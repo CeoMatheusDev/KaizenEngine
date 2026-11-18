@@ -2,9 +2,9 @@
 
 **Projeto:** KaizenEngine
 **Copyright (C) 2026 Matheus A. Santos, Hardion Labs**
-**Repositório:** https://github.com/CeoMatheusDev/Kaizen
+**Repositório:** https://github.com/CeoMatheusDev/KaizenEngine
 
-O código-fonte da KaizenEngine (a "Engine") é licenciado sob a **GNU Affero General Public License, versão 3 ou posterior (AGPL-3.0-or-later)**, cujo texto completo está no arquivo `LICENSE`.
+O código-fonte da KaizenEngine (a "Engine") é licenciado sob a **GNU Affero General Public License, versão 3 ou posterior (AGPL-3.0-or-later)**, cujo texto completo está no arquivo `LICENSE.txt`.
 
 Os termos abaixo são **Permissões Adicionais** concedidas sob a **Seção 7** da AGPL-3.0, e **obrigações adicionais de aviso** decorrentes da **Seção 5(a)** da AGPL-3.0. Eles fazem parte da licença do software e se aplicam a todos que recebem a Engine. Eles não podem ser removidos ou alterados por distribuidores subsequentes.
 

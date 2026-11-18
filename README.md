@@ -45,9 +45,9 @@ O projeto busca preservar a flexibilidade e a filosofia open-source de sua base,
 Atualmente, a maneira de obter o código-fonte da Kaizen é através do repositório oficial.
 
 ```bash
-git clone --recursive https://github.com/CeoMatheusDev/Kaizen.git
+git clone --recursive https://github.com/CeoMatheusDev/KaizenEngine.git
 
-cd Kaizen
+cd KaizenEngine
 ```
 
 O parâmetro `--recursive` permite inicializar os submódulos necessários ao projeto.
@@ -345,7 +345,7 @@ A Kaizen utiliza um modelo de licenciamento híbrido devido à sua origem como o
 | Camada | Licença | Arquivo |
 |---|---|---|
 | Código original da Godot Engine | MIT | `LICENSE-MIT` |
-| Modificações e código novo da KaizenEngine | AGPL-3.0 | `LICENSE` |
+| Modificações e código novo da KaizenEngine | AGPL-3.0 | `LICENSE.txt` |
 | Exceção para jogos e termos adicionais | Permissões adicionais (Seção 7 da AGPL) | `LICENSE-ADDITIONAL-TERMS.md` |
 
 ### Resumo prático
@@ -356,7 +356,7 @@ A Kaizen utiliza um modelo de licenciamento híbrido devido à sua origem como o
 
 Para conhecer todas as condições, consulte:
 
-- `LICENSE`
+- `LICENSE.txt`
 - `LICENSE-MIT`
 - `LICENSE-ADDITIONAL-TERMS.md`
 
