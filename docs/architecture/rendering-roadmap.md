@@ -44,7 +44,7 @@ The repository contains a Godot-derived rendering stack. The following paths are
 | `servers/rendering/renderer_rd/renderer_scene_render_rd.h` and `.cpp` | RD scene-rendering implementation and shared scene-rendering behavior. |
 | `servers/rendering/renderer_rd/forward_clustered/` | Forward+ renderer path. |
 | `servers/rendering/renderer_rd/forward_mobile/` | Mobile-oriented RD renderer path. |
-| `servers/rendering/renderer_gl/` | Compatibility renderer path. |
+| `drivers/gles3/` | Compatibility renderer path. |
 | `drivers/vulkan/` | Vulkan integration. |
 | `platform/web/` | Web platform integration. |
 
@@ -511,7 +511,7 @@ Recommended audit order:
 2. `servers/rendering/renderer_rd/renderer_scene_render_rd.h` and `.cpp` — inspect scene-renderer responsibilities and lifecycle.
 3. `servers/rendering/renderer_rd/forward_clustered/` — trace the desktop Forward+ path.
 4. `servers/rendering/renderer_rd/forward_mobile/` — compare mobile-specific constraints and execution.
-5. `servers/rendering/renderer_gl/` — establish the Compatibility path and Web relevance.
+5. `drivers/gles3/` — establish the Compatibility path and Web relevance.
 6. `drivers/vulkan/` and platform integration — identify what is already abstracted and reusable.
 7. Shader compilation, pipeline caching, RID/resource ownership, and render-thread synchronization — trace their actual call sites before defining new contracts.
 

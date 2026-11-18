@@ -56,7 +56,7 @@ The rendering stack is organized around the engine's rendering server and render
 - `servers/rendering/renderer_rd/` — RenderingDevice-based renderer infrastructure;
 - `servers/rendering/renderer_rd/forward_clustered/` — Forward+ renderer implementation;
 - `servers/rendering/renderer_rd/forward_mobile/` — mobile-oriented renderer implementation;
-- `servers/rendering/renderer_gl/` — Compatibility renderer infrastructure;
+- `drivers/gles3/` — Compatibility (GLES3/WebGL 2) renderer infrastructure;
 - `drivers/vulkan/` — Vulkan driver integration;
 - `platform/web/` — Web platform integration.
 
