@@ -246,7 +246,7 @@ A execução também pode ser feita por linha de comando com o binário do edito
 
 ## 📦 Exportando jogos
 
-O código da Kaizen já possui infraestrutura de exportação (com suporte a Linux e Windows) e parâmetros de linha de comando para exportação, herdados da arquitetura da Godot. O `main.cpp` confirma `--export-release`, `--export-debug` e `--headless`.
+O código da Kaizen já possui infraestrutura de exportação (com suporte a **Linux, Windows e macOS** — `platform/macos/export/export_plugin.cpp` implementa o exportador de macOS) e parâmetros de linha de comando para exportação. A disponibilidade prática de cada plataforma depende dos templates compilados e da configuração de cada export preset. O `main.cpp` confirma `--export-release`, `--export-debug` e `--headless`.
 
 Os templates de exportação são builds específicas da engine, compiladas a partir do próprio código-fonte e correspondentes à versão usada no desenvolvimento do projeto.
 
@@ -305,15 +305,9 @@ A documentação específica da Kaizen deverá registrar as modificações, APIs
 
 ## 🧪 Demos e exemplos
 
-Projetos demonstrativos ajudam a compreender o funcionamento da engine e experimentar suas ferramentas.
+> **Seção planejada.** Ainda não há projetos de demonstração oficiais publicados para a KaizenEngine. Quando existirem, serão linkados aqui.
 
-Esta seção poderá reunir:
-
-- Projetos de demonstração 2D e 3D.
-- Exemplos de utilização das APIs.
-- Demonstrações de renderização.
-- Exemplos de scripts e extensões.
-- Projetos de referência.
+Enquanto isso, a melhor forma de explorar a engine é compilar o editor (ver [Compilando a partir do código-fonte](#compilando-a-partir-do-código-fonte)) e abrir um projeto novo — a arquitetura de cenas e nós herdada da Godot é totalmente utilizável.
 
 ---
 
@@ -322,8 +316,8 @@ Esta seção poderá reunir:
 | Versão | Recurso | Status |
 |---|---|---|
 | **4.8.0-beta** | Base da engine (editor, renderer 2D/3D) herdada da Godot, rebranding Kaizen | 🚧 Em desenvolvimento (beta) |
-| **0.2** | Física 2D/3D e áudio | 🚧 Em desenvolvimento |
-| **0.3** | Editor de materiais e shaders | 📅 Planejado |
+| **0.2** | Física 2D/3D e áudio — infraestrutura herdada da Godot; integração e melhorias próprias em desenvolvimento | 🚧 Em desenvolvimento |
+| **0.3** | Editor de materiais e shaders — a base já possui infraestrutura Godot; trabalho pendente é a integração/evolução própria | 📅 Planejado |
 | **0.4** | Build para Web (WASM) | 📅 Planejado |
 | **1.0** | Versão estável e documentação completa | 🎯 Objetivo |
 

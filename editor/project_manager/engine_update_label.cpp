@@ -16,7 +16,7 @@
 // Modified by [Matheus A. Santos], [Hardion Labs] on [2026-11-17].       //
 // Modifications and additional code are licensed under the GNU Affero    //
 // General Public License v3.0 (AGPL-3.0).                                //
-// See the files LICENSE and LICENSE-ADDITIONAL-TERMS.md for details.     //
+// See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md for details. //
 //                                                                        //
 // [texto integral da licença MIT, inalterado]                            //
 //************************************************************************//
