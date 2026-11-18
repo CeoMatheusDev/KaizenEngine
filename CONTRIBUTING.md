@@ -35,7 +35,7 @@ Be sure to not include the `.kaizen` folder in the archive to save space.
 Make sure that the bug you are experiencing is reproducible in the latest Kaizen
 builds. Kaizen does not publish official binaries yet, so "latest" means the
 current state of the `main` branch (see [the build instructions in the
-README](README.md#compilando-a-partir-do-código-fonte)). It's worth testing
+README](README.md#building-from-source)). It's worth testing
 against both a recent beta build and your own build of `main`.
 
 If you run into a bug which wasn't present in an earlier Kaizen version (what we

@@ -1,13 +1,13 @@
- <div align="center">
+  <div align="center">
   <img src="LogoBanner_1.png" alt="Kaizen Game Engine" width="100%">
 </div>
 
 <div align="center">
 
-[![Versão](https://img.shields.io/badge/versão-4.8.0--beta-blue.svg)]()
-[![Licença](https://img.shields.io/badge/licença-AGPL--3.0%20%2B%20Exceção%20para%20Jogos-green.svg)](LICENSE-ADDITIONAL-TERMS.md)
-[![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
-[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-4.8.0--beta-blue.svg)]()
+[![License](https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Game%20Exception-green.svg)](LICENSE-ADDITIONAL-TERMS.md)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
+[![Status](https://img.shields.io/badge/status-under%20development-orange.svg)]()
 
 </div>
 
@@ -15,34 +15,34 @@
 
 ## 🎮 Kaizen Game Engine
 
-**Kaizen** (改善) é uma game engine open-source baseada na Godot Engine, desenvolvida com foco em evolução contínua, desempenho e liberdade de desenvolvimento.
+**Kaizen** (改善) is an open-source game engine based on the Godot Engine, built with a focus on continuous evolution, performance, and freedom of development.
 
-A engine oferece um ambiente integrado para criação de jogos 2D e 3D, reunindo ferramentas de edição, sistemas de renderização, física, áudio e programação.
+The engine provides an integrated environment for creating 2D and 3D games, combining editing tools, rendering, physics, audio, and scripting systems.
 
-O projeto busca preservar a flexibilidade e a filosofia open-source de sua base, enquanto desenvolve modificações e funcionalidades próprias.
+The project aims to preserve the flexibility and open-source philosophy of its upstream base while developing its own modifications and features.
 
-> *Kaizen: pequenas melhorias todos os dias levam a grandes resultados.*
+> *Kaizen: small, daily improvements lead to great results.*
 
-**Origem:** A KaizenEngine é derivada da [Godot Engine v4.8.0-beta.1](https://godotengine.org). O código original da Godot permanece sob MIT, enquanto as modificações e implementações próprias seguem AGPL-3.0, conforme os termos aplicáveis.
-
----
-
-## ✨ Recursos
-
-- 🎨 **Editor integrado:** criação e gerenciamento visual de projetos e cenas (infraestrutura herdada da Godot, com modificações próprias em desenvolvimento).
-- ⚡ **Renderização:** infraestrutura gráfica baseada na arquitetura de renderização da Godot.
-- 🧩 **Sistema de cenas e nós:** organização dos objetos e comportamentos do jogo (arquitetura de cenas herdada da Godot).
-- 🎯 **Física:** simulação e colisão 2D e 3D (física herdada da Godot; a árvore inclui os módulos renomeados `kaizen_physics_2d`/`kaizen_physics_3d` e Jolt — a presença deles não representa uma implementação independente, apenas a base herdada).
-- 🔊 **Áudio:** reprodução e gerenciamento de áudio (herdado da Godot).
-- 🛠️ **Extensibilidade:** possibilidade de trabalhar com código nativo e sistemas de scripts.
-- 📦 **Exportação multiplataforma:** infraestrutura de exportação herdada da arquitetura da Godot, sujeita às plataformas efetivamente habilitadas na Kaizen.
-- 🔌 **Modularidade:** possibilidade de ampliar os sistemas da engine.
+**Origin:** KaizenEngine is derived from [Godot Engine v4.8.0-beta.1](https://godotengine.org). The original Godot code remains under the MIT license, while the modifications and original implementations are licensed under AGPL-3.0, as applicable.
 
 ---
 
-## 📥 Obtendo a Kaizen
+## ✨ Features
 
-Atualmente, a maneira de obter o código-fonte da Kaizen é através do repositório oficial.
+- 🎨 **Integrated editor:** visual creation and management of projects and scenes (inherited Godot infrastructure, with original modifications under development).
+- ⚡ **Rendering:** graphics infrastructure based on Godot's rendering architecture.
+- 🧩 **Scene and node system:** organization of game objects and behaviors (Godot-inherited scene architecture).
+- 🎯 **Physics:** 2D and 3D simulation and collision (Godot-inherited physics; the tree includes the renamed `kaizen_physics_2d`/`kaizen_physics_3d` modules and Jolt — their presence does not represent an independent implementation, only the inherited base).
+- 🔊 **Audio:** playback and management of audio (inherited from Godot).
+- 🛠️ **Extensibility:** ability to work with native code and scripting systems.
+- 📦 **Multiplatform export:** export infrastructure inherited from Godot's architecture, subject to the platforms actually enabled in Kaizen.
+- 🔌 **Modularity:** ability to extend the engine's systems.
+
+---
+
+## 📥 Getting Kaizen
+
+The way to obtain the Kaizen source code today is through the official repository.
 
 ```bash
 git clone https://github.com/CeoMatheusDev/KaizenEngine.git
@@ -50,67 +50,67 @@ git clone https://github.com/CeoMatheusDev/KaizenEngine.git
 cd KaizenEngine
 ```
 
-> Nota: o repositório não utiliza submódulos Git.
+> Note: the repository does not use Git submodules.
 
-### Binários
+### Binaries
 
-Quando disponibilizados, os binários da Kaizen permitirão utilizar o editor sem precisar compilar manualmente todo o código-fonte.
+When available, Kaizen binaries will allow you to use the editor without compiling the entire source code manually.
 
-Os pacotes de distribuição deverão ser específicos para cada plataforma e arquitetura suportada.
+Distribution packages will be platform- and architecture-specific for each supported platform.
 
-**Downloads:** ainda não há endereço de distribuição binária oficial informado neste README.
+**Downloads:** there is no official binary distribution address as of this README.
 
 ---
 
-## 🔨 Compilando a partir do código-fonte
+## 🔨 Building from source
 
-A base de compilação da Godot utiliza **SCons**, um sistema de build baseado em Python.
+The upstream Godot build uses **SCons**, a Python-based build system.
 
-A compilação permite gerar o editor completo, builds de desenvolvimento e templates destinados à execução de jogos exportados.
+Compilation can produce the full editor, development builds, and templates used to run exported games.
 
-### Pré-requisitos
+### Prerequisites
 
-Os requisitos variam conforme a plataforma. Mínimos exigidos pelo `SConstruct`:
+Requirements vary by platform. Minimum versions required by `SConstruct`:
 
-| Ferramenta | Versão mínima | Finalidade |
+| Tool | Minimum version | Purpose |
 |---|---|---|
-| Python | 3.10+ | Sistema de compilação (`EnsurePythonVersion(3, 10)`) |
-| SCons | 4.4+ | Configuração e build (`EnsureSConsVersion(4, 4)`) |
-| SCons | 4.8+ | Obrigatório para Visual Studio 2022 |
-| SCons | 4.10.1+ | Obrigatório para Visual Studio 2026 |
-| GCC | 11+ | Compilador C/C++ (Linux) |
-| Clang | 9+ | Compilador C/C++ (Linux/macOS) |
-| Apple Clang | 16+ (Xcode 16) | Compilador C/C++ (macOS) |
-| Visual Studio | 2019 16.11+ | Compilador C/C++ (Windows; VS2022/VS2026 também suportados) |
-| Git | qualquer recente | Controle de versão |
-| pkg-config | — | Detecção de dependências no Linux |
+| Python | 3.10+ | Build system (`EnsurePythonVersion(3, 10)`) |
+| SCons | 4.4+ | Configuration and build (`EnsureSConsVersion(4, 4)`) |
+| SCons | 4.8+ | Required for Visual Studio 2022 |
+| SCons | 4.10.1+ | Required for Visual Studio 2026 |
+| GCC | 11+ | C/C++ compiler (Linux) |
+| Clang | 9+ | C/C++ compiler (Linux/macOS) |
+| Apple Clang | 16+ (Xcode 16) | C/C++ compiler (macOS) |
+| Visual Studio | 2019 16.11+ | C/C++ compiler (Windows; VS2022/VS2026 also supported) |
+| Git | any recent | Version control |
+| pkg-config | — | Dependency detection on Linux |
 
-Também são necessárias bibliotecas de desenvolvimento específicas do sistema operacional.
+Platform-specific development libraries are also required.
 
-As instruções de compilação da [Godot Engine](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html) são a referência da arquitetura herdada, mas os requisitos mínimos acima são os verificados no próprio `SConstruct` da Kaizen.
+The [Godot Engine compilation guide](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html) is the reference for the inherited architecture, but the minimum requirements above are the ones verified in Kaizen's own `SConstruct`.
 
-### Targets de compilação
+### Build targets
 
-O `SConstruct` define explicitamente três targets:
+The `SConstruct` explicitly defines three targets:
 
 ```bash
-# Editor (gera bin/kaizen.<plataforma>.editor.<arch>)
+# Editor (produces bin/kaizen.<platform>.editor.<arch>)
 scons platform=linuxbsd target=editor
 
-# Template de exportação (release)
+# Export template (release)
 scons platform=linuxbsd target=template_release
 
-# Template de exportação (debug)
+# Export template (debug)
 scons platform=linuxbsd target=template_debug
 ```
 
-`target=` pode ser omitido (o padrão é `editor`), mas explicitar evita dúvidas. Substitua `linuxbsd` por `windows` ou `macos` conforme a plataforma.
+`target=` can be omitted (`editor` is the default), but passing it explicitly avoids ambiguity. Replace `linuxbsd` with `windows` or `macos` as appropriate for your platform.
 
 ### Linux
 
-Instale as ferramentas necessárias para compilação:
+Install the required build tools:
 
-Lista **inicial** de dependências — não é universal nem exaustiva. A compilação pode exigir dependências adicionais conforme os drivers gráficos, os recursos e os módulos habilitados. Teste em uma instalação limpa do Fedora antes de tratá-la como procedimento validado:
+**Initial** dependency list — not universal or exhaustive. Compilation may require additional dependencies depending on the graphics drivers, features, and modules enabled. Test on a clean Fedora installation before treating this as a proven procedure:
 
 ```bash
 # Fedora
@@ -123,270 +123,270 @@ sudo dnf install gcc-c++ clang python3 python3-pip scons \
     alsa-lib-devel pulseaudio-libs-devel
 ```
 
-Na raiz do código-fonte:
+At the source-tree root:
 
 ```bash
-# Compilar o editor
+# Build the editor
 scons platform=linuxbsd target=editor
 
-# Executar o editor compilado
+# Run the compiled editor
 ./bin/kaizen.linuxbsd.editor.x86_64
 ```
 
-O nome exato do executável depende da plataforma e da arquitetura da build.
+The exact executable name depends on the platform and architecture of the build.
 
 ### Windows
 
-Instale:
+Install:
 
-- Python 3.10 ou superior.
-- SCons 4.4 ou superior (4.8+ se usar Visual Studio 2022; 4.10.1+ se usar Visual Studio 2026).
-- Visual Studio 2019 16.11+ (ou mais recente) com ferramentas de compilação C++, ou MinGW-w64.
+- Python 3.10 or newer.
+- SCons 4.4 or newer (4.8+ if using Visual Studio 2022; 4.10.1+ if using Visual Studio 2026).
+- Visual Studio 2019 16.11+ (or newer) with the C++ build tools, or MinGW-w64.
 
-Instale o SCons:
+Install SCons:
 
 ```powershell
 python -m pip install scons
 ```
 
-Na raiz do código-fonte:
+At the source-tree root:
 
 ```powershell
-# Compilar o editor
+# Build the editor
 scons platform=windows target=editor
 ```
 
-O executável será gerado no diretório `bin/`.
+The executable will be generated in the `bin/` directory.
 
 ### macOS
 
-Instale:
+Install:
 
-- Python 3.10 ou superior.
-- SCons 4.4 ou superior.
-- Xcode 16 ou superior (Apple Clang 16+) ou Command Line Tools correspondentes.
-- Driver gráfico: a Kaizen tem suporte a **Metal** (selecionado por padrão em builds de macOS) e a Vulkan via MoltenVK, conforme o driver habilitado na configuração gráfica — não é obrigatório instalar um Vulkan SDK para usar Metal. Consulte `platform/macos/detect.py` para as opções (`metal`, etc.).
+- Python 3.10 or newer.
+- SCons 4.4 or newer.
+- Xcode 16 or newer (Apple Clang 16+) or the corresponding Command Line Tools.
+- Graphics driver: Kaizen supports **Metal** (selected by default in macOS builds) and Vulkan via MoltenVK, depending on the driver enabled in the graphics configuration — a Vulkan SDK is not required to use Metal. See `platform/macos/detect.py` for the options (`metal`, etc.).
 
-Instale o SCons:
+Install SCons:
 
 ```bash
 python3 -m pip install scons
 ```
 
-Compile para Intel:
+Build for Intel:
 
 ```bash
 scons platform=macos target=editor arch=x86_64
 ```
 
-Ou para Apple Silicon:
+Or for Apple Silicon:
 
 ```bash
 scons platform=macos target=editor arch=arm64
 ```
 
-O resultado da compilação será disponibilizado no diretório `bin/`.
+The build output will be available in the `bin/` directory.
 
-### Builds de desenvolvimento
+### Development builds
 
-Para trabalhar no código-fonte, é possível utilizar opções de compilação voltadas ao desenvolvimento:
+For working on the source code, you can use build options aimed at development:
 
 ```bash
-# Editor com recursos adicionais de depuração (define DEV_ENABLED)
+# Editor with additional debugging features (defines DEV_ENABLED)
 scons platform=linuxbsd target=editor dev_build=yes
 ```
 
-Para builds destinados à distribuição:
+For distribution builds:
 
 ```bash
 scons platform=linuxbsd target=editor production=yes
 ```
 
-`dev_build` e `production` são opções definidas no próprio `SConstruct` (`dev_build` ativa código de depuração exclusivo de desenvolvimento; `production` ajusta os padrões para builds de produção).
+`dev_build` and `production` are options defined in the `SConstruct` itself (`dev_build` enables development-only debugging code; `production` adjusts the defaults for production builds).
 
-**Módulo C#/Mono:** o módulo Mono existe na árvore, mas **vem desabilitado por padrão**. Para habilitá-lo, compile com `module_mono_enabled=yes`. Sem essa opção, o suporte a C# não faz parte da build.
+**C#/Mono module:** the Mono module exists in the tree, but it is **disabled by default**. To enable it, build with `module_mono_enabled=yes`. Without that option, C# support is not part of the build.
 
-**Lua:** não há módulo Lua na árvore do projeto. Não há suporte a Lua para anunciar.
+**Lua:** there is no Lua module in the project tree. There is no Lua support to announce.
 
 ---
 
-## 🚀 Utilizando o editor
+## 🚀 Using the editor
 
-Após obter ou compilar uma versão executável da Kaizen, você poderá iniciar o ambiente de desenvolvimento.
+After downloading or building a Kaizen executable, you can launch the development environment.
 
-### Gerenciador de projetos
+### Project manager
 
-O gerenciador de projetos permite criar, importar, organizar e abrir projetos existentes.
+The project manager lets you create, import, organize, and open existing projects.
 
-A partir dele, é possível iniciar um novo projeto ou selecionar um projeto já existente.
+From it, you can start a new project or select an existing one.
 
-### Abrindo um projeto
+### Opening a project
 
-Projetos podem ser abertos através do editor, selecionando o diretório correspondente.
+Projects can be opened through the editor by selecting the corresponding directory.
 
-Na Kaizen, os projetos são identificados pelo arquivo **`project.kaizen`** — não por `project.godot`. O `main.cpp` reconhece esse arquivo e o gerenciador de projetos também o utiliza para identificar e abrir projetos.
+In Kaizen, projects are identified by the **`project.kaizen`** file — not `project.godot`. `main.cpp` recognizes that file, and the project manager also uses it to identify and open projects.
 
-O editor também pode ser iniciado diretamente pelo terminal:
+The editor can also be started directly from the terminal:
 
 ```bash
-# Abrir o editor apontando para o projeto
-./bin/kaizen.linuxbsd.editor.x86_64 --editor --path /caminho/do/projeto
+# Open the editor pointing at the project
+./bin/kaizen.linuxbsd.editor.x86_64 --editor --path /path/to/project
 
-# Executar o projeto diretamente
-./bin/kaizen.linuxbsd.editor.x86_64 --path /caminho/do/projeto
+# Run the project directly
+./bin/kaizen.linuxbsd.editor.x86_64 --path /path/to/project
 ```
 
-O nome do executável varia com a plataforma e a arquitetura da build.
+The executable name varies with the platform and architecture of the build.
 
-### Executando um projeto
+### Running a project
 
-Depois de configurar o projeto, utilize a opção de execução do editor para iniciar o jogo e testar suas alterações.
+After configuring the project, use the editor's run option to launch the game and test your changes.
 
-A execução também pode ser feita por linha de comando com o binário do editor, como no exemplo acima.
+You can also run the project from the command line using the editor binary, as in the example above.
 
 ---
 
-## 📦 Exportando jogos
+## 📦 Exporting games
 
-O código da Kaizen já possui infraestrutura de exportação (com suporte a **Linux, Windows e macOS** — `platform/macos/export/export_plugin.cpp` implementa o exportador de macOS) e parâmetros de linha de comando para exportação. A disponibilidade prática de cada plataforma depende dos templates compilados e da configuração de cada export preset. O `main.cpp` confirma `--export-release`, `--export-debug` e `--headless`.
+Kaizen's codebase already provides export infrastructure (with support for **Linux, Windows, and macOS** — `platform/macos/export/export_plugin.cpp` implements the macOS exporter) and command-line parameters for export. The practical availability of each platform depends on the compiled templates and on each export preset's configuration. `main.cpp` confirms `--export-release`, `--export-debug`, and `--headless`.
 
-Os templates de exportação são builds específicas da engine, compiladas a partir do próprio código-fonte e correspondentes à versão usada no desenvolvimento do projeto.
+Export templates are engine-specific builds, compiled from the source tree itself and matching the version used to develop the project.
 
-### Templates de exportação
+### Export templates
 
-Os templates são builds específicas da engine utilizadas para executar os projetos exportados sem incluir o editor completo. Compile-os com:
+Templates are engine-specific builds used to run exported projects without including the full editor. Build them with:
 
 ```bash
 scons platform=linuxbsd target=template_release
 scons platform=linuxbsd target=template_debug
 ```
 
-Para preparar uma exportação:
+To prepare an export:
 
-1. Compile os templates correspondentes à Kaizen (release e/ou debug).
-2. Abra o projeto no editor.
-3. Acesse o menu de exportação.
-4. Crie um preset para a plataforma desejada.
-5. Configure as opções de exportação.
-6. Gere o pacote final do jogo.
+1. Build the templates matching your Kaizen version (release and/or debug).
+2. Open the project in the editor.
+3. Open the export menu.
+4. Create a preset for the desired platform.
+5. Configure the export options.
+6. Generate the final game package.
 
-### Exportação pela linha de comando
+### Command-line export
 
-A Kaizen oferece suporte à exportação automatizada:
+Kaizen supports automated export:
 
 ```bash
 ./bin/kaizen.linuxbsd.editor.x86_64 \
     --headless \
-    --path /caminho/do/projeto \
-    --export-release "Meu preset Linux" \
+    --path /path/to/project \
+    --export-release "My Linux preset" \
     build/game
 ```
 
-Observações:
+Notes:
 
-- O nome do preset precisa corresponder a um preset definido em `export_presets.cfg` no projeto — `"Meu preset Linux"` é apenas ilustrativo.
-- Também existe `--export-debug <preset> <path>` para exports de depuração.
-- Documentação da base upstream: [exportação de projetos (Godot)](https://docs.godotengine.org/en/latest/tutorials/export/exporting_projects.html).
-
----
-
-## 📚 Documentação e recursos
-
-A documentação é essencial para aprender a utilizar a engine e compreender sua arquitetura.
-
-Os seguintes materiais são documentação da **Godot Engine (base upstream)**, não documentação específica da Kaizen — a Kaizen ainda não possui documentação própria publicada:
-
-- [Godot Documentation](https://docs.godotengine.org/en/latest/) — documentação da arquitetura original.
-- [Godot Class Reference](https://docs.godotengine.org/en/latest/classes/) — referência das classes e APIs herdadas.
-- [Godot Compilation Guide](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html) — compilação a partir do código-fonte.
-- [Godot Export Documentation](https://docs.godotengine.org/en/latest/tutorials/export/exporting_projects.html) — funcionamento do sistema de exportação.
-
-A documentação específica da Kaizen deverá registrar as modificações, APIs próprias e diferenças em relação à Godot — ainda está por ser escrita.
+- The preset name must match a preset defined in `export_presets.cfg` in the project — `"My Linux preset"` is only an example.
+- `--export-debug <preset> <path>` is also available for debug exports.
+- Upstream base documentation: [exporting projects (Godot)](https://docs.godotengine.org/en/latest/tutorials/export/exporting_projects.html).
 
 ---
 
-## 🧪 Demos e exemplos
+## 📚 Documentation and resources
 
-> **Seção planejada.** Ainda não há projetos de demonstração oficiais publicados para a KaizenEngine. Quando existirem, serão linkados aqui.
+Documentation is essential to learn the engine and understand its architecture.
 
-Enquanto isso, a melhor forma de explorar a engine é compilar o editor (ver [Compilando a partir do código-fonte](#compilando-a-partir-do-código-fonte)) e abrir um projeto novo — a arquitetura de cenas e nós herdada da Godot é totalmente utilizável.
+The following materials are documentation for the **Godot Engine (upstream base)**, not Kaizen-specific documentation — Kaizen does not have its own published documentation yet:
+
+- [Godot Documentation](https://docs.godotengine.org/en/latest/) — original architecture documentation.
+- [Godot Class Reference](https://docs.godotengine.org/en/latest/classes/) — reference for inherited classes and APIs.
+- [Godot Compilation Guide](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html) — building from source.
+- [Godot Export Documentation](https://docs.godotengine.org/en/latest/tutorials/export/exporting_projects.html) — how the export system works.
+
+Kaizen-specific documentation will record the modifications, original APIs, and differences from Godot — it has yet to be written.
+
+---
+
+## 🧪 Demos and examples
+
+> **Planned section.** There are no official demo projects published for KaizenEngine yet. When they exist, they will be linked here.
+
+In the meantime, the best way to explore the engine is to build the editor (see [Building from source](#building-from-source)) and open a new project — the Godot-inherited scene and node architecture is fully usable.
 
 ---
 
 ## 🗺️ Roadmap
 
-> A numeração **4.8.x** identifica a versão da base tecnológica herdada da Godot. As versões **0.x** e **1.x** representam os marcos de desenvolvimento próprios da Kaizen.
+> The **4.8.x** numbering identifies the version of the technology base inherited from Godot. The **0.x** and **1.x** versions represent Kaizen's own development milestones.
 
-| Versão | Recurso | Status |
+| Version | Feature | Status |
 |---|---|---|
-| **4.8.0-beta** | Base da engine (editor, renderer 2D/3D) herdada da Godot, rebranding Kaizen | 🚧 Em desenvolvimento (beta) |
-| **0.2** | Física 2D/3D e áudio — infraestrutura herdada da Godot; integração e melhorias próprias em desenvolvimento | 🚧 Em desenvolvimento |
-| **0.3** | Editor de materiais e shaders — a base já possui infraestrutura Godot; trabalho pendente é a integração/evolução própria | 📅 Planejado |
-| **0.4** | Build para Web (WASM) | 📅 Planejado |
-| **1.0** | Versão estável e documentação completa | 🎯 Objetivo |
+| **4.8.0-beta** | Engine base (2D/3D editor, renderer) inherited from Godot, Kaizen rebranding | 🚧 In development (beta) |
+| **0.2** | 2D/3D physics and audio — Godot-inherited infrastructure; original integration and improvements under development | 🚧 In development |
+| **0.3** | Material and shader editor — the base already provides Godot infrastructure; the pending work is original integration/evolution | 📅 Planned |
+| **0.4** | Web build (WASM) | 📅 Planned |
+| **1.0** | Stable release and complete documentation | 🎯 Goal |
 
-> Nota: a Kaizen ainda não possui um ECS (Entity-Component-System) próprio implementado. A arquitetura atual é a de cenas e nós herdada da Godot.
+> Note: Kaizen does not have its own ECS (Entity-Component-System) implementation yet. The current architecture is the Godot-inherited scene and node system.
 
 ---
 
-## 🤝 Comunidade e contribuição
+## 🤝 Community and contributing
 
-A Kaizen é um projeto open-source. Contribuições são bem-vindas, sejam correções, melhorias, documentação ou novas funcionalidades.
+Kaizen is an open-source project. Contributions are welcome — fixes, improvements, documentation, or new features.
 
-### Como contribuir
+### How to contribute
 
-1. Faça um fork do projeto.
-2. Crie uma branch:
-
-   ```bash
-   git checkout -b feature/minha-feature
-   ```
-
-3. Implemente suas alterações.
-4. Faça um commit:
+1. Fork the project.
+2. Create a branch:
 
    ```bash
-   git commit -m "feat: adiciona nova funcionalidade"
+   git checkout -b feature/my-feature
    ```
 
-5. Envie as alterações:
+3. Implement your changes.
+4. Commit:
 
    ```bash
-   git push origin feature/minha-feature
+   git commit -m "feat: add new feature"
    ```
 
-6. Abra um Pull Request.
+5. Push your changes:
 
-Antes de contribuir, consulte o [CONTRIBUTING.md](CONTRIBUTING.md).
+   ```bash
+   git push origin feature/my-feature
+   ```
 
-### Canais
+6. Open a Pull Request.
 
-A Kaizen ainda não possui uma plataforma própria de comunidade. Por enquanto, os canais disponíveis são:
+Before contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- 💡 **[Issues](https://github.com/CeoMatheusDev/KaizenEngine/issues):** reporte problemas e sugira funcionalidades.
-- 🔧 **[Pull Requests](https://github.com/CeoMatheusDev/KaizenEngine/pulls):** contribua diretamente com o código.
+### Channels
+
+Kaizen does not have a community platform of its own yet. For now, the available channels are:
+
+- 💡 **[Issues](https://github.com/CeoMatheusDev/KaizenEngine/issues):** report problems and suggest features.
+- 🔧 **[Pull Requests](https://github.com/CeoMatheusDev/KaizenEngine/pulls):** contribute code directly.
 
 ---
 
-## 📄 Licença
+## 📄 License
 
-A Kaizen utiliza um modelo de licenciamento híbrido devido à sua origem como obra derivada da Godot Engine.
+Kaizen uses a hybrid licensing model due to its origin as a derivative work of the Godot Engine.
 
-> **Importante:** a tabela abaixo é apenas um resumo. As condições completas e vinculantes estão nos documentos de licença. A interpretação jurídica da compatibilidade entre os arquivos, e do alcance da permissão adicional para jogos, exige revisão legal específica — esta seção não é uma garantia jurídica.
+> **Important:** the table below is only a summary. The complete, binding terms are in the license documents. The legal interpretation of the compatibility between the files, and the scope of the game exception, requires specific legal review — this section is not legal advice or a guarantee.
 
-| Camada | Licença | Arquivo |
+| Layer | License | File |
 |---|---|---|
-| Código original da Godot Engine | MIT | `LICENSE-MIT` |
-| Modificações e código novo da KaizenEngine | AGPL-3.0 | `LICENSE.txt` |
-| Exceção para jogos e termos adicionais | Permissões adicionais (Seção 7 da AGPL) | `LICENSE-ADDITIONAL-TERMS.md` |
+| Original Godot Engine code | MIT | `LICENSE-MIT` |
+| KaizenEngine modifications and new code | AGPL-3.0 | `LICENSE.txt` |
+| Game distribution exception and additional terms | Additional permissions (AGPL Section 7) | `LICENSE-ADDITIONAL-TERMS.md` |
 
-### Resumo prático
+### Practical summary
 
-- **Engine:** o código novo e as modificações estão sujeitos à AGPL-3.0.
-- **Jogos:** a exceção adicional permite a distribuição comercial de jogos sob outras licenças, respeitando suas condições.
-- **Código da Godot:** permanece sob a licença MIT original.
+- **Engine:** new code and modifications are subject to AGPL-3.0.
+- **Games:** the additional exception allows commercial distribution of games under other licenses, subject to its conditions.
+- **Godot code:** remains under the original MIT license.
 
-Para conhecer todas as condições, consulte:
+To learn the complete terms, see:
 
 - `LICENSE.txt`
 - `LICENSE-MIT`
@@ -396,8 +396,8 @@ Para conhecer todas as condições, consulte:
 
 <div align="center">
 
-**Kaizen — evoluindo um commit de cada vez. 🌱**
+**Kaizen — evolving one commit at a time. 🌱**
 
-Feito com ❤️ por desenvolvedores apaixonados por games.
+Made with ❤️ by developers passionate about games.
 
 </div>

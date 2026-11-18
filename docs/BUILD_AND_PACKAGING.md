@@ -1,138 +1,137 @@
-# Kaizen Engine — Build e Distribuição
+# Kaizen Engine — Build and Distribution
 
-Documento técnico da infraestrutura de build e packaging da Kaizen Engine
-(fork da Godot Engine 4.8, renomeado e com modificações próprias).
+Technical document for the build and packaging infrastructure of the Kaizen Engine
+(a fork of the Godot Engine 4.8, renamed and with its own modifications).
 
-- Versão da engine: `4.8.beta.mono.custom_build` (`version.py` = `4.8.0`,
+- Engine version: `4.8.beta.mono.custom_build` (`version.py` = `4.8.0`,
   status `beta`)
-- Plataforma validada: **Linux x86_64** (Fedora 44, GCC 16.2.1)
-- Variante .NET: **validada**, com SDK/runtime 10 privados embarcados
-- Windows: infraestrutura **preparada, não validada** neste ambiente e ainda
-  no formato antigo (ver §12)
+- Validated platform: **Linux x86_64** (Fedora 44, GCC 16.2.1)
+- .NET variant: **validated**, with private embedded SDK/runtime 10
+- Windows: infrastructure **prepared, not validated** in this environment and still
+  in the old layout (see §12)
 
 ---
 
-## 1. Princípios
+## 1. Principles
 
-1. **Build ≠ packaging.** O SCons continua sendo o único responsável por
-   compilar. Os scripts dirigem o SCons e organizam artefatos; nenhuma opção
-   interna do build system foi alterada.
-2. **Nada é apagado implicitamente.** `build.sh` nunca executa `scons -c` nem
-   remove `bin/`. `package.sh` só substitui a saída com `--force` explícito,
-   via staging + troca atômica.
-3. **Versão/canal são metadados explícitos.** Nunca são deduzidos de nome de
-   diretório. A versão do pacote vem de `version.py` ou de `--version`; o
-   canal, de `status` ou de `--channel`.
-4. **Distribuição reproduzível.** O `.tar.xz` é determinístico; com o mesmo
-   toolchain e `SOURCE_DATE_EPOCH`, duas execuções geram bytes idênticos.
-5. **Sem intermediários na distribuição.** `.o`, `.a`, `.lib`, `obj/`, caches,
-   `__pycache__`, `.sconsign*`, `.scons_env.json`, `doc/translations` e
-   `tests/` nunca são copiados.
-6. **Nada de vazio.** Nenhum diretório é criado sem conteúdo real.
+1. **Build ≠ packaging.** SCons remains the only entity responsible for
+   compiling. The scripts drive SCons and organize artifacts; no internal
+   build-system option has been changed.
+2. **Nothing is deleted implicitly.** `build.sh` never runs `scons -c` nor
+   removes `bin/`. `package.sh` only replaces the output with an explicit
+   `--force`, via staging + atomic swap.
+3. **Version/channel are explicit metadata.** They are never deduced from
+   directory names. The package version comes from `version.py` or from `--version`;
+   the channel, from `status` or from `--channel`.
+4. **Reproducible distribution.** The `.tar.xz` is deterministic; with the same
+   toolchain and `SOURCE_DATE_EPOCH`, two runs generate identical bytes.
+5. **No intermediates in the distribution.** `.o`, `.a`, `.lib`, `obj/`, caches,
+   `__pycache__`, `.sconsign*`, `.scons_env.json`, `doc/translations` and
+   `tests/` are never copied.
+6. **No empty content.** No directory is created without real content.
 
 ---
 
-## 2. Arquitetura de diretórios
+## 2. Directory architecture
 
-### 2.1 Repositório (fonte)
+### 2.1 Repository (source)
 
 ```text
 KaizenEngine/
 ├── SConstruct, methods.py, platform_methods.py   # build system (SCons)
 ├── core/ editor/ main/ scene/ servers/ platform/ modules/ drivers/
-├── modules/mono/                                 # integração .NET
+├── modules/mono/                                 # .NET integration
 │   ├── build_scripts/build_assemblies.py
-│   ├── glue/KaizenSharp/                         # fontes da API C# (glue)
-│   ├── editor/Kaizen.NET.Sdk/                    # SDK MSBuild distribuído
-│   └── editor/KaizenTools/                       # editor tooling C#
+│   ├── glue/KaizenSharp/                         # C# API sources (glue)
+│   ├── editor/Kaizen.NET.Sdk/                    # distributed MSBuild SDK
+│   └── editor/KaizenTools/                       # C# editor tooling
 ├── misc/dist/linux/                              # .desktop, AppData, MIME, man
-├── misc/logo/                                    # ícones
-├── packaging/                                    # esta infraestrutura
+├── misc/logo/                                    # icons
+├── packaging/                                    # this infrastructure
 │
-│ ── saídas de build (geradas, não fazem parte do fonte) ──
-├── bin/                                          # artefatos de build
+│ ── build outputs (generated, not part of the source) ──
+├── bin/                                          # build artifacts
 └── dist/                                         # .reference/, Kaizen/, .tar.xz
 ```
 
-> O repositório está em estado **somente fonte**: `bin/` e `dist/` são
-> saídas de `build.sh`/`package.sh` e foram removidos em 2026-11-17;
-> reaparecem apenas após uma reconstrução completa.
+> The repository is in a **source-only** state: `bin/` and `dist/` are
+> outputs of `build.sh`/`package.sh` and were removed on 2026-11-17;
+> they reappear only after a full rebuild.
 
-### 2.2 Distribuição
+### 2.2 Distribution
 
-| Caminho | Conteúdo | Consumidor |
+| Path | Content | Consumer |
 |---|---|---|
-| `Engine/Binaries/Linux/` | executável canônico, wrapper `kaizen`, marcador `_sc_`, symlink `KaizenSharp` | usuário/runtime |
-| `ExportTemplates/Linux/{Release,Debug}/` | `linux_release.x86_64`, `linux_debug.x86_64` | plugin de exportação |
-| `Templates/<FULL_CONFIG>/` | visão pronta para instalar: **somente symlinks relativos** | instalador |
-| `Engine/Managed/KaizenSharp/` | `Api/{Debug,Release}`, `Tools` (inclui `nupkgs/`) | editor .NET |
-| `Engine/Managed/dotnet/` | SDK + runtime privados (mono) | wrapper/editor |
-| `Engine/Source/` | fonte (inclui `packaging/`) — **apenas** com `--with-source` | desenvolvimento |
-| `Build/Config/` | `build-info.json`, `package-info.env`, `dotnet-info.env` | validação/instalação |
-| `Build/Toolchains/` | notas de toolchain | mantenedores |
-| `Config/linux/` | `.desktop`, AppStream, MIME, man page, ícones | integração desktop |
-| `LICENSES/` | Kaizen + licenças do .NET embarcado | distribuição |
-| `Samples/` | `hello-kaizen`, `hello-kaizen-csharp` | usuário/CI |
-| `Setup/` | `install.sh`, `uninstall.sh`, `select.sh`, `check-deps.sh` | instalação |
-| `README.txt` | resumo da versão/canal e instruções | usuário |
-| `MANIFEST.sha256` | hash de todos os arquivos regulares | integridade |
+| `Engine/Binaries/Linux/` | canonical executable, `kaizen` wrapper, `_sc_` marker, `KaizenSharp` symlink | user/runtime |
+| `ExportTemplates/Linux/{Release,Debug}/` | `linux_release.x86_64`, `linux_debug.x86_64` | export plugin |
+| `Templates/<FULL_CONFIG>/` | ready-to-install view: **relative symlinks only** | installer |
+| `Engine/Managed/KaizenSharp/` | `Api/{Debug,Release}`, `Tools` (includes `nupkgs/`) | .NET editor |
+| `Engine/Managed/dotnet/` | private SDK + runtime (mono) | wrapper/editor |
+| `Engine/Source/` | source (includes `packaging/`) — **only** with `--with-source` | development |
+| `Build/Config/` | `build-info.json`, `package-info.env`, `dotnet-info.env` | validation/installation |
+| `Build/Toolchains/` | toolchain notes | maintainers |
+| `Config/linux/` | `.desktop`, AppStream, MIME, man page, icons | desktop integration |
+| `LICENSES/` | Kaizen + licenses of the embedded .NET | distribution |
+| `Samples/` | `hello-kaizen`, `hello-kaizen-csharp` | user/CI |
+| `Setup/` | `install.sh`, `uninstall.sh`, `select.sh`, `check-deps.sh` | installation |
+| `README.txt` | version/channel summary and instructions | user |
+| `MANIFEST.sha256` | hash of every regular file | integrity |
 
-O modo portátil usa `Engine/Binaries/Linux/editor_data/export_templates/<FULL_CONFIG>/`
-com symlinks para `ExportTemplates/`. A distribuição **instalada** descarta
-`_sc_`, `editor_data/`, `ExportTemplates/` e `Templates/`, pois os templates vão
-para o diretório XDG e o editor deixa de ser autocontido.
+The portable mode uses `Engine/Binaries/Linux/editor_data/export_templates/<FULL_CONFIG>/`
+with symlinks to `ExportTemplates/`. The **installed** distribution drops
+`_sc_`, `editor_data/`, `ExportTemplates/` and `Templates/`, because the templates
+go to the XDG directory and the editor stops being self-contained.
 
-### 2.3 Instalação (por usuário)
+### 2.3 Installation (per user)
 
 ```text
 ~/.local/opt/kaizen/
-├── <canal>/<versão>/            árvore instalada + .kaizen-receipt.env
-├── <canal>/current -> <versão>
-├── .dotnet/<sdk>/               .NET privado compartilhado
-├── default-channel              canal padrão
+├── <channel>/<version>/      installed tree + .kaizen-receipt.env
+├── <channel>/current -> <version>
+├── .dotnet/<sdk>/            shared private .NET
+├── default-channel           default channel
 ├── select.sh
 └── check-deps.sh
 
-~/.local/bin/kaizen              wrapper do canal padrão
-~/.local/bin/kaizen-<canal>      launcher por canal
-~/.local/bin/kaizen-select       seleção
+~/.local/bin/kaizen           wrapper for the default channel
+~/.local/bin/kaizen-<channel>  per-channel launcher
+~/.local/bin/kaizen-select    selection
 ~/.local/share/kaizen/export_templates/<FULL_CONFIG>/
 ~/.local/share/{applications,metainfo,mime,icons,man}/
-~/.local/share/kaizen/{app_userdata,...}   # dados do usuário (nunca removidos)
+~/.local/share/kaizen/{app_userdata,...}   # user data (never removed)
 ```
 
 ---
 
-## 3. Versionamento e canais
+## 3. Versioning and channels
 
-### 3.1 Modelo
+### 3.1 Model
 
-`version.py` fornece `major.minor.patch` e `status`:
+`version.py` provides `major.minor.patch` and `status`:
 
-| Campo | Exemplo |
+| Field | Example |
 |---|---|
 | `major.minor.patch` | `4.8.0` |
 | `status` | `beta` |
 | `--channel-revision N` | `1` |
-| Versão do pacote | `4.8.0-beta1` |
-| Nome | `kaizen-x86_64-linux-4.8.0-beta1` |
+| Package version | `4.8.0-beta1` |
+| Name | `kaizen-x86_64-linux-4.8.0-beta1` |
 
-Canais aceitos: `stable`, `beta`, `rc`, `dev`.
+Accepted channels: `stable`, `beta`, `rc`, `dev`.
 
-- `stable`: sem sufixo (`4.8.0`).
-- `beta`/`rc`/`dev`: `X.Y.Z-<canal><N>` (N ≥ 1, padrão 1).
-- `--version`/`--channel` sobrescrevem os metadados de `version.py`.
-- O empacotador cruza o canal/versão com o que o binário reporta. Se
-  divergirem, falha; `--allow-channel-mismatch` existe só para fixtures de
-  teste.
+- `stable`: no suffix (`4.8.0`).
+- `beta`/`rc`/`dev`: `X.Y.Z-<channel><N>` (N ≥ 1, default 1).
+- `--version`/`--channel` override the `version.py` metadata.
+- The packager cross-checks the channel/version against what the binary reports. If
+  they diverge, it fails; `--allow-channel-mismatch` exists only for test fixtures.
 
-A versão da engine (interna) não muda com o canal do pacote:
-`4.8.beta.mono.custom_build`, templates em `4.8.beta.mono`.
+The engine version (internal) does not change with the package channel:
+`4.8.beta.mono.custom_build`, templates at `4.8.beta.mono`.
 
-### 3.2 Coexistência
+### 3.2 Coexistence
 
-Versões de canais diferentes convivem em `<opt-root>/<canal>/<versão>/`.
-Exemplo:
+Versions of different channels coexist in `<opt-root>/<channel>/<version>/`.
+Example:
 
 ```text
 ~/.local/opt/kaizen/stable/4.8.0/
@@ -141,35 +140,35 @@ Exemplo:
 ~/.local/opt/kaizen/dev/4.8.0-dev1/
 ```
 
-`kaizen` aponta para o canal padrão; `kaizen-beta` etc. são launchers fixos
-por canal. `kaizen-select` altera o padrão e/ou o `current` de um canal.
+`kaizen` points to the default channel; `kaizen-beta` etc. are fixed launchers
+per channel. `kaizen-select` changes the default and/or a channel's `current`.
 
 ---
 
-## 4. Sistema de build (SCons)
+## 4. Build system (SCons)
 
-### 4.1 Opções relevantes (verificadas no `SConstruct`)
+### 4.1 Relevant options (verified in `SConstruct`)
 
-| Opção | Padrão | Uso |
+| Option | Default | Use |
 |---|---|---|
-| `platform=` | detectado | `linuxbsd`, `windows` |
+| `platform=` | detected | `linuxbsd`, `windows` |
 | `target=` | `editor` | `editor`, `template_debug`, `template_release` |
-| `arch=` | detectado | `x86_64` |
-| `module_mono_enabled=` | `no` | habilita .NET |
-| `production=` | `no` | build de produção (LTO/strip) |
-| `dev_build=` | `no` | build de desenvolvimento |
-| `use_llvm=` | `no` | Clang em vez de GCC |
-| `use_mingw=` | `no` | MinGW-w64 no Windows |
-| `accesskit=` | `yes` | leitor de tela (requer deps extras) |
-| `redirect_build_objects=` | `yes` | objetos em `bin/obj/` |
+| `arch=` | detected | `x86_64` |
+| `module_mono_enabled=` | `no` | enables .NET |
+| `production=` | `no` | production build (LTO/strip) |
+| `dev_build=` | `no` | development build |
+| `use_llvm=` | `no` | Clang instead of GCC |
+| `use_mingw=` | `no` | MinGW-w64 on Windows |
+| `accesskit=` | `yes` | screen reader (requires extra deps) |
+| `redirect_build_objects=` | `yes` | objects in `bin/obj/` |
 
-Nome final do executável:
+Final executable name:
 
 ```text
 <PROGPREFIX>kaizen.<platform>.<target>.<arch><module_version><PROGSUFFIX>
 ```
 
-Exemplos:
+Examples:
 
 ```text
 kaizen.linuxbsd.editor.x86_64
@@ -177,7 +176,7 @@ kaizen.linuxbsd.template_release.x86_64.mono
 kaizen.windows.editor.x86_64.mono.exe
 ```
 
-### 4.2 Comandos reproduzíveis
+### 4.2 Reproducible commands
 
 ```bash
 scons platform=linuxbsd target=editor -j24
@@ -187,20 +186,20 @@ scons platform=linuxbsd target=template_release module_mono_enabled=yes -j24
 scons platform=linuxbsd target=template_debug   module_mono_enabled=yes -j24
 ```
 
-### 4.3 Versão e diretório de templates
+### 4.3 Version and template directory
 
-`core/version.h` define:
+`core/version.h` defines:
 
-- `KAIZEN_VERSION_FULL_CONFIG` = `4.8.beta` ou `4.8.beta.mono`
+- `KAIZEN_VERSION_FULL_CONFIG` = `4.8.beta` or `4.8.beta.mono`
 - `KAIZEN_VERSION_FULL_BUILD` = `4.8.beta.mono.custom_build`
 
-O editor procura templates em
-`<data>/export_templates/<KAIZEN_VERSION_FULL_CONFIG>/`. O `package.sh` deriva
-esse nome removendo `.custom_build`/`.official` do `kaizen --version`.
+The editor looks for templates in
+`<data>/export_templates/<KAIZEN_VERSION_FULL_CONFIG>/`. `package.sh` derives
+this name by removing `.custom_build`/`.official` from `kaizen --version`.
 
 ---
 
-## 5. Driver de build — `packaging/linux/build.sh`
+## 5. Build driver — `packaging/linux/build.sh`
 
 ```bash
 ./packaging/linux/build.sh [--target editor|template_debug|template_release|all]
@@ -208,96 +207,96 @@ esse nome removendo `.custom_build`/`.official` do `kaizen --version`.
                            [--jobs N] [--arch x86_64] [--dry-run] [-v]
 ```
 
-- `--target` aceita lista separada por vírgula ou repetição; padrão `all`
+- `--target` accepts a comma-separated list or repetition; default `all`
   (editor → template_release → template_debug).
-- Valida que o binário esperado apareceu em `bin/`.
-- `--mono` adiciona `module_mono_enabled=yes` e, após o editor:
-  1. gera o glue C# com `--generate-mono-glue`;
-  2. compila os assemblies com `build_assemblies.py`;
-  3. verifica `bin/KaizenSharp/Api/Release/KaizenSharp.dll` e
+- Validates that the expected binary appeared in `bin/`.
+- `--mono` adds `module_mono_enabled=yes` and, after the editor:
+  1. generates the C# glue with `--generate-mono-glue`;
+  2. compiles the assemblies with `build_assemblies.py`;
+  3. verifies `bin/KaizenSharp/Api/Release/KaizenSharp.dll` and
      `bin/KaizenSharp/Tools/KaizenTools.dll`.
-- `--dry-run` imprime os comandos sem executar.
+- `--dry-run` prints the commands without executing them.
 
 ---
 
-## 6. Integração .NET
+## 6. .NET integration
 
-### 6.1 Componentes gerados
+### 6.1 Generated components
 
-| Componente | Origem | Destino |
+| Component | Origin | Destination |
 |---|---|---|
-| Glue C# | `--generate-mono-glue` | `modules/mono/glue/KaizenSharp/**/Generated` |
-| API gerenciada | `build_assemblies.py` | `bin/KaizenSharp/Api/{Debug,Release}` |
-| Ferramentas do editor | `KaizenTools.sln` | `bin/KaizenSharp/Tools` |
-| SDK MSBuild | `Kaizen.NET.Sdk.sln` | `bin/KaizenSharp/Tools/nupkgs` |
-| Source generators | `Kaizen.SourceGenerators*.sln` | dentro de `Tools` |
+| C# glue | `--generate-mono-glue` | `modules/mono/glue/KaizenSharp/**/Generated` |
+| Managed API | `build_assemblies.py` | `bin/KaizenSharp/Api/{Debug,Release}` |
+| Editor tools | `KaizenTools.sln` | `bin/KaizenSharp/Tools` |
+| MSBuild SDK | `Kaizen.NET.Sdk.sln` | `bin/KaizenSharp/Tools/nupkgs` |
+| Source generators | `Kaizen.SourceGenerators*.sln` | inside `Tools` |
 
-### 6.2 Localização em runtime
+### 6.2 Runtime location
 
-`modules/mono/kaizensharp_dirs.cpp` resolve `KaizenSharp` **ao lado do
-executável** (`exe_dir/KaizenSharp/{Tools,Api/<Config>}`). A distribuição
-mantém:
+`modules/mono/kaizensharp_dirs.cpp` resolves `KaizenSharp` **next to the
+executable** (`exe_dir/KaizenSharp/{Tools,Api/<Config>}`). The distribution
+keeps:
 
 ```text
-Engine/Managed/KaizenSharp/         # conteúdo real
+Engine/Managed/KaizenSharp/         # real content
 Engine/Binaries/Linux/KaizenSharp -> ../../Managed/KaizenSharp
 ```
 
-Não mova o conteúdo sem manter esse link: o editor não procura em
-`share/kaizen` nem em caminhos XDG.
+Do not move the content without keeping that link: the editor does not search in
+`share/kaizen` or in XDG paths.
 
-### 6.3 SDK + runtime privados
+### 6.3 Private SDK + runtime
 
-A variante `--mono` embarca um subconjunto do .NET 10 em
+The `--mono` variant embeds a subset of .NET 10 in
 `Engine/Managed/dotnet/`:
 
 - `dotnet`, `host`, `metadata`
-- `sdk/<versão>` (SDK completo, necessário para compilar C#)
-- `shared/Microsoft.NETCore.App/<versão>`
+- `sdk/<version>` (full SDK, required to compile C#)
+- `shared/Microsoft.NETCore.App/<version>`
 - `packs/Microsoft.NETCore.App.Ref`
 - `LICENSE.txt`, `ThirdPartyNotices.txt`
 
-Não são embarcados: AspNetCore, packs de RID (Fedora), templates de projeto do
-SDK, glibc, drivers gráficos/Vulkan ou bibliotecas fundamentais do sistema.
+Not embedded: AspNetCore, RID packs (Fedora), project templates from the
+SDK, glibc, Vulkan/graphics drivers or fundamental system libraries.
 
-O wrapper `Engine/Binaries/Linux/kaizen` resolve o próprio caminho, define
-`DOTNET_ROOT=<tree>/Engine/Managed/dotnet`, prepende esse diretório ao `PATH`
-e executa o binário canônico. `KAIZEN_DOTNET_ROOT` pode sobrescrever.
+The wrapper `Engine/Binaries/Linux/kaizen` resolves its own path, sets
+`DOTNET_ROOT=<tree>/Engine/Managed/dotnet`, prepends that directory to `PATH`
+and executes the canonical binary. `KAIZEN_DOTNET_ROOT` may override it.
 
-Na instalação, o conteúdo é movido para `<opt-root>/.dotnet/<sdk>/` e cada
-versão recebe o symlink:
+On install, the content is moved to `<opt-root>/.dotnet/<sdk>/` and each
+version receives the symlink:
 
 ```text
-<versão>/Engine/Managed/dotnet -> ../../../../.dotnet/<sdk>
+<version>/Engine/Managed/dotnet -> ../../../../.dotnet/<sdk>
 ```
 
-Isso evita duplicar ~300 MB por versão. A remoção só apaga o `.dotnet/<sdk>`
-quando nenhum recibo restante usa o mesmo SDK.
+This avoids duplicating ~300 MB per version. Removal only deletes `.dotnet/<sdk>`
+when no remaining receipt uses the same SDK.
 
-Verificação:
+Verification:
 
 ```bash
 <opt-root>/.dotnet/10.0.113/dotnet --info
 <opt-root>/.dotnet/10.0.113/dotnet --list-sdks
 ```
 
-### 6.4 NuGet e projetos C#
+### 6.4 NuGet and C# projects
 
-`build_assemblies.py` gera `KaizenSharp`, `KaizenSharpEditor`,
-`Kaizen.SourceGenerators` e `Kaizen.NET.Sdk` na versão dos assemblies
-(`4.8.0-beta`). `Kaizen.NET.Sdk` não existe no NuGet.org; o sample usa uma
-fonte local relativa dentro da distribuição:
+`build_assemblies.py` generates `KaizenSharp`, `KaizenSharpEditor`,
+`Kaizen.SourceGenerators` and `Kaizen.NET.Sdk` at the assemblies' version
+(`4.8.0-beta`). `Kaizen.NET.Sdk` does not exist on NuGet.org; the sample uses a
+relative local source inside the distribution:
 
 ```xml
 <add key="kaizen-local" value="../../Engine/Managed/KaizenSharp/Tools/nupkgs" />
 ```
 
-Projetos criados pelo editor recebem `Sdk="Kaizen.NET.Sdk/<versão>"` e
-`TargetFramework=net10.0`, com saída em `.kaizen/mono/temp/`.
+Projects created by the editor receive `Sdk="Kaizen.NET.Sdk/<version>"` and
+`TargetFramework=net10.0`, with output in `.kaizen/mono/temp/`.
 
-O SDK privado compila e exporta C# sem SDK do sistema. O restore ainda pode
-precisar de rede (NuGet.org) para dependências de terceiros; o feed local
-cobre os pacotes Kaizen.
+The private SDK compiles and exports C# without a system SDK. Restore may still
+need the network (NuGet.org) for third-party dependencies; the local feed
+covers the Kaizen packages.
 
 ---
 
@@ -312,34 +311,34 @@ cobre os pacotes Kaizen.
     [--xz-preset 0-9] [-j|--jobs N] [--force] [--dry-run]
 ```
 
-Sem `--mono/--no-mono`, detecta a variante pela presença de
+Without `--mono/--no-mono`, it detects the variant by the presence of
 `bin/kaizen.linuxbsd.editor.x86_64.mono`.
 
-Etapas:
+Stages:
 
-1. Resolve binários e lê a versão real do executável (`--version`).
-2. Resolve versão/canal explícitos e valida contra o binário.
-3. Cria staging; nada é escrito no destino até o fim.
-4. Copia o executável canônico (`0755`), gera o wrapper `kaizen` e o marcador
-   `_sc_`.
-5. Instala templates em `ExportTemplates/Linux/{Release,Debug}` e cria
-   symlinks em `editor_data/export_templates/<FULL_CONFIG>/` e em
+1. Resolves binaries and reads the executable's real version (`--version`).
+2. Resolves explicit version/channel and validates them against the binary.
+3. Creates staging; nothing is written to the destination until the end.
+4. Copies the canonical executable (`0755`), generates the `kaizen` wrapper and the
+   `_sc_` marker.
+5. Installs templates in `ExportTemplates/Linux/{Release,Debug}` and creates
+   symlinks in `editor_data/export_templates/<FULL_CONFIG>/` and in
    `Templates/<FULL_CONFIG>/`.
-6. Copia `bin/KaizenSharp` para `Engine/Managed/KaizenSharp` e cria o symlink
-   ao lado do executável (mono).
-7. Opcionalmente embarca o .NET privado e o valida com `dotnet --info`.
-8. Copia `.desktop`, AppStream, MIME, man page, ícones e licenças.
-9. Copia os samples aplicáveis, excluindo `.kaizen/`, `out/`, `export/`,
+6. Copies `bin/KaizenSharp` to `Engine/Managed/KaizenSharp` and creates the
+   symlink next to the executable (mono).
+7. Optionally embeds the private .NET and validates it with `dotnet --info`.
+8. Copies `.desktop`, AppStream, MIME, man page, icons and licenses.
+9. Copies the applicable samples, excluding `.kaizen/`, `out/`, `export/`,
    `bin/`, `obj/`.
-10. Copia `install.sh`, `uninstall.sh`, `select.sh`, `check-deps.sh` e
+10. Copies `install.sh`, `uninstall.sh`, `select.sh`, `check-deps.sh` and
     `Setup/README.md`.
-11. Gera `README.txt`, `Build/Config/package-info.env`, `dotnet-info.env` e
-    `Build/Config/build-info.json` (schema 2, com SHA-256 de cada arquivo).
-12. Gera `MANIFEST.sha256`.
-13. Cria o `.tar.xz` determinístico e o `.sha256` externo.
-14. Troca o staging pelo destino (backup temporário + remoção).
+11. Generates `README.txt`, `Build/Config/package-info.env`, `dotnet-info.env` and
+    `Build/Config/build-info.json` (schema 2, with SHA-256 of each file).
+12. Generates `MANIFEST.sha256`.
+13. Creates the deterministic `.tar.xz` and the external `.sha256`.
+14. Swaps the staging into the destination (temporary backup + removal).
 
-### 7.1 Metadados
+### 7.1 Metadata
 
 `package-info.env`:
 
@@ -359,95 +358,94 @@ DOTNET_RUNTIME=10.0.13
 ...
 ```
 
-`build-info.json` (schema 2) contém `package`, `engine`, `build`, `files` e
-`symlinks`. O validador recomputa todos os hashes. O próprio
-`build-info.json` **não** entra em `files` (ele ainda não existe quando a
-lista é calculada); `MANIFEST.sha256` é gerado depois e cobre todos os
-arquivos regulares, exceto ele mesmo. Nesta build: 3907 arquivos + 5
-symlinks no JSON, 3908 entradas no `MANIFEST.sha256`.
+`build-info.json` (schema 2) contains `package`, `engine`, `build`, `files` and
+`symlinks`. The validator recomputes all hashes. `build-info.json` itself is
+**not** included in `files` (it does not exist yet when the list is computed);
+`MANIFEST.sha256` is generated afterwards and covers all regular files,
+except itself. In this build: 3907 files + 5 symlinks in the JSON,
+3908 entries in `MANIFEST.sha256`.
 
-### 7.2 Arquivo oficial
+### 7.2 Official archive
 
 ```text
-kaizen-x86_64-linux-<versão>.tar.xz
-kaizen-x86_64-linux-<versão>.tar.xz.sha256
+kaizen-x86_64-linux-<version>.tar.xz
+kaizen-x86_64-linux-<version>.tar.xz.sha256
 ```
 
-Raiz `Kaizen/`, ordenação por nome, mtime fixo, dono 0/0, sem ACL/SELinux/
-xattrs, hardlinks expandidos (`--hard-dereference`), `xz -T<jobs>`.
+Root `Kaizen/`, name sorting, fixed mtime, owner 0/0, no ACL/SELinux/
+xattrs, expanded hardlinks (`--hard-dereference`), `xz -T<jobs>`.
 
-### 7.3 Reprodutibilidade
+### 7.3 Reproducibility
 
-- `--reproducible` fixa `mtime` e `generated_at` em `946684800`
+- `--reproducible` pins `mtime` and `generated_at` to `946684800`
   (2000-01-01T00:00:00Z).
-- `SOURCE_DATE_EPOCH` tem precedência.
-- O campo `host` do manifesto e o caminho de origem do .NET são omitidos
-  quando reproduzível.
-- Testado: duas execuções produziram o mesmo SHA-256.
+- `SOURCE_DATE_EPOCH` takes precedence.
+- The manifest's `host` field and the .NET origin path are omitted
+  when reproducible.
+- Tested: two runs produced the same SHA-256.
 
-### 7.4 Modo portátil
+### 7.4 Portable mode
 
-`_sc_` ao lado do executável faz `EditorPaths` usar `exe_dir/editor_data/`.
-A árvore é movível e não depende do repositório. O wrapper é POSIX sh e
-funciona em qualquer shell.
+`_sc_` next to the executable makes `EditorPaths` use `exe_dir/editor_data/`.
+The tree is movable and does not depend on the repository. The wrapper is POSIX sh and
+works in any shell.
 
 ---
 
-## 8. Instalação
+## 8. Installation
 
-### 8.1 Modos e opções
+### 8.1 Modes and options
 
 ```bash
 ./Setup/install.sh [--user|--system] [--prefix DIR]
     [--opt-root DIR] [--bin-dir DIR] [--share-dir DIR] [--data-home DIR]
     [--from-tarball FILE] [--channel NAME] [--version VER]
-    [--select[=CANAL]] [--no-select] [--templates-only]
+    [--select[=CHANNEL]] [--no-select] [--templates-only]
     [--no-share-dotnet] [--force] [--dry-run] [-y|--yes]
 ```
 
-- `--user` (padrão): `~/.local/opt/kaizen`, `~/.local/bin`,
-  `$XDG_DATA_HOME` (ou `~/.local/share`).
-- `--system`: `/opt/kaizen`, `/usr/local/bin`, `/usr/share`; os templates vão
-  para o XDG do usuário que executa (limitação da engine, ver §8.6).
-- `--from-tarball` verifica o `.sha256` externo, inspeciona as entradas,
-  extrai em diretório privado e valida o manifesto.
-- `--templates-only` instala apenas os templates (útil para outros usuários).
-- `--force` substitui uma versão já instalada.
+- `--user` (default): `~/.local/opt/kaizen`, `~/.local/bin`,
+  `$XDG_DATA_HOME` (or `~/.local/share`).
+- `--system`: `/opt/kaizen`, `/usr/local/bin`, `/usr/share`; the templates go
+  to the XDG directory of the user running the installer (engine limitation, see §8.6).
+- `--from-tarball` verifies the external `.sha256`, inspects the entries,
+  extracts into a private directory and validates the manifest.
+- `--templates-only` installs only the templates (useful for other users).
+- `--force` replaces an already-installed version.
 
-### 8.2 Verificações antes de escrever
+### 8.2 Checks before writing
 
-1. checksum externo do arquivo;
-2. manifesto SHA-256 e cobertura completa;
-3. caminhos relativos, sem `..`/absolutos, tipos de entrada seguros;
-4. symlinks relativos e contidos na árvore;
-5. produto, plataforma `linux`, arquitetura `x86_64`, canal e versão;
-6. espaço livre (com estimativa já descontando .NET compartilhado);
-7. permissão de escrita nos destinos.
+1. external file checksum;
+2. SHA-256 manifest and complete coverage;
+3. relative paths, no `..`/absolute paths, safe entry types;
+4. symlinks relative and contained in the tree;
+5. product, `linux` platform, `x86_64` architecture, channel and version;
+6. free space (with an estimate already accounting for shared .NET);
+7. write permission on the destinations.
 
-### 8.3 Transação e rollback
+### 8.3 Transaction and rollback
 
-- A árvore é copiada para `<canal>/.<versão>.staging.$$`.
-- O `.NET` privado é movido para `.dotnet/<sdk>` (ou reutilizado) antes da
-  troca.
-- A versão existente (com `--force`) vira backup; em erro, o backup é
-  restaurado e o staging/launchers são limpos.
-- Launchers e seleção só são atualizados depois que a engine em staging
-  responde `--version` corretamente.
-- O recibo `.kaizen-receipt.env` registra canal, versão, paths e SDK.
+- The tree is copied to `<channel>/.<version>.staging.$$`.
+- The private .NET is moved to `.dotnet/<sdk>` (or reused) before the swap.
+- The existing version (with `--force`) becomes a backup; on error, the backup is
+  restored and the staging/launchers are cleaned up.
+- Launchers and selection are updated only after the engine in staging answers
+  `--version` correctly.
+- The `.kaizen-receipt.env` receipt records channel, version, paths and SDK.
 
-### 8.4 Integração XDG
+### 8.4 XDG integration
 
-- `.desktop` com `Exec=<bin-dir>/kaizen %f` (caminho absoluto).
-- AppStream em `metainfo/`, MIME em `mime/packages/`, man em `man/man6/`,
-  ícones em `icons/hicolor/{scalable,256x256}/apps/`.
-- `update-desktop-database`, `update-mime-database` e
-  `gtk-update-icon-cache` são executados best-effort.
-- Nenhum arquivo de shell (`~/.bashrc`, `~/.profile`, `~/.zshrc`) é editado.
+- `.desktop` with `Exec=<bin-dir>/kaizen %f` (absolute path).
+- AppStream in `metainfo/`, MIME in `mime/packages/`, man in `man/man6/`,
+  icons in `icons/hicolor/{scalable,256x256}/apps/`.
+- `update-desktop-database`, `update-mime-database` and
+  `gtk-update-icon-cache` are executed best-effort.
+- No shell file (`~/.bashrc`, `~/.profile`, `~/.zshrc`) is edited.
 
-### 8.5 Seleção
+### 8.5 Selection
 
-`kaizen` lê `<opt-root>/default-channel` e cai em ordem determinística
-(`stable`, `rc`, `beta`, `dev`) se o canal não existir. `kaizen-select`:
+`kaizen` reads `<opt-root>/default-channel` and falls back in deterministic order
+(`stable`, `rc`, `beta`, `dev`) if the channel does not exist. `kaizen-select`:
 
 ```bash
 kaizen-select --list
@@ -456,43 +454,42 @@ kaizen-select beta
 kaizen-select beta/4.8.0-beta1
 ```
 
-### 8.6 Templates e instalação global
+### 8.6 Templates and global installation
 
-A engine só procura templates em
-`$XDG_DATA_HOME/kaizen/export_templates/<FULL_CONFIG>`. Não há caminho
-system-wide. Consequências:
+The engine only looks for templates in
+`$XDG_DATA_HOME/kaizen/export_templates/<FULL_CONFIG>`. There is no system-wide
+path. Consequences:
 
-- instalação global instala templates no XDG do usuário que rodou o
-  instalador;
-- outros usuários precisam extrair o arquivo e rodar
-  `./Setup/install.sh --templates-only` com o próprio `HOME`;
-- `--templates-only` **não** funciona a partir de uma árvore já instalada
-  (ela não contém `Templates/`), apenas do arquivo/árvore portátil.
+- a global installation installs the templates in the XDG of the user who ran
+  the installer;
+- other users need to extract the archive and run
+  `./Setup/install.sh --templates-only` with their own `HOME`;
+- `--templates-only` does **not** work from an already-installed tree
+  (it does not contain `Templates/`), only from the archive/portable tree.
 
 ---
 
-## 9. Desinstalação — `Setup/uninstall.sh`
+## 9. Uninstallation — `Setup/uninstall.sh`
 
 ```bash
 ./Setup/uninstall.sh --list
 ./Setup/uninstall.sh --channel beta --version 4.8.0-beta1
 ./Setup/uninstall.sh --all [--channel beta] --yes
-/opt/kaizen/beta/4.8.0-beta1/Setup/uninstall.sh   # infere tudo do recibo
+/opt/kaizen/beta/4.8.0-beta1/Setup/uninstall.sh   # infers everything from the receipt
 ```
 
-- Remove somente `<opt-root>/<canal>/<versão>` e valida o recibo antes.
-- Atualiza `<canal>/current` e `default-channel` (fallback determinístico).
-- Remove `.dotnet/<sdk>` apenas se nenhum recibo restante usar o SDK.
-- Remove templates apenas se nenhum recibo restante compartilhar o mesmo
+- Removes only `<opt-root>/<channel>/<version>` and validates the receipt first.
+- Updates `<channel>/current` and `default-channel` (deterministic fallback).
+- Removes `.dotnet/<sdk>` only if no remaining receipt uses the SDK.
+- Removes templates only if no remaining receipt shares the same
   `TEMPLATES_CONFIG`.
-- Remove launchers/ícones/`.desktop`/MIME/man apenas quando o último canal
-  some.
-- Nunca remove projetos, `app_userdata`, configurações ou caches; o
-  `rmdir` só atua em diretórios vazios.
+- Removes launchers/icons/`.desktop`/MIME/man only when the last channel is gone.
+- Never removes projects, `app_userdata`, configuration or caches; `rmdir` only
+  acts on empty directories.
 
 ---
 
-## 10. Validação — `packaging/linux/validate.sh`
+## 10. Validation — `packaging/linux/validate.sh`
 
 ```bash
 ./packaging/linux/validate.sh --mono [--global] [--gui]
@@ -500,144 +497,145 @@ system-wide. Consequências:
 ./packaging/linux/validate.sh --mono --no-install --no-tarball --skip-run
 ```
 
-Blocos de checagem (cada um reporta PASS/WARN/FAIL):
+Check blocks (each reports PASS/WARN/FAIL):
 
-1. **Layout**: árvore nova, ícones, MIME, man, licenças, samples, Setup
-   executável, ausência de caminhos legados e de diretórios vazios.
-2. **Metadados**: chaves obrigatórias, formato de versão, canal, nome,
+1. **Layout**: fresh tree, icons, MIME, man, licenses, samples, executable
+   Setup, absence of legacy paths and of empty directories.
+2. **Metadata**: required keys, version format, channel, name,
    `TEMPLATES_CONFIG` × engine, `SOURCE_INCLUDED`.
-3. **Binário**: ELF x86-64, permissão, wrapper `kaizen` (não symlink),
-   `DOTNET_ROOT`, alvo do `exec`, `_sc_`, `--version`.
-4. **Templates**: Release/Debug, caminho portátil e visão `Templates/` com
-   symlinks resolvendo.
-5. **.NET**: `KaizenSharp` ao lado do executável, DLLs, `.deps.json`, nupkg,
-   `KaizenPlugins`; se embarcado, host, licença, SDK × metadados e execução
-   isolada do `dotnet`.
-6. **Manifesto JSON**: schema 2, arquivos/tamanhos/hashes, symlinks.
-7. **MANIFEST.sha256**: verificação completa e cobertura de todos os arquivos.
-8. **Symlinks**: relativos e contidos.
-9. **Higiene**: sem `.o/.a/.lib/.sconsign/__pycache__/*.pyc`.
-10. **Dependências**: `ldd` sem `not found`.
-11. **Runtime**: cópia descartável, `HOME`/XDG isolados, `--version` e
+3. **Binary**: ELF x86-64, permission, `kaizen` wrapper (not a symlink),
+   `DOTNET_ROOT`, `exec` target, `_sc_`, `--version`.
+4. **Templates**: Release/Debug, portable path and the `Templates/` view with
+   resolvable symlinks.
+5. **.NET**: `KaizenSharp` next to the executable, DLLs, `.deps.json`, nupkg,
+   `KaizenPlugins`; if bundled, host, license, SDK × metadata and isolated
+   execution of `dotnet`.
+6. **JSON manifest**: schema 2, files/sizes/hashes, symlinks.
+7. **MANIFEST.sha256**: complete verification and coverage of all files.
+8. **Symlinks**: relative and contained.
+9. **Hygiene**: no `.o/.a/.lib/.sconsign/__pycache__/*.pyc`.
+10. **Dependencies**: `ldd` without `not found`.
+11. **Runtime**: disposable copy, isolated `HOME`/XDG, `--version` and
     `--headless --quit`.
-12. **GUI opcional**: Project Manager com `--quit-after`.
-13. **Tarball**: nome, checksum, entradas dentro de `Kaizen/`, tipos seguros,
-    extração, manifesto e execução da engine extraída.
-14. **Instalação**: usuário em HOME/XDG isolados, launcher, `kaizen-select`,
-    XDG, recibo, ausência de `_sc_`/templates duplicados, `.bashrc` intacto.
-15. **Coexistência**: segundo canal (fixture), launchers, `--no-select`,
-    troca de padrão.
-16. **Desinstalação**: remoção seletiva, preservação da outra versão,
-    templates compartilhados, reparo do padrão, remoção final e preservação
-    de dados do usuário.
-17. **Global simulada**: `--system` com `--opt-root/--bin-dir/--share-dir/
-    --data-home` em diretório gravável, sem root; launcher e remoção.
+12. **Optional GUI**: Project Manager with `--quit-after`.
+13. **Tarball**: name, checksum, entries inside `Kaizen/`, safe types,
+    extraction, manifest and execution of the extracted engine.
+14. **Installation**: per-user install in isolated HOME/XDG, launcher,
+    `kaizen-select`, XDG, receipt, absence of `_sc_`/duplicate templates,
+    intact `.bashrc`.
+15. **Coexistence**: second channel (fixture), launchers, `--no-select`,
+    default swap.
+16. **Uninstallation**: selective removal, preservation of the other version,
+    shared templates, default repair, final removal and preservation of
+    user data.
+17. **Simulated global**: `--system` with `--opt-root/--bin-dir/--share-dir/
+    --data-home` in a writable directory, without root; launcher and removal.
 
-Testes de runtime/instalação usam cópias descartáveis; a árvore empacotada
-não é executada no lugar nem sujada.
+Runtime/installation tests use disposable copies; the packaged tree
+is not executed in place nor dirtied.
 
 ---
 
-## 11. Dependências (Linux)
+## 11. Dependencies (Linux)
 
-Compilação:
+Compilation:
 
-- GCC ≥ 11 ou Clang ≥ 9
-- Python 3.9+, SCons ≥ 4
+- GCC ≥ 11 or Clang ≥ 9
+- Python 3.10+, SCons ≥ 4.4 (required by `SConstruct`)
 - Headers: X11, Xcursor, Xinerama, XRandR, Xi, XInput2, Wayland, libudev,
   ALSA, PulseAudio, fontconfig, freetype, dbus
-- Vulkan loader (runtime) e drivers de GPU
-- .NET SDK ≥ 10.0.100 (somente para rebuild da variante .NET; o pacote mono
-  já traz SDK/runtime privados)
+- Vulkan loader (runtime) and GPU drivers
+- .NET SDK ≥ 10.0.100 (only to rebuild the .NET variant; the mono package
+  already ships the private SDK/runtime)
 
-Runtime do pacote:
+Package runtime:
 
 ```bash
 ldd dist/Kaizen/Engine/Binaries/Linux/kaizen.linuxbsd.editor.x86_64.mono
-# linux-vdso, libm, libgcc_s, libc, ld-linux (+ libdl/libpthread) e X11/GL
+# linux-vdso, libm, libgcc_s, libc, ld-linux (+ libdl/libpthread) and X11/GL
 ```
 
-Drivers opcionais são carregados por `dlopen` (Vulkan, ALSA, PulseAudio,
-DBus, fontconfig): ausência degrada funcionalidades, não impede iniciar.
+Optional drivers are loaded via `dlopen` (Vulkan, ALSA, PulseAudio,
+DBus, fontconfig): their absence degrades functionality, it does not prevent startup.
 
-`Setup/check-deps.sh` relata .NET (privado ou sistema), bibliotecas
-dinâmicas e sessão gráfica; `--strict` falha se faltar dependência
-obrigatória.
+`Setup/check-deps.sh` reports .NET (private or system), dynamic
+libraries and graphical session; `--strict` fails if a required dependency is
+missing.
 
 ---
 
 ## 12. Windows
 
-Infraestrutura em `packaging/windows/` existe, mas **não foi validada** neste
-host (Fedora, sem MSVC/Mingw-w64) e ainda produz o layout antigo
-(`Engine/ExportTemplates`, `Engine/Build`, sem canais/.tar.xz). Nenhum
-formato Windows (MSI, ZIP, instalador) foi implementado nesta etapa.
+The infrastructure in `packaging/windows/` exists, but has **not been validated** on this
+host (Fedora, no MSVC/MinGW-w64) and still produces the old layout
+(`Engine/ExportTemplates`, `Engine/Build`, no channels/.tar.xz). No
+Windows format (MSI, ZIP, installer) has been implemented at this stage.
 
 ---
 
-## 13. Limitações conhecidas
+## 13. Known limitations
 
-1. **Windows não validado** e fora do escopo desta etapa.
-2. Apenas **x86_64** em Linux; ARM64/ARM32 não testados.
-3. Instalação global não consegue servir templates para todos os usuários
-   (limitação da engine, §8.6).
-4. `--templates-only` só funciona a partir do arquivo/árvore portátil.
-5. NuGet de terceiros pode exigir rede; o feed local cobre só pacotes Kaizen.
-6. `--with-source` não é uma distribuição de desenvolvimento completa (não
-   inclui `bin/obj`); recompilar exige as dependências de build.
-7. Assinatura, pacotes distro (`.deb`/`.rpm`/Flatpak) e atualização
-   automática estão fora do escopo.
-8. `doc/translations/` e `tests/` não são distribuídos.
-9. O `.tar.xz` não é assinado criptograficamente; a integridade é garantida
-   pelo `.sha256` publicado ao lado dele.
+1. **Windows not validated** and out of scope for this stage.
+2. Only **x86_64** on Linux; ARM64/ARM32 not tested.
+3. Global installation cannot serve templates to all users
+   (engine limitation, §8.6).
+4. `--templates-only` only works from the archive/portable tree.
+5. Third-party NuGet may require the network; the local feed covers only Kaizen packages.
+6. `--with-source` is not a complete development distribution (it does not
+   include `bin/obj`); recompiling requires the build dependencies.
+7. Signing, distro packages (`.deb`/`.rpm`/Flatpak) and automatic updates
+   are out of scope.
+8. `doc/translations/` and `tests/` are not distributed.
+9. The `.tar.xz` is not cryptographically signed; integrity is guaranteed by the
+   `.sha256` published alongside it.
 
 ---
 
-## 14. Resultados de validação (Linux)
+## 14. Validation results (Linux)
 
-> **Nota:** as medições abaixo são o registro histórico da última execução
-> (artefato `kaizen-x86_64-linux-4.8.0-beta1.tar.xz`, SHA-256
+> **Note:** the measurements below are the historical record of the last run
+> (artifact `kaizen-x86_64-linux-4.8.0-beta1.tar.xz`, SHA-256
 > `bebd507e28e7601b0321a90cea42b2397180caf79176ff5ccc0cd92ab9a67b00`).
-> Em 2026-11-17, a pedido explícito, `dist/` foi removido — inclusive o
-> `.tar.xz`, a árvore `dist/Kaizen/` e `dist/.reference/`. O repositório
-> hoje contém apenas o fonte; para obter uma entrega novamente é preciso
-> reconstruir do zero (`build.sh` → `package.sh` → `validate.sh`), e os
-> hashes/contagens podem divergir.
+> On 2026-11-17, at explicit request, `dist/` was removed — including the
+> `.tar.xz`, the `dist/Kaizen/` tree and `dist/.reference/`. The repository
+> today contains only the source; obtaining a build again requires
+> rebuilding from scratch (`build.sh` → `package.sh` → `validate.sh`), and the
+> hashes/counts may differ.
 
-Medições daquela execução:
+Measurements from that run:
 
-| Etapa | Resultado |
+| Stage | Result |
 |---|---|
-| Build editor mono | OK — `4.8.beta.mono.custom_build` |
-| Glue C# / assemblies / SDK NuGet | OK |
-| Templates mono Debug/Release | OK |
-| Pacote mono com .NET privado | OK — SDK 10.0.113, runtime 10.0.13 |
-| Distribuição extraída | 745 MB, 3909 files, 5 symlinks |
+| Mono editor build | OK — `4.8.beta.mono.custom_build` |
+| C# glue / assemblies / NuGet SDK | OK |
+| Mono Debug/Release templates | OK |
+| Mono package with private .NET | OK — SDK 10.0.113, runtime 10.0.13 |
+| Extracted distribution | 745 MB, 3909 files, 5 symlinks |
 | `.tar.xz` | 232 MB + `.sha256` |
-| SHA-256 do arquivo | `bebd507e28e7601b0321a90cea42b2397180caf79176ff5ccc0cd92ab9a67b00` |
-| Reprodutibilidade | OK — duas execuções, mesmo SHA-256 |
+| Archive SHA-256 | `bebd507e28e7601b0321a90cea42b2397180caf79176ff5ccc0cd92ab9a67b00` |
+| Reproducibility | OK — two runs, same SHA-256 |
 | `validate.sh --mono --global` | **132 PASS, 0 FAIL, 0 WARN** |
-| Exportação GDScript | OK — executável exportado roda e imprime |
-| `--build-solutions` C# | OK com SDK privado |
-| Exportação C# | OK — executável exportado roda e imprime |
-| Instalação por usuário + `kaizen-select` | OK |
-| Coexistência beta/rc (fixture) | OK |
-| Desinstalação seletiva | OK — preserva versão e dados |
-| Instalação global simulada | OK (sem root) |
-| Windows | **não executado** |
+| GDScript export | OK — exported executable runs and prints |
+| `--build-solutions` C# | OK with private SDK |
+| C# export | OK — exported executable runs and prints |
+| Per-user installation + `kaizen-select` | OK |
+| beta/rc coexistence (fixture) | OK |
+| Selective uninstallation | OK — preserves version and data |
+| Simulated global installation | OK (no root) |
+| Windows | **not run** |
 
 ---
 
-## 15. Solução de problemas
+## 15. Troubleshooting
 
-| Sintoma | Causa / solução |
+| Symptom | Cause / solution |
 |---|---|
-| “Nenhum modelo de exportação encontrado” | versão do template ≠ `KAIZEN_VERSION_FULL_CONFIG`; confira `kaizen --version` e o diretório de templates |
-| `Unable to find MSBuild` | o wrapper não encontrou o .NET privado; confira o symlink `Engine/Managed/dotnet` e `<opt>/.dotnet/<sdk>` |
-| Restore falha com `Kaizen.NET.Sdk` | fonte local ausente; use o `NuGet.config` do sample ou aponte para `Tools/nupkgs` |
-| `KaizenSharp` não encontrado | mantenha o symlink em `Engine/Binaries/Linux`; o runtime não procura em XDG |
-| Editor não acha templates no modo portátil | verifique `_sc_` e os symlinks em `editor_data/export_templates/<versão>/` |
-| `sha256sum -c` falha | arquivo corrompido ou editado; reempacote ou rebaixe |
-| Instalação diz que o canal não existe | o pacote tem metadados de outro canal; use o arquivo correto ou `--channel` compatível |
-| `kaizen` abre a versão errada | `kaizen-select --list` e `kaizen-select <canal>` |
-| Sem permissão em `/opt` | use o modo por usuário (padrão) ou `sudo --system` |
+| “No export model found” | template version ≠ `KAIZEN_VERSION_FULL_CONFIG`; check `kaizen --version` and the template directory |
+| `Unable to find MSBuild` | the wrapper did not find the private .NET; check the `Engine/Managed/dotnet` symlink and `<opt>/.dotnet/<sdk>` |
+| Restore fails with `Kaizen.NET.Sdk` | local source missing; use the sample's `NuGet.config` or point to `Tools/nupkgs` |
+| `KaizenSharp` not found | keep the symlink in `Engine/Binaries/Linux`; the runtime does not search in XDG |
+| Editor cannot find templates in portable mode | check `_sc_` and the symlinks in `editor_data/export_templates/<version>/` |
+| `sha256sum -c` fails | corrupted or modified file; repackage or re-download |
+| Installation says the channel does not exist | the package has metadata for a different channel; use the correct archive or a compatible `--channel` |
+| `kaizen` opens the wrong version | `kaizen-select --list` and `kaizen-select <channel>` |
+| No permission in `/opt` | use per-user mode (default) or `sudo --system` |
