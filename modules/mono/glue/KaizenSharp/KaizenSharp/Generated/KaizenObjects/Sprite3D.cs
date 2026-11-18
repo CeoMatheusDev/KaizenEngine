@@ -1,0 +1,493 @@
+namespace Kaizen;
+
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using Kaizen.NativeInterop;
+
+#nullable disable
+/// <summary>
+/// <para>A node that displays a 2D texture in a 3D environment. The texture displayed can be a region from a larger atlas texture, or a frame from a sprite sheet animation. See also <see cref="Kaizen.SpriteBase3D"/> where properties such as the billboard mode are defined.</para>
+/// </summary>
+public partial class Sprite3D : SpriteBase3D
+{
+    /// <summary>
+    /// <para><see cref="Kaizen.Texture2D"/> object to draw. If <see cref="Kaizen.GeometryInstance3D.MaterialOverride"/> is used, this will be overridden. The size information is still used.</para>
+    /// </summary>
+    public Texture2D Texture
+    {
+        get
+        {
+            return GetTexture();
+        }
+        set
+        {
+            SetTexture(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>The number of columns in the sprite sheet. When this property is changed, <see cref="Kaizen.Sprite3D.Frame"/> is adjusted so that the same visual frame is maintained (same row and column). If that's impossible, <see cref="Kaizen.Sprite3D.Frame"/> is reset to <c>0</c>.</para>
+    /// </summary>
+    public int Hframes
+    {
+        get
+        {
+            return GetHframes();
+        }
+        set
+        {
+            SetHframes(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>The number of rows in the sprite sheet. When this property is changed, <see cref="Kaizen.Sprite3D.Frame"/> is adjusted so that the same visual frame is maintained (same row and column). If that's impossible, <see cref="Kaizen.Sprite3D.Frame"/> is reset to <c>0</c>.</para>
+    /// </summary>
+    public int Vframes
+    {
+        get
+        {
+            return GetVframes();
+        }
+        set
+        {
+            SetVframes(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>Current frame to display from sprite sheet. <see cref="Kaizen.Sprite3D.Hframes"/> or <see cref="Kaizen.Sprite3D.Vframes"/> must be greater than 1. This property is automatically adjusted when <see cref="Kaizen.Sprite3D.Hframes"/> or <see cref="Kaizen.Sprite3D.Vframes"/> are changed to keep pointing to the same visual frame (same column and row). If that's impossible, this value is reset to <c>0</c>.</para>
+    /// </summary>
+    public int Frame
+    {
+        get
+        {
+            return GetFrame();
+        }
+        set
+        {
+            SetFrame(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>Coordinates of the frame to display from sprite sheet. This is as an alias for the <see cref="Kaizen.Sprite3D.Frame"/> property. <see cref="Kaizen.Sprite3D.Hframes"/> or <see cref="Kaizen.Sprite3D.Vframes"/> must be greater than 1.</para>
+    /// </summary>
+    public Vector2I FrameCoords
+    {
+        get
+        {
+            return GetFrameCoords();
+        }
+        set
+        {
+            SetFrameCoords(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>If <see langword="true"/>, the sprite will use <see cref="Kaizen.Sprite3D.RegionRect"/> and display only the specified part of its texture.</para>
+    /// </summary>
+    public bool RegionEnabled
+    {
+        get
+        {
+            return IsRegionEnabled();
+        }
+        set
+        {
+            SetRegionEnabled(value);
+        }
+    }
+
+    /// <summary>
+    /// <para>The region of the atlas texture to display. <see cref="Kaizen.Sprite3D.RegionEnabled"/> must be <see langword="true"/>.</para>
+    /// </summary>
+    public Rect2 RegionRect
+    {
+        get
+        {
+            return GetRegionRect();
+        }
+        set
+        {
+            SetRegionRect(value);
+        }
+    }
+
+    private static readonly System.Type CachedType = typeof(Sprite3D);
+
+    private static readonly StringName NativeName = "Sprite3D";
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly unsafe delegate* unmanaged<kaizen_bool, IntPtr> NativeCtor = ClassDB_get_constructor(NativeName);
+
+    public Sprite3D() : this(false)
+    {
+        unsafe
+        {
+            ConstructAndInitialize(NativeCtor, NativeName, CachedType, refCounted: false);
+        }
+    }
+
+    internal Sprite3D(IntPtr ptr) : this(false)
+    {
+        NativePtr = ptr;
+        unsafe
+        {
+            ConstructAndInitialize(null, NativeName, CachedType, refCounted: false);
+        }
+    }
+
+    internal Sprite3D(bool memoryOwn) : base(memoryOwn) { }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind0 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetTexture, 4051416890ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void SetTexture(Texture2D texture)
+    {
+        NativeCalls.kaizen_icall_1_56(MethodBind0, KaizenObject.GetPtr(this), KaizenObject.GetPtr(texture));
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind1 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetTexture, 3635182373ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Texture2D GetTexture()
+    {
+        Texture2D ret = (Texture2D)NativeCalls.kaizen_icall_0_87(MethodBind1, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind2 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetRegionEnabled, 2586408642ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void SetRegionEnabled(bool enabled)
+    {
+        NativeCalls.kaizen_icall_1_14(MethodBind2, KaizenObject.GetPtr(this), enabled.ToKaizenBool());
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind3 = ClassDB_get_method_with_compatibility(NativeName, MethodName.IsRegionEnabled, 36873697ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool IsRegionEnabled()
+    {
+        bool ret = NativeCalls.kaizen_icall_0_15(MethodBind3, KaizenObject.GetPtr(this)).ToBool();
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind4 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetRegionRect, 2046264180ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public unsafe void SetRegionRect(Rect2 rect)
+    {
+        NativeCalls.kaizen_icall_1_214(MethodBind4, KaizenObject.GetPtr(this), &rect);
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind5 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetRegionRect, 1639390495ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Rect2 GetRegionRect()
+    {
+        Rect2 ret = NativeCalls.kaizen_icall_0_215(MethodBind5, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind6 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetFrame, 1286410249ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void SetFrame(int frame)
+    {
+        NativeCalls.kaizen_icall_1_38(MethodBind6, KaizenObject.GetPtr(this), frame);
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind7 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetFrame, 3905245786ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int GetFrame()
+    {
+        int ret = NativeCalls.kaizen_icall_0_39(MethodBind7, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind8 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetFrameCoords, 1130785943ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public unsafe void SetFrameCoords(Vector2I coords)
+    {
+        NativeCalls.kaizen_icall_1_34(MethodBind8, KaizenObject.GetPtr(this), &coords);
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind9 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetFrameCoords, 3690982128ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public Vector2I GetFrameCoords()
+    {
+        Vector2I ret = NativeCalls.kaizen_icall_0_35(MethodBind9, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind10 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetVframes, 1286410249ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void SetVframes(int vframes)
+    {
+        NativeCalls.kaizen_icall_1_38(MethodBind10, KaizenObject.GetPtr(this), vframes);
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind11 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetVframes, 3905245786ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int GetVframes()
+    {
+        int ret = NativeCalls.kaizen_icall_0_39(MethodBind11, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind12 = ClassDB_get_method_with_compatibility(NativeName, MethodName.SetHframes, 1286410249ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public void SetHframes(int hframes)
+    {
+        NativeCalls.kaizen_icall_1_38(MethodBind12, KaizenObject.GetPtr(this), hframes);
+        global::System.GC.KeepAlive(this);
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind13 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetHframes, 3905245786ul);
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public int GetHframes()
+    {
+        int ret = NativeCalls.kaizen_icall_0_39(MethodBind13, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    /// <summary>
+    /// <para>Emitted when the <see cref="Kaizen.Sprite3D.Frame"/> changes.</para>
+    /// </summary>
+    public event Action FrameChanged
+    {
+        add => Connect(SignalName.FrameChanged, Callable.From(value));
+        remove => Disconnect(SignalName.FrameChanged, Callable.From(value));
+    }
+
+    protected void EmitSignalFrameChanged()
+    {
+        EmitSignal(SignalName.FrameChanged);
+    }
+
+    /// <summary>
+    /// <para>Emitted when the <see cref="Kaizen.Sprite3D.Texture"/> changes.</para>
+    /// </summary>
+    public event Action TextureChanged
+    {
+        add => Connect(SignalName.TextureChanged, Callable.From(value));
+        remove => Disconnect(SignalName.TextureChanged, Callable.From(value));
+    }
+
+    protected void EmitSignalTextureChanged()
+    {
+        EmitSignal(SignalName.TextureChanged);
+    }
+
+    // ReSharper disable once InconsistentNaming
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly StringName SignalProxyName_frame_changed = "FrameChanged";
+
+    // ReSharper disable once InconsistentNaming
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly StringName SignalProxyName_texture_changed = "TextureChanged";
+
+    /// <summary>
+    /// Invokes the method with the given name, using the given arguments.
+    /// This method is used by Kaizen to invoke methods from the engine side.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="method">Name of the method to invoke.</param>
+    /// <param name="args">Arguments to use with the invoked method.</param>
+    /// <param name="ret">Value returned by the invoked method.</param>
+#pragma warning disable CS0618 // Member is obsolete
+    protected internal override bool InvokeKaizenClassMethod(in kaizen_string_name method, NativeVariantPtrArgs args, out kaizen_variant ret)
+    {
+        return base.InvokeKaizenClassMethod(method, args, out ret);
+    }
+#pragma warning restore CS0618
+
+    /// <summary>
+    /// Check if the type contains a method with the given name.
+    /// This method is used by Kaizen to check if a method exists before invoking it.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="method">Name of the method to check for.</param>
+
+    protected internal override bool HasKaizenClassMethod(in kaizen_string_name method)
+    {
+        return base.HasKaizenClassMethod(method);
+    }
+
+    /// <summary>
+    /// Check if the type contains a signal with the given name.
+    /// This method is used by Kaizen to check if a signal exists before raising it.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="signal">Name of the signal to check for.</param>
+
+    protected internal override bool HasKaizenClassSignal(in kaizen_string_name signal)
+    {
+        if (signal == SignalName.FrameChanged)
+        {
+            if (HasKaizenClassSignal(SignalProxyName_frame_changed.NativeValue.DangerousSelfRef))
+            {
+                return true;
+            }
+        }
+        if (signal == SignalName.TextureChanged)
+        {
+            if (HasKaizenClassSignal(SignalProxyName_texture_changed.NativeValue.DangerousSelfRef))
+            {
+                return true;
+            }
+        }
+        return base.HasKaizenClassSignal(signal);
+    }
+
+    /// <summary>
+    /// Cached StringNames for the properties and fields contained in this class, for fast lookup.
+    /// </summary>
+    public new class PropertyName : SpriteBase3D.PropertyName
+    {
+        /// <summary>
+        /// Cached name for the 'texture' property.
+        /// </summary>
+        public static readonly StringName Texture = "texture";
+        /// <summary>
+        /// Cached name for the 'hframes' property.
+        /// </summary>
+        public static readonly StringName Hframes = "hframes";
+        /// <summary>
+        /// Cached name for the 'vframes' property.
+        /// </summary>
+        public static readonly StringName Vframes = "vframes";
+        /// <summary>
+        /// Cached name for the 'frame' property.
+        /// </summary>
+        public static readonly StringName Frame = "frame";
+        /// <summary>
+        /// Cached name for the 'frame_coords' property.
+        /// </summary>
+        public static readonly StringName FrameCoords = "frame_coords";
+        /// <summary>
+        /// Cached name for the 'region_enabled' property.
+        /// </summary>
+        public static readonly StringName RegionEnabled = "region_enabled";
+        /// <summary>
+        /// Cached name for the 'region_rect' property.
+        /// </summary>
+        public static readonly StringName RegionRect = "region_rect";
+    }
+
+    /// <summary>
+    /// Cached StringNames for the methods contained in this class, for fast lookup.
+    /// </summary>
+    public new class MethodName : SpriteBase3D.MethodName
+    {
+        /// <summary>
+        /// Cached name for the 'set_texture' method.
+        /// </summary>
+        public static readonly StringName SetTexture = "set_texture";
+        /// <summary>
+        /// Cached name for the 'get_texture' method.
+        /// </summary>
+        public static readonly StringName GetTexture = "get_texture";
+        /// <summary>
+        /// Cached name for the 'set_region_enabled' method.
+        /// </summary>
+        public static readonly StringName SetRegionEnabled = "set_region_enabled";
+        /// <summary>
+        /// Cached name for the 'is_region_enabled' method.
+        /// </summary>
+        public static readonly StringName IsRegionEnabled = "is_region_enabled";
+        /// <summary>
+        /// Cached name for the 'set_region_rect' method.
+        /// </summary>
+        public static readonly StringName SetRegionRect = "set_region_rect";
+        /// <summary>
+        /// Cached name for the 'get_region_rect' method.
+        /// </summary>
+        public static readonly StringName GetRegionRect = "get_region_rect";
+        /// <summary>
+        /// Cached name for the 'set_frame' method.
+        /// </summary>
+        public static readonly StringName SetFrame = "set_frame";
+        /// <summary>
+        /// Cached name for the 'get_frame' method.
+        /// </summary>
+        public static readonly StringName GetFrame = "get_frame";
+        /// <summary>
+        /// Cached name for the 'set_frame_coords' method.
+        /// </summary>
+        public static readonly StringName SetFrameCoords = "set_frame_coords";
+        /// <summary>
+        /// Cached name for the 'get_frame_coords' method.
+        /// </summary>
+        public static readonly StringName GetFrameCoords = "get_frame_coords";
+        /// <summary>
+        /// Cached name for the 'set_vframes' method.
+        /// </summary>
+        public static readonly StringName SetVframes = "set_vframes";
+        /// <summary>
+        /// Cached name for the 'get_vframes' method.
+        /// </summary>
+        public static readonly StringName GetVframes = "get_vframes";
+        /// <summary>
+        /// Cached name for the 'set_hframes' method.
+        /// </summary>
+        public static readonly StringName SetHframes = "set_hframes";
+        /// <summary>
+        /// Cached name for the 'get_hframes' method.
+        /// </summary>
+        public static readonly StringName GetHframes = "get_hframes";
+    }
+
+    /// <summary>
+    /// Cached StringNames for the signals contained in this class, for fast lookup.
+    /// </summary>
+    public new class SignalName : SpriteBase3D.SignalName
+    {
+        /// <summary>
+        /// Cached name for the 'frame_changed' signal.
+        /// </summary>
+        public static readonly StringName FrameChanged = "frame_changed";
+        /// <summary>
+        /// Cached name for the 'texture_changed' signal.
+        /// </summary>
+        public static readonly StringName TextureChanged = "texture_changed";
+    }
+}

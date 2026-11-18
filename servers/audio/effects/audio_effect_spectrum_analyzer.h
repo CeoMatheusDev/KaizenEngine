@@ -1,0 +1,116 @@
+//************************************************************************//
+//  audio_effect_spectrum_analyzer.h                                      //
+//************************************************************************//
+//                         This file is part of:                          //
+//                            KaizenEngine                                //
+//              https://github.com/CeoMatheusDev/Kaizen                   //
+//************************************************************************//
+// Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  //
+// Copyright (c) 2014-present Godot Engine contributors.                  //
+// Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                    //
+//                                                                        //
+// This file contains code derived from the Godot Engine                  //
+// (https://godotengine.org), which is licensed under the MIT License.    //
+// The original MIT notice is preserved below.                            //
+//                                                                        //
+// Modified by Matheus A. Santos, Hardion Labs on 2026-11-17.             //
+// Modifications and additional code are licensed under the GNU Affero    //
+// General Public License v3.0 (AGPL-3.0).                                //
+// See the files LICENSE and LICENSE-ADDITIONAL-TERMS.md for details.     //
+//                                                                        //
+// Permission is hereby granted, free of charge, to any person obtaining  //
+// a copy of this software and associated documentation files (the        //
+// "Software"), to deal in the Software without restriction, including    //
+// without limitation the rights to use, copy, modify, merge, publish,    //
+// distribute, sublicense, and/or sell copies of the Software, and to     //
+// permit persons to whom the Software is furnished to do so, subject to  //
+// the following conditions:                                              //
+//                                                                        //
+// The above copyright notice and this permission notice shall be         //
+// included in all copies or substantial portions of the Software.        //
+//                                                                        //
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        //
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     //
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. //
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   //
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   //
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      //
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 //
+//************************************************************************//
+
+#pragma once
+
+#include "servers/audio/audio_effect.h"
+
+class AudioEffectSpectrumAnalyzer;
+
+class AudioEffectSpectrumAnalyzerInstance : public AudioEffectInstance {
+	GDCLASS(AudioEffectSpectrumAnalyzerInstance, AudioEffectInstance);
+
+public:
+	enum MagnitudeMode {
+		MAGNITUDE_AVERAGE,
+		MAGNITUDE_MAX,
+	};
+
+private:
+	friend class AudioEffectSpectrumAnalyzer;
+	Ref<AudioEffectSpectrumAnalyzer> base;
+
+	Vector<Vector<AudioFrame>> fft_history;
+	Vector<float> temporal_fft;
+	int temporal_fft_pos;
+	int fft_size;
+	int fft_count;
+	int fft_pos;
+	float mix_rate;
+
+protected:
+	static void _bind_methods();
+
+public:
+	virtual void process(const AudioFrame *p_src_frames, AudioFrame *p_dst_frames, int p_frame_count) override;
+	Vector2 get_magnitude_for_frequency_range(float p_begin, float p_end, MagnitudeMode p_mode = MAGNITUDE_MAX) const;
+};
+
+VARIANT_ENUM_CAST(AudioEffectSpectrumAnalyzerInstance::MagnitudeMode)
+
+class AudioEffectSpectrumAnalyzer : public AudioEffect {
+	GDCLASS(AudioEffectSpectrumAnalyzer, AudioEffect);
+
+public:
+	enum FFTSize {
+		FFT_SIZE_256,
+		FFT_SIZE_512,
+		FFT_SIZE_1024,
+		FFT_SIZE_2048,
+		FFT_SIZE_4096,
+		FFT_SIZE_MAX
+	};
+
+public:
+	friend class AudioEffectSpectrumAnalyzerInstance;
+	float buffer_length;
+	FFTSize fft_size;
+
+protected:
+	static void _bind_methods();
+
+#ifndef DISABLE_DEPRECATED
+	void _set_tap_back_pos_bind_compat_114355(float p_seconds);
+	float _get_tap_back_pos_bind_compat_114355() const;
+	static void _bind_compatibility_methods();
+#endif
+
+public:
+	Ref<AudioEffectInstance> instantiate() override;
+	void set_buffer_length(float p_seconds);
+	float get_buffer_length() const;
+
+	void set_fft_size(FFTSize);
+	FFTSize get_fft_size() const;
+
+	AudioEffectSpectrumAnalyzer();
+};
+
+VARIANT_ENUM_CAST(AudioEffectSpectrumAnalyzer::FFTSize);

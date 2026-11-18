@@ -1,0 +1,126 @@
+//************************************************************************//
+//  path_2d.h                                                             //
+//************************************************************************//
+//                         This file is part of:                          //
+//                            KaizenEngine                                //
+//              https://github.com/CeoMatheusDev/Kaizen                   //
+//************************************************************************//
+// Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  //
+// Copyright (c) 2014-present Godot Engine contributors.                  //
+// Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                    //
+//                                                                        //
+// This file contains code derived from the Godot Engine                  //
+// (https://godotengine.org), which is licensed under the MIT License.    //
+// The original MIT notice is preserved below.                            //
+//                                                                        //
+// Modified by Matheus A. Santos, Hardion Labs on 2026-11-17.             //
+// Modifications and additional code are licensed under the GNU Affero    //
+// General Public License v3.0 (AGPL-3.0).                                //
+// See the files LICENSE and LICENSE-ADDITIONAL-TERMS.md for details.     //
+//                                                                        //
+// Permission is hereby granted, free of charge, to any person obtaining  //
+// a copy of this software and associated documentation files (the        //
+// "Software"), to deal in the Software without restriction, including    //
+// without limitation the rights to use, copy, modify, merge, publish,    //
+// distribute, sublicense, and/or sell copies of the Software, and to     //
+// permit persons to whom the Software is furnished to do so, subject to  //
+// the following conditions:                                              //
+//                                                                        //
+// The above copyright notice and this permission notice shall be         //
+// included in all copies or substantial portions of the Software.        //
+//                                                                        //
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        //
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     //
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. //
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   //
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   //
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      //
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 //
+//************************************************************************//
+
+#pragma once
+
+#include "scene/2d/node_2d.h"
+#include "scene/resources/curve.h"
+
+class Timer;
+
+class Path2D : public Node2D {
+	GDCLASS(Path2D, Node2D);
+
+	Ref<Curve2D> curve;
+
+	void _curve_changed();
+
+#ifdef DEBUG_ENABLED
+	RID debug_mesh_rid;
+	RID debug_instance;
+
+	void _debug_create();
+	void _debug_update();
+	void _debug_free();
+#endif // DEBUG_ENABLED
+
+protected:
+	void _notification(int p_what);
+	static void _bind_methods();
+
+public:
+#ifdef DEBUG_ENABLED
+	virtual Rect2 _edit_get_rect() const override;
+	virtual bool _edit_use_rect() const override;
+	virtual bool _edit_is_selected_on_click(const Point2 &p_point, double p_tolerance) const override;
+#endif
+
+	void set_curve(const Ref<Curve2D> &p_curve);
+	Ref<Curve2D> get_curve() const;
+};
+
+class PathFollow2D : public Node2D {
+	GDCLASS(PathFollow2D, Node2D);
+
+public:
+private:
+	Path2D *path = nullptr;
+	real_t progress = 0.0;
+	Timer *update_timer = nullptr;
+	real_t h_offset = 0.0;
+	real_t v_offset = 0.0;
+	bool cubic = true;
+	bool loop = true;
+	bool rotates = true;
+
+	void _update_transform();
+
+protected:
+	void _validate_property(PropertyInfo &p_property) const;
+
+	void _notification(int p_what);
+	static void _bind_methods();
+
+public:
+	void path_changed();
+
+	void set_progress(real_t p_progress);
+	real_t get_progress() const;
+
+	void set_h_offset(real_t p_h_offset);
+	real_t get_h_offset() const;
+
+	void set_v_offset(real_t p_v_offset);
+	real_t get_v_offset() const;
+
+	void set_progress_ratio(real_t p_ratio);
+	real_t get_progress_ratio() const;
+
+	void set_loop(bool p_loop);
+	bool has_loop() const;
+
+	void set_rotation_enabled(bool p_enabled);
+	bool is_rotation_enabled() const;
+
+	void set_cubic_interpolation_enabled(bool p_enabled);
+	bool is_cubic_interpolation_enabled() const;
+
+	PackedStringArray get_configuration_warnings() const override;
+};

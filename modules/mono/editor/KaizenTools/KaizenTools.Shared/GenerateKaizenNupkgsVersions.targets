@@ -1,0 +1,39 @@
+<Project>
+  <!-- Generate C# file with the version of all the nupkgs bundled with Kaizen -->
+
+  <Target Name="SetPropertiesForGenerateKaizenNupkgsVersions">
+    <PropertyGroup>
+      <GeneratedKaizenNupkgsVersionsFile>$(IntermediateOutputPath)KaizenNupkgsVersions.g.cs</GeneratedKaizenNupkgsVersionsFile>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="GenerateKaizenNupkgsVersionsFile"
+          DependsOnTargets="_GenerateKaizenNupkgsVersionsFile"
+          BeforeTargets="PrepareForBuild;CompileDesignTime;BeforeCompile;CoreCompile">
+    <ItemGroup>
+      <Compile Include="$(GeneratedKaizenNupkgsVersionsFile)" />
+      <FileWrites Include="$(GeneratedKaizenNupkgsVersionsFile)" />
+    </ItemGroup>
+  </Target>
+  <Target Name="_GenerateKaizenNupkgsVersionsFile"
+          DependsOnTargets="SetPropertiesForGenerateKaizenNupkgsVersions"
+          Inputs="$(MSBuildProjectFile);$(MSBuildThisFileDirectory);$(MSBuildProjectFile)\..\..\..\SdkPackageVersions.props"
+          Outputs="$(GeneratedKaizenNupkgsVersionsFile)">
+    <PropertyGroup>
+      <GenerateKaizenNupkgsVersionsCode><![CDATA[
+namespace $(RootNamespace)
+{
+    public class GeneratedKaizenNupkgsVersions
+    {
+        public const string KaizenNETSdk = "$(PackageVersion_Kaizen_NET_Sdk)"%3b
+        public const string KaizenSourceGenerators = "$(PackageVersion_Kaizen_SourceGenerators)"%3b
+        public const string KaizenSharp = "$(PackageVersion_KaizenSharp)"%3b
+    }
+}
+]]></GenerateKaizenNupkgsVersionsCode>
+    </PropertyGroup>
+    <WriteLinesToFile Lines="$(GenerateKaizenNupkgsVersionsCode)"
+                      File="$(GeneratedKaizenNupkgsVersionsFile)"
+                      Overwrite="True" WriteOnlyWhenDifferent="True" />
+  </Target>
+</Project>

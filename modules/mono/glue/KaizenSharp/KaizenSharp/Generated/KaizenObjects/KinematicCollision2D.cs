@@ -1,0 +1,323 @@
+namespace Kaizen;
+
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using Kaizen.NativeInterop;
+
+#nullable disable
+/// <summary>
+/// <para>Holds collision data from the movement of a <see cref="Kaizen.PhysicsBody2D"/>, usually from <see cref="Kaizen.PhysicsBody2D.MoveAndCollide(Vector2, bool, float, bool)"/>. When a <see cref="Kaizen.PhysicsBody2D"/> is moved, it stops if it detects a collision with another body. If a collision is detected, a <see cref="Kaizen.KinematicCollision2D"/> object is returned.</para>
+/// <para>The collision data includes the colliding object, the remaining motion, and the collision position. This data can be used to determine a custom response to the collision.</para>
+/// </summary>
+public partial class KinematicCollision2D : RefCounted
+{
+    private static readonly System.Type CachedType = typeof(KinematicCollision2D);
+
+    private static readonly StringName NativeName = "KinematicCollision2D";
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly unsafe delegate* unmanaged<kaizen_bool, IntPtr> NativeCtor = ClassDB_get_constructor(NativeName);
+
+    public KinematicCollision2D() : this(true)
+    {
+        unsafe
+        {
+            ConstructAndInitialize(NativeCtor, NativeName, CachedType, refCounted: true);
+        }
+    }
+
+    internal KinematicCollision2D(IntPtr ptr) : this(true)
+    {
+        NativePtr = ptr;
+        unsafe
+        {
+            ConstructAndInitialize(null, NativeName, CachedType, refCounted: true);
+        }
+    }
+
+    internal KinematicCollision2D(bool memoryOwn) : base(memoryOwn) { }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind0 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetPosition, 3341600327ul);
+
+    /// <summary>
+    /// <para>Returns the point of collision in global coordinates.</para>
+    /// </summary>
+    public Vector2 GetPosition()
+    {
+        Vector2 ret = NativeCalls.kaizen_icall_0_37(MethodBind0, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind1 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetNormal, 3341600327ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's shape's normal at the point of collision.</para>
+    /// </summary>
+    public Vector2 GetNormal()
+    {
+        Vector2 ret = NativeCalls.kaizen_icall_0_37(MethodBind1, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind2 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetTravel, 3341600327ul);
+
+    /// <summary>
+    /// <para>Returns the moving object's travel before collision.</para>
+    /// </summary>
+    public Vector2 GetTravel()
+    {
+        Vector2 ret = NativeCalls.kaizen_icall_0_37(MethodBind2, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind3 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetRemainder, 3341600327ul);
+
+    /// <summary>
+    /// <para>Returns the moving object's remaining movement vector.</para>
+    /// </summary>
+    public Vector2 GetRemainder()
+    {
+        Vector2 ret = NativeCalls.kaizen_icall_0_37(MethodBind3, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind4 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetAngle, 2841063350ul);
+
+    /// <summary>
+    /// <para>Returns the collision angle according to <paramref name="upDirection"/>, which is <c>Vector2.UP</c> by default. This value is always positive.</para>
+    /// </summary>
+    /// <param name="upDirection">If the parameter is null, then the default value is <c>new Vector2(0.0f, -1.0f)</c>.</param>
+    public unsafe float GetAngle(Nullable<Vector2> upDirection = null)
+    {
+        Vector2 upDirectionOrDefVal = upDirection.HasValue ? upDirection.Value : new Vector2(0.0f, -1.0f);
+        float ret = NativeCalls.kaizen_icall_1_315(MethodBind4, KaizenObject.GetPtr(this), &upDirectionOrDefVal);
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind5 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetDepth, 1740695150ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's length of overlap along the collision normal.</para>
+    /// </summary>
+    public float GetDepth()
+    {
+        float ret = NativeCalls.kaizen_icall_0_92(MethodBind5, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind6 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetLocalShape, 1981248198ul);
+
+    /// <summary>
+    /// <para>Returns the moving object's colliding shape.</para>
+    /// </summary>
+    public KaizenObject GetLocalShape()
+    {
+        KaizenObject ret = (KaizenObject)NativeCalls.kaizen_icall_0_53(MethodBind6, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind7 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetCollider, 1981248198ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's attached <see cref="Kaizen.KaizenObject"/>.</para>
+    /// </summary>
+    public KaizenObject GetCollider()
+    {
+        KaizenObject ret = (KaizenObject)NativeCalls.kaizen_icall_0_53(MethodBind7, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind8 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetColliderId, 3905245786ul);
+
+    /// <summary>
+    /// <para>Returns the unique instance ID of the colliding body's attached <see cref="Kaizen.KaizenObject"/>. See <see cref="Kaizen.KaizenObject.GetInstanceId()"/>.</para>
+    /// </summary>
+    public ulong GetColliderId()
+    {
+        ulong ret = NativeCalls.kaizen_icall_0_162(MethodBind8, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind9 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetColliderRid, 2944877500ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's <see cref="Kaizen.Rid"/> used by the <see cref="Kaizen.PhysicsServer2D"/>.</para>
+    /// </summary>
+    public Rid GetColliderRid()
+    {
+        Rid ret = NativeCalls.kaizen_icall_0_267(MethodBind9, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind10 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetColliderShape, 1981248198ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's shape.</para>
+    /// </summary>
+    public KaizenObject GetColliderShape()
+    {
+        KaizenObject ret = (KaizenObject)NativeCalls.kaizen_icall_0_53(MethodBind10, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind11 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetColliderShapeIndex, 3905245786ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's shape index. See <see cref="Kaizen.CollisionObject2D"/>.</para>
+    /// </summary>
+    public int GetColliderShapeIndex()
+    {
+        int ret = NativeCalls.kaizen_icall_0_39(MethodBind11, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private static readonly IntPtr MethodBind12 = ClassDB_get_method_with_compatibility(NativeName, MethodName.GetColliderVelocity, 3341600327ul);
+
+    /// <summary>
+    /// <para>Returns the colliding body's velocity.</para>
+    /// </summary>
+    public Vector2 GetColliderVelocity()
+    {
+        Vector2 ret = NativeCalls.kaizen_icall_0_37(MethodBind12, KaizenObject.GetPtr(this));
+        global::System.GC.KeepAlive(this);
+        return ret;
+    }
+
+    /// <summary>
+    /// Invokes the method with the given name, using the given arguments.
+    /// This method is used by Kaizen to invoke methods from the engine side.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="method">Name of the method to invoke.</param>
+    /// <param name="args">Arguments to use with the invoked method.</param>
+    /// <param name="ret">Value returned by the invoked method.</param>
+#pragma warning disable CS0618 // Member is obsolete
+    protected internal override bool InvokeKaizenClassMethod(in kaizen_string_name method, NativeVariantPtrArgs args, out kaizen_variant ret)
+    {
+        return base.InvokeKaizenClassMethod(method, args, out ret);
+    }
+#pragma warning restore CS0618
+
+    /// <summary>
+    /// Check if the type contains a method with the given name.
+    /// This method is used by Kaizen to check if a method exists before invoking it.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="method">Name of the method to check for.</param>
+
+    protected internal override bool HasKaizenClassMethod(in kaizen_string_name method)
+    {
+        return base.HasKaizenClassMethod(method);
+    }
+
+    /// <summary>
+    /// Check if the type contains a signal with the given name.
+    /// This method is used by Kaizen to check if a signal exists before raising it.
+    /// Do not call or override this method.
+    /// </summary>
+    /// <param name="signal">Name of the signal to check for.</param>
+
+    protected internal override bool HasKaizenClassSignal(in kaizen_string_name signal)
+    {
+        return base.HasKaizenClassSignal(signal);
+    }
+
+    /// <summary>
+    /// Cached StringNames for the properties and fields contained in this class, for fast lookup.
+    /// </summary>
+    public new class PropertyName : RefCounted.PropertyName
+    {
+    }
+
+    /// <summary>
+    /// Cached StringNames for the methods contained in this class, for fast lookup.
+    /// </summary>
+    public new class MethodName : RefCounted.MethodName
+    {
+        /// <summary>
+        /// Cached name for the 'get_position' method.
+        /// </summary>
+        public static readonly StringName GetPosition = "get_position";
+        /// <summary>
+        /// Cached name for the 'get_normal' method.
+        /// </summary>
+        public static readonly StringName GetNormal = "get_normal";
+        /// <summary>
+        /// Cached name for the 'get_travel' method.
+        /// </summary>
+        public static readonly StringName GetTravel = "get_travel";
+        /// <summary>
+        /// Cached name for the 'get_remainder' method.
+        /// </summary>
+        public static readonly StringName GetRemainder = "get_remainder";
+        /// <summary>
+        /// Cached name for the 'get_angle' method.
+        /// </summary>
+        public static readonly StringName GetAngle = "get_angle";
+        /// <summary>
+        /// Cached name for the 'get_depth' method.
+        /// </summary>
+        public static readonly StringName GetDepth = "get_depth";
+        /// <summary>
+        /// Cached name for the 'get_local_shape' method.
+        /// </summary>
+        public static readonly StringName GetLocalShape = "get_local_shape";
+        /// <summary>
+        /// Cached name for the 'get_collider' method.
+        /// </summary>
+        public static readonly StringName GetCollider = "get_collider";
+        /// <summary>
+        /// Cached name for the 'get_collider_id' method.
+        /// </summary>
+        public static readonly StringName GetColliderId = "get_collider_id";
+        /// <summary>
+        /// Cached name for the 'get_collider_rid' method.
+        /// </summary>
+        public static readonly StringName GetColliderRid = "get_collider_rid";
+        /// <summary>
+        /// Cached name for the 'get_collider_shape' method.
+        /// </summary>
+        public static readonly StringName GetColliderShape = "get_collider_shape";
+        /// <summary>
+        /// Cached name for the 'get_collider_shape_index' method.
+        /// </summary>
+        public static readonly StringName GetColliderShapeIndex = "get_collider_shape_index";
+        /// <summary>
+        /// Cached name for the 'get_collider_velocity' method.
+        /// </summary>
+        public static readonly StringName GetColliderVelocity = "get_collider_velocity";
+    }
+
+    /// <summary>
+    /// Cached StringNames for the signals contained in this class, for fast lookup.
+    /// </summary>
+    public new class SignalName : RefCounted.SignalName
+    {
+    }
+}

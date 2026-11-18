@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<style name="KaizenEditorTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+	</style>
+
+	<style name="KaizenGameTheme" parent="KaizenEditorTheme">
+		<item name="android:windowIsTranslucent">true</item>
+	</style>
+
+	<style name="KaizenEditorSplashScreenTheme" parent="Theme.SplashScreen.IconBackground">
+		<!-- Set the theme of the Activity that directly follows your splash
+		screen. This is required. -->
+		<item name="postSplashScreenTheme">@style/KaizenEditorTheme</item>
+	</style>
+
+	<style name="KaizenEmbeddedGameTheme" parent="@android:style/Theme.DeviceDefault.Panel">
+	</style>
+</resources>

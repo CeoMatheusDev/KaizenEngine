@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- $(KaizenProjectDir) would normally be defined by the Kaizen.NET.Sdk -->
+    <KaizenProjectDir>$(MSBuildProjectDirectory)</KaizenProjectDir>
+    <KaizenProjectDirBase64 Condition=" $([MSBuild]::VersionGreaterThanOrEquals($(MSBuildAssemblyVersion), '17.3')) ">$([MSBuild]::ConvertToBase64('$(KaizenProjectDir)'))</KaizenProjectDirBase64>
+    <!-- For compiling GetKaizenPropertyDefaultValues. -->
+    <DefineConstants>$(DefineConstants);TOOLS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- The emitted files are not part of the compilation nor design.
+    They're only for peeking at the generated sources. Sometimes the
+    emitted files get corrupted, but that won't break anything. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\glue\KaizenSharp\KaizenSharp\KaizenSharp.csproj">
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Kaizen.SourceGenerators\Kaizen.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- This file is imported automatically when using PackageReference to
+  reference Kaizen.SourceGenerators, but not when using ProjectReference -->
+  <Import Project="..\Kaizen.SourceGenerators\Kaizen.SourceGenerators.props" />
+
+</Project>

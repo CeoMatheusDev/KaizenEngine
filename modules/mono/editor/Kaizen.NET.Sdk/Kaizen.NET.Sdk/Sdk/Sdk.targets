@@ -1,0 +1,54 @@
+<Project>
+  <Import Sdk="Microsoft.NET.Sdk" Project="Sdk.targets" Condition="'$(KaizenSdkImportsMicrosoftNetSdk)' == 'true'" />
+
+  <PropertyGroup>
+    <!--
+    Define constant to determine whether the real_t type in Kaizen is double precision or not.
+    By default this is false, like the official Kaizen builds. If someone is using a custom
+    Kaizen build where real_t is double, they can override the KaizenFloat64 property.
+    -->
+    <DefineConstants Condition=" '$(KaizenFloat64)' == 'true' ">KAIZEN_REAL_T_IS_DOUBLE;$(DefineConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <!--
+  We are defining ExportDebug and Debug in Sdk.targets to ensure that the user cannot
+  override the DefineConstants property in their csproj file and break the editor functionality.
+  -->
+  <PropertyGroup>
+    <!-- ExportDebug also defines DEBUG like Debug does. -->
+    <DefineConstants Condition=" '$(Configuration)' == 'ExportDebug' ">$(DefineConstants);DEBUG</DefineConstants>
+    <!-- Debug defines TOOLS to differentiate between Debug and ExportDebug configurations. -->
+    <DefineConstants Condition=" '$(Configuration)' == 'Debug' ">$(DefineConstants);TOOLS</DefineConstants>
+
+    <DefineConstants>$(_KaizenDefineConstants);$(DefineConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableKaizenDotNetPreview)' == 'true'">
+    <DisableImplicitKaizenGeneratorReferences>true</DisableImplicitKaizenGeneratorReferences>
+    <DisableImplicitKaizenSharpReferences>true</DisableImplicitKaizenSharpReferences>
+  </PropertyGroup>
+
+  <!-- KaizenSharp references -->
+  <ItemGroup Condition=" '$(DisableImplicitKaizenGeneratorReferences)' != 'true' ">
+    <PackageReference Include="Kaizen.SourceGenerators" IsImplicitlyDefined="true" Version="$(PackageVersion_Kaizen_SourceGenerators)" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(DisableImplicitKaizenSharpReferences)' != 'true' ">
+    <PackageReference Include="KaizenSharp" IsImplicitlyDefined="true" Version="$(PackageVersion_KaizenSharp)" />
+    <PackageReference Include="KaizenSharpEditor" IsImplicitlyDefined="true" Version="$(PackageVersion_KaizenSharp)" Condition=" '$(Configuration)' == 'Debug' " />
+  </ItemGroup>
+  <Target Name="CheckKaizenDotNetReferences" BeforeTargets="Build" Condition=" '$(EnableKaizenDotNetPreview)' != 'true' ">
+    <Error Text="The project or one of its dependencies references Kaizen .NET packages which are incompatible with the active Kaizen C# bindings. The active C# bindings is KaizenSharp." Condition="$([System.String]::Copy('%(Reference.Identity)').Contains('Kaizen.Bindings.dll'))" />
+  </Target>
+
+  <!-- Kaizen .NET references -->
+  <ItemGroup Condition=" '$(EnableKaizenDotNetPreview)' == 'true' ">
+    <PackageReference Include="Kaizen" IsImplicitlyDefined="true" Version="$(PackageVersion_KaizenDotNet)" />
+  </ItemGroup>
+  <Target Name="CheckKaizenSharpReferences" BeforeTargets="Build" Condition=" '$(EnableKaizenDotNetPreview)' == 'true' ">
+    <Error Text="The project or one of its dependencies references KaizenSharp packages which is incompatible with the active Kaizen C# bindings. The active C# bindings is Kaizen .NET." Condition="$([System.String]::Copy('%(Reference.Identity)').Contains('KaizenSharp.dll'))" />
+  </Target>
+
+  <!-- iOS-specific build targets -->
+  <Import Project="$(MSBuildThisFileDirectory)\iOS.targets" Condition=" '$(KaizenTargetPlatform)' == 'ios' " />
+
+</Project>

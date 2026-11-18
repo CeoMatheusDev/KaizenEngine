@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <KaizenSdkPackageVersionsFilePath>$(MSBuildThisFileDirectory)\SdkPackageVersions.props</KaizenSdkPackageVersionsFilePath>
+  </PropertyGroup>
+  <Import Project="$(KaizenSdkPackageVersionsFilePath)" />
+</Project>

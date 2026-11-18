@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-kaizen-project">
+    <comment>Kaizen Engine project</comment>
+    <sub-class-of type="text/plain"/>
+    <icon name="x-kaizen-project"/>
+    <glob pattern="project.kaizen"/>
+  </mime-type>
+
+  <mime-type type="application/x-kaizen-resource">
+    <comment>Kaizen Engine resource</comment>
+    <icon name="x-kaizen-resource"/>
+    <glob pattern="*.res"/>
+    <glob pattern="*.tres"/>
+  </mime-type>
+
+  <mime-type type="application/x-kaizen-scene">
+    <comment>Kaizen Engine scene</comment>
+    <icon name="x-kaizen-scene"/>
+    <glob pattern="*.scn"/>
+    <glob pattern="*.tscn"/>
+    <glob pattern="*.escn"/>
+  </mime-type>
+
+  <mime-type type="application/x-kaizen-shader">
+    <comment>Kaizen Engine shader</comment>
+    <sub-class-of type="text/plain"/>
+    <icon name="x-kaizen-shader"/>
+    <glob pattern="*.gdshader"/>
+  </mime-type>
+
+  <mime-type type="application/x-gdscript">
+    <comment>GDScript script</comment>
+    <sub-class-of type="text/plain"/>
+    <icon name="x-gdscript"/>
+    <glob pattern="*.gd"/>
+  </mime-type>
+</mime-info>

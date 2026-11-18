@@ -1,0 +1,96 @@
+//************************************************************************//
+//  jni_singleton.cpp                                                     //
+//************************************************************************//
+//                         This file is part of:                          //
+//                            KaizenEngine                                //
+//              https://github.com/CeoMatheusDev/Kaizen                   //
+//************************************************************************//
+// Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  //
+// Copyright (c) 2014-present Godot Engine contributors.                  //
+// Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                    //
+//                                                                        //
+// This file contains code derived from the Godot Engine                  //
+// (https://godotengine.org), which is licensed under the MIT License.    //
+// The original MIT notice is preserved below.                            //
+//                                                                        //
+// Modified by Matheus A. Santos, Hardion Labs on 2026-11-17.             //
+// Modifications and additional code are licensed under the GNU Affero    //
+// General Public License v3.0 (AGPL-3.0).                                //
+// See the files LICENSE and LICENSE-ADDITIONAL-TERMS.md for details.     //
+//                                                                        //
+// Permission is hereby granted, free of charge, to any person obtaining  //
+// a copy of this software and associated documentation files (the        //
+// "Software"), to deal in the Software without restriction, including    //
+// without limitation the rights to use, copy, modify, merge, publish,    //
+// distribute, sublicense, and/or sell copies of the Software, and to     //
+// permit persons to whom the Software is furnished to do so, subject to  //
+// the following conditions:                                              //
+//                                                                        //
+// The above copyright notice and this permission notice shall be         //
+// included in all copies or substantial portions of the Software.        //
+//                                                                        //
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        //
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     //
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. //
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   //
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   //
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      //
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 //
+//************************************************************************//
+
+#include "jni_singleton.h"
+
+#include "core/object/class_db.h"
+
+void JNISingleton::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("has_java_method", "method"), &JNISingleton::has_java_method);
+}
+
+bool JNISingleton::_get(const StringName &p_name, Variant &r_property) const {
+	if (has_signal(p_name)) {
+		r_property = Signal(this, p_name);
+		return true;
+	}
+
+	return false;
+}
+
+Variant JNISingleton::callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
+	// Kaizen methods take precedence.
+	Variant ret = Object::callp(p_method, p_args, p_argcount, r_error);
+	if (r_error.error == Callable::CallError::CALL_OK) {
+		return ret;
+	}
+
+	// Check the method we're looking for is in the JNISingleton map.
+	// This is done because JNISingletons register methods differently than wrapped JavaClass / JavaObject to allow
+	// for access to private methods annotated with the @UsedByKaizen annotation.
+	// In the future, we should remove access to private methods and require that JNISingletons' methods exposed to
+	// GDScript be all public, similarly to what we do for wrapped JavaClass / JavaObject methods. Doing so will
+	// also allow dropping and deprecating the @UsedByKaizen annotation.
+	RBMap<StringName, MethodData>::Element *E = method_map.find(p_method);
+	if (E) {
+		if (wrapped_object.is_valid()) {
+			return wrapped_object->callp(p_method, p_args, p_argcount, r_error);
+		} else {
+			r_error.error = Callable::CallError::CALL_ERROR_INSTANCE_IS_NULL;
+		}
+	}
+	return Variant();
+}
+
+void JNISingleton::add_method(const StringName &p_name, const Vector<Variant::Type> &p_args, Variant::Type p_ret_type) {
+	MethodData md;
+	md.argtypes = p_args;
+	md.ret_type = p_ret_type;
+	method_map[p_name] = md;
+}
+
+void JNISingleton::add_signal(const StringName &p_name, const Vector<Variant::Type> &p_args) {
+	MethodInfo mi;
+	mi.name = p_name;
+	for (int i = 0; i < p_args.size(); i++) {
+		mi.arguments.push_back(PropertyInfo(p_args[i], "arg" + itos(i + 1)));
+	}
+	add_user_signal(mi);
+}

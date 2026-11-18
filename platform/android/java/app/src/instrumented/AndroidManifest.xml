@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <meta-data
+            android:name="org.kaizenengine.plugin.v2.KaizenAppInstrumentedTestPlugin"
+            android:value="com.kaizen.game.test.KaizenAppInstrumentedTestPlugin"/>
+
+        <meta-data
+            android:name="org.kaizenengine.plugin.v2.SignalTestPlugin"
+            android:value="com.kaizen.game.test.SignalTestPlugin"/>
+    </application>
+
+</manifest>
