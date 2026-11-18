@@ -292,16 +292,13 @@ Notes:
 
 ## 📚 Documentation and resources
 
-Documentation is essential to learn the engine and understand its architecture.
+Kaizen-specific engineering documentation is maintained in the repository:
 
-The following materials are documentation for the **Godot Engine (upstream base)**, not Kaizen-specific documentation — Kaizen does not have its own published documentation yet:
+- [Documentation index](docs/README.md) — entry point and documentation conventions.
+- [Architecture overview](docs/architecture/overview.md) — current source baseline, inherited systems, and engineering constraints.
+- [Rendering architecture and technical roadmap](docs/architecture/rendering-roadmap.md) — the proposed custom rendering architecture and staged roadmap for desktop, mobile, and Web.
 
-- [Godot Documentation](https://docs.godotengine.org/en/latest/) — original architecture documentation.
-- [Godot Class Reference](https://docs.godotengine.org/en/latest/classes/) — reference for inherited classes and APIs.
-- [Godot Compilation Guide](https://docs.godotengine.org/en/latest/engine_details/development/compiling/index.html) — building from source.
-- [Godot Export Documentation](https://docs.godotengine.org/en/latest/tutorials/export/exporting_projects.html) — how the export system works.
-
-Kaizen-specific documentation will record the modifications, original APIs, and differences from Godot — it has yet to be written.
+The [Godot documentation](https://docs.godotengine.org/en/latest/) remains the reference for inherited APIs and workflows. Unless a Kaizen document explicitly records a divergence, upstream behavior should be verified against the Kaizen source revision before being treated as guaranteed.
 
 ---
 
