@@ -32,7 +32,7 @@ O projeto busca preservar a flexibilidade e a filosofia open-source de sua base,
 - 🎨 **Editor integrado:** criação e gerenciamento visual de projetos e cenas (infraestrutura herdada da Godot, com modificações próprias em desenvolvimento).
 - ⚡ **Renderização:** infraestrutura gráfica baseada na arquitetura de renderização da Godot.
 - 🧩 **Sistema de cenas e nós:** organização dos objetos e comportamentos do jogo (arquitetura de cenas herdada da Godot).
-- 🎯 **Física:** simulação e colisão 2D e 3D (física herdada da Godot, incluindo módulos renomeados na árvore, como `kaizen_physics_2d`/`kaizen_physics_3d` e Jolt).
+- 🎯 **Física:** simulação e colisão 2D e 3D (física herdada da Godot; a árvore inclui os módulos renomeados `kaizen_physics_2d`/`kaizen_physics_3d` e Jolt — a presença deles não representa uma implementação independente, apenas a base herdada).
 - 🔊 **Áudio:** reprodução e gerenciamento de áudio (herdado da Godot).
 - 🛠️ **Extensibilidade:** possibilidade de trabalhar com código nativo e sistemas de scripts.
 - 📦 **Exportação multiplataforma:** infraestrutura de exportação herdada da arquitetura da Godot, sujeita às plataformas efetivamente habilitadas na Kaizen.
@@ -109,6 +109,8 @@ scons platform=linuxbsd target=template_debug
 ### Linux
 
 Instale as ferramentas necessárias para compilação:
+
+Lista **inicial** de dependências — não é universal nem exaustiva. A compilação pode exigir dependências adicionais conforme os drivers gráficos, os recursos e os módulos habilitados. Teste em uma instalação limpa do Fedora antes de tratá-la como procedimento validado:
 
 ```bash
 # Fedora
@@ -313,6 +315,8 @@ Enquanto isso, a melhor forma de explorar a engine é compilar o editor (ver [Co
 
 ## 🗺️ Roadmap
 
+> A numeração **4.8.x** identifica a versão da base tecnológica herdada da Godot. As versões **0.x** e **1.x** representam os marcos de desenvolvimento próprios da Kaizen.
+
 | Versão | Recurso | Status |
 |---|---|---|
 | **4.8.0-beta** | Base da engine (editor, renderer 2D/3D) herdada da Godot, rebranding Kaizen | 🚧 Em desenvolvimento (beta) |
@@ -353,20 +357,22 @@ A Kaizen é um projeto open-source. Contribuições são bem-vindas, sejam corre
 
 6. Abra um Pull Request.
 
-Antes de contribuir, consulte o arquivo `CONTRIBUTING.md`, quando disponível.
+Antes de contribuir, consulte o [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Canais
 
-- 💡 **Issues:** reporte problemas e sugira funcionalidades.
-- 💬 **Discussões:** participe das conversas sobre o projeto.
-- 📚 **Wiki:** acompanhe a documentação.
-- 🔧 **Pull Requests:** contribua diretamente com o código.
+A Kaizen ainda não possui uma plataforma própria de comunidade. Por enquanto, os canais disponíveis são:
+
+- 💡 **[Issues](https://github.com/CeoMatheusDev/KaizenEngine/issues):** reporte problemas e sugira funcionalidades.
+- 🔧 **[Pull Requests](https://github.com/CeoMatheusDev/KaizenEngine/pulls):** contribua diretamente com o código.
 
 ---
 
 ## 📄 Licença
 
 A Kaizen utiliza um modelo de licenciamento híbrido devido à sua origem como obra derivada da Godot Engine.
+
+> **Importante:** a tabela abaixo é apenas um resumo. As condições completas e vinculantes estão nos documentos de licença. A interpretação jurídica da compatibilidade entre os arquivos, e do alcance da permissão adicional para jogos, exige revisão legal específica — esta seção não é uma garantia jurídica.
 
 | Camada | Licença | Arquivo |
 |---|---|---|
