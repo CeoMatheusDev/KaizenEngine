@@ -3,8 +3,10 @@
 This document summarizes the most important points for people interested in
 contributing to Kaizen, especially via bug reports or pull requests.
 
-Kaizen has a dedicated [Contributing documentation](https://contributing.godotengine.org/en/latest/index.html)
-which details these points and more, and is a recommended read.
+Kaizen does not have its own dedicated contributing documentation yet. This
+file is the reference for contributing to the project. The upstream Godot
+Engine documentation (Kaizen's base) is linked throughout as a technical
+reference and is clearly marked as Godot's documentation, not Kaizen's.
 
 <!--
 > [!NOTE]
@@ -23,7 +25,7 @@ which details these points and more, and is a recommended read.
 
 ## Reporting bugs
 
-Report bugs [here](https://github.com/kaizenengine/kaizen/issues/new?assignees=&labels=&template=bug_report.yml).
+Report bugs on the [issue tracker](https://github.com/CeoMatheusDev/KaizenEngine/issues/new).
 Please follow the instructions in the template when you do.
 
 Notably, please include a Minimal Reproduction Project (MRP), which is a small
@@ -31,10 +33,10 @@ Kaizen project which reproduces the issue, with no unnecessary files included.
 Be sure to not include the `.kaizen` folder in the archive to save space.
 
 Make sure that the bug you are experiencing is reproducible in the latest Kaizen
-releases. You can find an overview of all Kaizen releases [on the website](https://godotengine.org/download/archive/)
-to confirm whether your current version is the latest one. It's worth testing
-against both the latest stable release and the latest dev snapshot for the next
-Kaizen release.
+builds. Kaizen does not publish official binaries yet, so "latest" means the
+current state of the `main` branch (see [the build instructions in the
+README](README.md#compilando-a-partir-do-código-fonte)). It's worth testing
+against both a recent beta build and your own build of `main`.
 
 If you run into a bug which wasn't present in an earlier Kaizen version (what we
 call a _regression_), please mention it and clarify which versions you tested
@@ -44,8 +46,10 @@ call a _regression_), please mention it and clarify which versions you tested
 
 **The main issue tracker is for bug reports and does not accept feature proposals.**
 
-Instead, head to the [Kaizen Proposals repository](https://github.com/kaizenengine/kaizen-proposals)
-and follow the instructions in the README file and issue template.
+Instead, open an issue on the [KaizenEngine issue tracker](https://github.com/CeoMatheusDev/KaizenEngine/issues)
+and describe the proposal clearly (use case, motivation, proposed design).
+There is no dedicated proposals repository yet; well-written issues serve as
+the place for feature discussions until one exists.
 
 ## Contributing pull requests
 
@@ -62,17 +66,21 @@ Similar rules can be applied when contributing bug fixes - it's always best to
 discuss the implementation in the bug report first if you are not 100% about
 what would be the best fix.
 
+The links below point to the Godot Engine contributing documentation
+(Kaizen's upstream base). It is an important technical reference, but it is
+**Godot's documentation, not Kaizen's**.
+
 You can refer to the [Pull request review process](https://contributing.godotengine.org/en/latest/development/workflows/review_guidelines.html)
 for insights into the intended lifecycle of pull requests. This should help you
 ensure that your pull request fulfills the requirements.
 
 In addition to the following tips, also take a look at the
 [Engine development guide](https://docs.godotengine.org/en/latest/engine_details/development/index.html)
-for an introduction to developing on Kaizen.
+for an introduction to developing on the codebase Kaizen inherits from.
 
-The [Contributing docs](https://contributing.godotengine.org/en/latest/index.html)
+The [Godot contributing docs](https://contributing.godotengine.org/en/latest/index.html)
 also have important information on the [PR workflow](https://contributing.godotengine.org/en/latest/development/workflows/creating_pull_requests.html)
-(with a helpful guide for Git usage), and our [Code style guidelines](https://contributing.godotengine.org/en/latest/development/engine/cpp_usage_guidelines.html)
+(with a helpful guide for Git usage), and the [Code style guidelines](https://contributing.godotengine.org/en/latest/development/engine/cpp_usage_guidelines.html)
 which all contributions need to follow.
 
 ### Be mindful of your commits
@@ -91,7 +99,7 @@ stable state, i.e. if your first commit has a bug that you fixed in the second
 commit, try to merge them together before making your pull request. This
 includes fixing build issues or typos, adding documentation, etc.
 
-See our [PR workflow](https://contributing.godotengine.org/en/latest/development/workflows/creating_pull_requests.html)
+See the [upstream PR workflow](https://contributing.godotengine.org/en/latest/development/workflows/creating_pull_requests.html)
 documentation for tips on using Git, amending commits and rebasing branches.
 
 This [Git style guide](https://github.com/agis-/git-style-guide) also has some
@@ -153,9 +161,9 @@ This is to ensure the documentation coverage doesn't decrease as contributions
 are merged.
 
 [Update documentation XML files](https://contributing.godotengine.org/en/latest/development/documentation/class_reference.html)
-using your compiled binary, then fill in the descriptions.
+(Godot upstream documentation) using your compiled binary, then fill in the descriptions.
 Follow the style guide described in the
-[Documentation writing guidelines](https://contributing.godotengine.org/en/latest/development/documentation/docs_writing_guidelines.html).
+[documentation writing guidelines](https://contributing.godotengine.org/en/latest/development/documentation/docs_writing_guidelines.html).
 
 If your pull request modifies parts of the code in a non-obvious way, make sure
 to add comments in the code as well. This helps other people understand the
@@ -182,38 +190,35 @@ Feel free to contribute standalone pull requests to add new tests or improve
 existing tests as well.
 
 See [Unit testing](https://contributing.godotengine.org/en/latest/development/engine/unit_tests.html)
-for information on writing tests in Kaizen's C++ codebase.
+(Godot upstream documentation) for information on writing tests in Kaizen's C++ codebase.
 
 ## Contributing to Kaizen translations
 
-You can contribute to Kaizen translations on [Hosted Weblate](https://hosted.weblate.org/projects/kaizen-engine/),
-an open source and web-based translation platform.
+You can contribute to Kaizen translations by improving the `.po` files in the
+repository (`doc/translations/` and `editor/translations/`) via a pull request.
+There is no hosted translation platform for Kaizen yet (the Godot Weblate
+instance does not translate Kaizen).
 
-Please refer to our [editor and documentation localization guidelines](https://contributing.godotengine.org/en/latest/development/translations.html)
-for an overview of the translation resources and what they correspond to.
+Please refer to the [editor and documentation localization guidelines](https://contributing.godotengine.org/en/latest/development/translations.html)
+(Godot upstream documentation) for an overview of the translation resources and what they correspond to.
 
 ## Communicating with developers
 
-The Kaizen Engine community has [many communication
-channels](https://godotengine.org/community), some used more for user-level
-discussions and support, others more for development discussions.
+Kaizen does not have its own chat or community platform yet. For now, the
+following channels can be used:
 
-To communicate with developers (e.g. to discuss a feature you want to implement
-or a bug you want to fix), the following channels can be used:
-
-- [Kaizen Contributors Chat](https://chat.godotengine.org): You will
-  find most core developers there, so it's the go-to platform for direct chat
-  about Kaizen Engine development. Browse the [Directory](https://chat.godotengine.org/directory/channels)
-  for an overview of public channels focusing on various engine areas which you
-  might be interested in.
-- [Bug tracker](https://github.com/kaizenengine/kaizen/issues): If there is an
+- [Bug tracker / issue tracker](https://github.com/CeoMatheusDev/KaizenEngine/issues): If there is an
   existing issue about a topic you want to discuss, you can participate directly.
   If not, you can open a new issue. Please mind the guidelines outlined above
   for bug reporting.
-- [Feature proposals](https://github.com/kaizenengine/kaizen-proposals/issues):
-  To propose a new feature, we have a dedicated issue tracker for that. Don't
-  hesitate to start by talking about your idea on the Kaizen Contributors Chat
-  to make sure that it makes sense in Kaizen's context.
+- [Feature proposals](https://github.com/CeoMatheusDev/KaizenEngine/issues):
+  To propose a new feature, open an issue describing the problem, the use case,
+  and your proposed design. Discussion happens in the issue thread.
+- [Pull requests](https://github.com/CeoMatheusDev/KaizenEngine/pulls): The
+  best way to contribute code is to open a pull request on the repository.
+
+The Godot community channels (chat, Q&A sites, etc.) are for Godot Engine
+itself — please do not ask Kaizen-specific questions there.
 
 Thanks for your interest in contributing!
 
