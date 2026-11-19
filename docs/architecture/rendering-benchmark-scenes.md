@@ -418,8 +418,14 @@ Each cell is one (scene, parameters, configuration, preset) combination. Minimum
 | S3b | 1 feature set | Q0 | same | 8 |
 | S4 | 5 light cells + shadow variant | Q0, Q1 | D1, D2, M1 | 36 |
 | S5 | 3×2×2 combinations | Q0 | D1, D3, A1, B1 | 48 |
-| S6 | 3 overdraw × 6 presets | — | D1, M1, W2 | 54 |
+| S6 | 3 overdraw × 6 presets | — | D1, D2**, M1, W2 | 60 |
 | S7 | 2 layouts | Q0 | D1, M1 | 4 |
+
+** S6 adds six cells on D2, the Mobile backend, with P0 and P1 only. That
+backend stubs SSAO and SSIL and reports no volumetric support, so P2–P5 there
+are "not applicable": the harness marks them invalid and the collector records
+the cell as not applicable. Running these cells is how the applicability rule
+itself is tested instead of assumed.
 
 \* B1 uses only the Compatibility renderer; Q1 sub-cases that require an unsupported feature are reported as "not applicable" rather than silently omitted. S1 and S2 totals already exclude the three/four B1 Q1 cells.
 
