@@ -1,14 +1,14 @@
 # Rendering Benchmark Implementation Report
 
-> **Status:** Implemented; fifteen cells validated in a template build and published
+> **Status:** Implemented; twenty-eight cells validated in a template build and published
 >
 > - **Implementation range:** `d8e1623` → `7c129d3` (7 commits), then the fixes recorded in the [run log](rendering-benchmark-run-log.md)
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** fifteen validated cells in three D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 session](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md))
+> - **Runtime measurements:** twenty-eight validated cells in five D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 sessions](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
-The implementation report describes authored code and recorded engineering decisions. The GDScript now parses in the engine, a template build exists, and fifteen cells have been measured and published in three D1 sessions. Everything outside those cells remains unmeasured, and the report says so where it matters.
+The implementation report describes authored code and recorded engineering decisions. The GDScript now parses in the engine, a template build exists, and twenty-eight cells have been measured and published in five D1 sessions. Everything outside those cells remains unmeasured, and the report says so where it matters.
 
 ## 1. Implementation status
 
@@ -24,7 +24,7 @@ The implementation report describes authored code and recorded engineering decis
 | S7 — editor viewport | Manual procedure documented | No automated harness scene |
 | Report checker (`benchmarks/tools/check_report.py`) | Implemented | 34 tests; run against real reports |
 | Harness runtime validation | Performed | Template build, five warm runs and one cold run |
-| Performance measurements | Fifteen validated cells | S1, S2, S3a, S3b, six S4 light cells and six S6 post cells on D1; the rest remain unmeasured |
+| Performance measurements | Twenty-eight validated cells | S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells on D1; the rest remain unmeasured |
 
 “Implemented” means the scene and harness source were authored; the S1–S4 and S6 paths have since been executed end to end in a template build.
 
@@ -200,7 +200,7 @@ These are implementation notes, not substitutes for the upstream API contract. I
 
 - GDScript behaviour on Metal, WebGL, Android, and iOS.
 - Metal quality parity, browser performance, and mobile thermal behaviour.
-- Any cell outside the three D1 sessions, and every Q1 cell: no scene implements Q1, and the harness now refuses the label.
+- Any cell outside the five D1 sessions, and every Q1 cell: no scene implements Q1, and the harness now refuses the label.
 - Driver-level VSync enforcement and GPU temperature, which the report cannot read.
 
 ## 8. First execution
@@ -212,7 +212,7 @@ The first cell was **S1/Q0** on D1 (Vulkan, Forward+, RADV on an RX 550). It ran
 3. `check_report.py` reports zero failures and `timing.pso_in_sample` is 0.
 4. Five warm runs and one cold run produced the same frame hash.
 5. Draw calls (7) and primitives (4802) are constant across all 3600 sampled frames of every run.
-6. S2, S3a, S3b and the six S4 light cells produced template cells in the second D1 session, and S6 produced six P0–P5 cells at four quads in the third. Other counts, presets and configurations still have tools-build runs only.
+6. S2, S3a, S3b and the six S4 light cells produced template cells in the second D1 session, and S6 produced six P0–P5 cells at each of 1, 4 and 16 quads in the third, fourth and fifth. Other counts, presets and configurations still have tools-build runs only.
 7. S7 remains manual and S5 is still deferred.
 
 The S1 cell and its reports are in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md); the other published cells are indexed in [`benchmarks/results/`](../../benchmarks/results/README.md). No cell outside those session directories has passed the gate, and no number outside them is a baseline.

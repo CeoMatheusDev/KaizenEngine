@@ -27,10 +27,10 @@ results/
     README.md                 shared environment, commands, cell table
     s2_4096_q0/{cold,r1..r5}.json.gz
     ...
-  2026-11-19_s6_d1_q4/        S6 at four quads, post presets P0-P5
+  2026-11-19_s6_d1_q{1,4,16}/ S6 at one overdraw level, post presets P0-P5
     README.md
     p0..p5/{cold,r1..r5}.json.gz
-    p0/frame_299.png          P0 reference used by every other cell
+    p0/frame_299.png          P0 reference used by every other cell at that level
     checker.txt
 ```
 
@@ -44,7 +44,9 @@ a run is written as not measured.
 |---|---|---|---|
 | [`2026-11-19_s1_d1_q0`](2026-11-19_s1_d1_q0/README.md) | S1/Q0, 400 boxes | 6 | D1 |
 | [`2026-11-19_d1`](2026-11-19_d1/README.md) | S2/4096, S3a/64, S3b/64, six S4 light cells, all Q0 | 54 | D1 |
+| [`2026-11-19_s6_d1_q1`](2026-11-19_s6_d1_q1/README.md) | S6 at one quad, P0–P5 | 36 | D1 |
 | [`2026-11-19_s6_d1_q4`](2026-11-19_s6_d1_q4/README.md) | S6 at four quads, P0–P5 | 36 | D1 |
+| [`2026-11-19_s6_d1_q16`](2026-11-19_s6_d1_q16/README.md) | S6 at sixteen quads, P0–P5 | 36 | D1 |
 
 ## Verifying a session
 

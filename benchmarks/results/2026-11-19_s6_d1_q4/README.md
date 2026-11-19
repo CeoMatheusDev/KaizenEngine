@@ -130,5 +130,6 @@ python3 benchmarks/tools/check_report.py benchmarks/results/2026-11-19_s6_d1_q4/
 ## Scope
 
 One overdraw level (4 quads), one configuration (D1), one commit. The
-matrix also asks for 1 and 16 quads and for the D2/M1/W2 configurations;
-those cells are not measured, and nothing here is a claim about them.
+other D1 overdraw levels are separate sessions under `benchmarks/results/`;
+the D2, M1 and W2 configurations are not measured, and nothing here is a
+claim about them or about a different backend.

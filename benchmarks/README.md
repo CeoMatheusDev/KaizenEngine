@@ -8,13 +8,13 @@ engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
 > **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
-> manual editor procedure without a harness scene**. Fifteen D1 cells have
+> manual editor procedure without a harness scene**. Twenty-eight D1 cells have
 > passed the validity gate in a template build at 1920×1080: S1/Q0 with 400
 > boxes in [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md),
 > S2, S3a, S3b and six S4 light cells in
-> [`results/2026-11-19_d1/`](results/2026-11-19_d1/README.md), and S6 at four
-> quads for P0–P5 in
-> [`results/2026-11-19_s6_d1_q4/`](results/2026-11-19_s6_d1_q4/README.md).
+> [`results/2026-11-19_d1/`](results/2026-11-19_d1/README.md), and S6 for P0–P5
+> at 1, 4 and 16 quads in the three
+> [`2026-11-19_s6_d1_*`](results/README.md) sessions.
 > Cell counts outside those sessions have tools-build smoke runs only. See the
 > [run log](../docs/architecture/rendering-benchmark-run-log.md) for what was
 > observed and which defects the runs exposed.

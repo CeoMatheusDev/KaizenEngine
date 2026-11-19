@@ -1,6 +1,6 @@
 # Benchmark Run Log
 
-> **Status:** Fifteen validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, S6 at four quads for P0–P5) plus tools-build smoke runs
+> **Status:** Twenty-eight validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, and S6 P0–P5 at 1, 4 and 16 quads) plus tools-build smoke runs
 > **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
@@ -299,51 +299,73 @@ each. The reports are in
   unaffected.
 - Frame drift stays between -0.89% and +0.48% across all cells.
 
-## 8. The S6 session: post presets P0–P5 at four quads
+## 8. The S6 sessions: post presets P0–P5 at three overdraw levels
 
-Six cells on the same machine and template build, same 900/3600 sampling, one
-cold run and five warm runs each. Reports are in
-[`benchmarks/results/2026-11-19_s6_d1_q4/`](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md);
-`check_report.py` reports 36 reports, 6 repeated cells, 0 failures.
+Eighteen cells on the same machine and template build, same 900/3600 sampling,
+one cold run and five warm runs each: `quad_count` 1, 4 and 16 with presets
+P0–P5. Reports are in
+[`2026-11-19_s6_d1_q1/`](../../benchmarks/results/2026-11-19_s6_d1_q1/README.md),
+[`2026-11-19_s6_d1_q4/`](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md)
+and [`2026-11-19_s6_d1_q16/`](../../benchmarks/results/2026-11-19_s6_d1_q16/README.md);
+`check_report.py` reports 36 reports and 0 failures per session, 18 cells in
+total.
 
-The P0 cold run also wrote `p0/frame_299.png`; every other run passed it as
-`--bench-reference`, so each preset records its mean absolute difference from
-P0. The P0 reference was inspected: four nested translucent quads over the
-checker ground with the box field behind them.
+Each level's P0 cold run wrote its own `p0/frame_299.png`, and every other run
+in that level passed it as `--bench-reference`, so each preset records its mean
+absolute difference from P0 at the same overdraw. The three P0 references were
+inspected: one, four and sixteen nested translucent quads over the checker
+ground, with the box field behind them (barely visible at sixteen).
 
-| Preset | Effects | GPU ms | Δ GPU ms | FPS | Image diff | `first_120` |
-|---|---|---|---|---|---|---|
-| P0 | none | 2.212–2.214 | reference | 338.9–340.4 | 0.0000 (self) | 7 |
-| P1 | glow | 4.856–4.857 | +2.643 | 177.6–178.7 | 3.0142 | 7 |
-| P2 | SSAO | 3.824–3.825 | +1.612 | 218.5–219.5 | 0.0057 | 8 |
-| P3 | SSAO + SSIL | 8.821–8.823 | +6.609 | 103.9–104.1 | 0.0095 | 8 |
-| P4 | glow + SSAO + SSIL | 11.463–11.466 | +9.251 | 81.3–81.5 | 3.0124 | 8 |
-| P5 | P4 + volumetric fog | 12.433–12.437 | +10.223 | 75.3–75.4 | 16.2981 | 8 |
+GPU median per preset, in milliseconds:
 
-- Every cell reports the same 3 draws and 394 primitives, and every report has
-  one frame hash across its six runs. Post effects run after the geometry pass,
-  so they change neither counter.
-- **Glow is the expensive single effect here:** +2.643 ms over P0 at four
-  quads. It costs the same (+2.642 ms) when added on top of SSAO and SSIL in P4,
-  so on this scene its cost does not depend on what the other effects wrote.
-- **SSAO and SSIL scale with the effect stack:** SSAO alone costs +1.612 ms;
-  adding SSIL on top costs a further +4.997 ms. Volumetric fog adds +0.972 ms
-  over P4, the cheapest step in this matrix.
-- **The image diff separates visibility from cost.** SSAO changes the frame by
-  0.0057 on average while costing 1.6 ms; glow changes it by 3.0142 for 2.6 ms;
-  volumetric fog, the largest visible change at 16.2981, costs 0.97 ms. Cost
-  and visible difference are different axes, and both are recorded.
-- A diff of exactly zero would have failed the P1–P5 cells; none did.
-  `report.preset` equals `scene.parameters.post.preset` in all 36 reports.
-- No run reported a hitch. Frame drift stays between -0.42% and +0.54%.
-  `pso_in_sample` is 0 everywhere, and load to first sample grows from 3.5 s at
-  P0 to 12.75 s at P5.
+| Preset | Effects | 1 quad | 4 quads | 16 quads |
+|---|---|---|---|---|
+| P0 | none | 1.866 | 2.213 | 4.610 |
+| P1 | glow | 4.509 | 4.856 | 7.253 |
+| P2 | SSAO | 3.478 | 3.825 | 6.220 |
+| P3 | SSAO + SSIL | 8.475 | 8.822 | 11.212 |
+| P4 | glow + SSAO + SSIL | 11.118 | 11.464 | 13.856 |
+| P5 | P4 + volumetric fog | 12.005 | 12.436 | 15.358 |
+
+Delta against P0 at the same overdraw level:
+
+| Preset | 1 quad | 4 quads | 16 quads |
+|---|---|---|---|
+| P1 | +2.643 | +2.643 | +2.643 |
+| P2 | +1.612 | +1.612 | +1.610 |
+| P3 | +6.609 | +6.609 | +6.602 |
+| P4 | +9.252 | +9.251 | +9.246 |
+| P5 | +10.139 | +10.223 | +10.748 |
+
+- **The transparent pass costs what the quads cost.** P0 rises from 1.866 ms
+  with one quad to 4.610 ms with sixteen. The rise is not linear: 1 → 4 adds
+  0.347 ms (0.116 per quad) and 4 → 16 adds 2.397 ms (0.200 per quad).
+- **Glow, SSAO and SSIL do not see the overdraw.** Their deltas are the same at
+  all three levels to within 0.007 ms: glow 2.643 everywhere, SSAO 1.610–1.612,
+  SSAO + SSIL 6.602–6.609, and the three together 9.246–9.252. This is
+  consistent with the quads being transparent and not writing depth, so the
+  depth-based passes process the same opaque depth buffer at every level; that
+  is an explanation from the scene composition, not a measurement.
+- **Volumetric fog is the exception.** Its delta over P0 grows from +10.139 to
+  +10.223 to +10.748, and the P5 − P4 step grows from 0.887 to 0.972 to
+  1.502 ms. More transparent layers cost the fog more, consistent with fog being
+  evaluated per transparent fragment; again, an explanation, not a measurement.
+- **Image visibility moves in the other direction.** The P0 image gets more
+  tinted as quads are added, so the same effect changes less of it: SSAO's mean
+  absolute difference falls from 0.0096 to 0.0057 to 0.0045, and volumetric fog
+  from 18.7847 to 16.2981 to 4.7839, while its cost rises. Cost and visible
+  difference are separate axes, and both are recorded.
+- Every cell reports 3 draw calls and one frame hash across its six runs, with
+  `pso_in_sample` 0 and `first_120` 7 for P0–P1 and 8 for P2–P5. Primitives are
+  388 at one quad, 394 at four and 418 at sixteen (386 base plus two per quad),
+  identical across presets at each level.
+- No run reported a hitch. Frame drift stays between −0.69% and +0.46%.
+  `report.preset` equals `scene.parameters.post.preset` in all 108 reports.
 
 ## 9. Still missing
 
-- The rest of the cell matrix: the other S6 overdraw levels (1 and 16 quads),
-  the other S1 and S2 counts, Q1 (which no scene implements), and the D2/D3,
-  M1, W1/W2, A1, and B1 configurations.
+- The rest of the cell matrix: the other S1 and S2 counts, Q1 (which no scene
+  implements), and the D2/D3, M1, W1/W2, A1, and B1 configurations.
 - An exported `.pck` run. The validated runs use the template binary with
   `--path`, loading the project directory; that is a template build, but not the
   shipping package layout.
