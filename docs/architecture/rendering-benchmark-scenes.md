@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored, never executed; S5 not written; S7 is a manual procedure; nothing measured**
+> **Status:** Specification — **S1–S4 and S6 authored and executed once in a tools build; S5 not written; S7 is a manual procedure; no cell has passed the validity gate** (see the [run log](rendering-benchmark-run-log.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -82,7 +82,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S1 — Static 3D
 
-> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it; the implementation has not been validated on hardware yet.
+> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it. Executed once in a tools build on RADV/Forward+; that run is invalid by design, and the observations are in the [run log](rendering-benchmark-run-log.md).
 
 **Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against. On Forward+ it is a throughput baseline, not a per-draw probe: identical surfaces are merged into instanced draws automatically (see the acceptance criteria).
 
@@ -106,7 +106,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 - `raster/total_primitives_drawn` ≈ `12 × box_count + 2` (±1%). Primitive count does not depend on how the renderer batches.
 - `raster/total_draw_calls` is **renderer-dependent and must be recorded, not asserted as a fixed number**:
-  - Forward+ sorts the opaque list by material/shader/geometry key and merges adjacent identical surfaces into one instanced draw (`RenderElementInfo::repeat`, `MAX_REPEATS = 2^20 − 1` in `forward_clustered/render_forward_clustered.h`). One material plus one shared `BoxMesh` therefore collapses all boxes into a single draw: expect roughly two draw calls (ground and boxes) regardless of `box_count`.
+  - Forward+ sorts the opaque list by material/shader/geometry key and merges **adjacent** identical surfaces into one instanced draw (`RenderElementInfo::repeat`, `MAX_REPEATS = 2^20 − 1` in `forward_clustered/render_forward_clustered.h`). Batching is real but partial: only neighbours in the sorted list merge, and the sort order depends on the camera. Measured on RADV/Forward+ with one material and one shared `BoxMesh`: 2, 5, 4, 5, 6 and 7 draw calls for 1, 64, 65, 128, 256 and 400 boxes. The count is not monotonic and not predictable in advance, which is exactly why the criterion is stability, not a target.
   - Mobile reports one draw call per instance (`forward_mobile/render_forward_mobile.cpp` sets the counter from `instances->size()`), so the same scene reports ≈ `box_count + 1`.
   - The acceptance criterion is **stability across repeated runs of the same configuration**, not a target count. A draw-call count that changes between two runs of one configuration invalidates the cell.
 - No increase in `pipeline/compilations_*` during the sampling window. These counters are cumulative since startup, so the check is on the per-frame delta, never on the absolute value.
@@ -118,7 +118,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S2 — Instancing
 
-> Implemented in `benchmarks/rd_3d/` (`scenes/s2_instancing.tscn`); not validated on hardware yet.
+> Implemented in `benchmarks/rd_3d/` (`scenes/s2_instancing.tscn`); executed once in a tools build, no publishable cell yet.
 
 **Purpose:** draw-call scaling. Separates per-draw overhead from per-primitive cost.
 
@@ -330,7 +330,7 @@ Fixed values: glow intensity 0.8, bloom 0.1, HDR threshold 1.0; SSAO radius 1.0,
 
 **Acceptance criteria**
 
-- Each post cell is verified to actually change the image: one reference screenshot per (preset, configuration) is diffed against P0 and the mean absolute difference is recorded. A cell whose diff is ~0 is invalid (the effect silently did not run).
+- Each post cell is verified to actually change the image: one reference screenshot per (preset, configuration) is diffed against P0 and the mean absolute difference is recorded. A difference of **exactly zero** is invalid: it means the effect did not run. A small non-zero difference is recorded as measured, not judged: on the reference run SSAO changed 0.35% of the pixels by one level while still costing about 1 ms, because it modulates only the ambient term.
 - Volumetric fog, SSAO, and SSIL are Forward+ features. The Mobile backend stubs
   the SSAO/SSIL quality setters and reports no volumetric support, so a preset
   that asks for them there is published as **"not applicable"**, never as "0 ms".
@@ -443,7 +443,7 @@ This matrix is deliberately larger than a first pass can execute. The recommende
 
 Hitches are defined as frames whose time exceeds twice the run median. The count and the worst frame are reported; a run with hitches inside the sampling window is still valid but is flagged.
 
-## 6. Harness contract (implemented, never executed)
+## 6. Harness contract (implemented, executed once in a tools build)
 
 The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor. A tools build can be used for scene development with `--bench-allow-editor`, which marks the report invalid. The project starts on an empty bootstrap scene; the harness loads the scene named by `--bench-scene` from its internal registry.
 
@@ -527,7 +527,6 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
   },
   "frames": {
     "frame_us": [0],
-    "process_ms": [0.0],
     "draw_calls": [0],
     "primitives": [0],
     "pso_compilations": [0],
@@ -541,7 +540,8 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
     "frame_ms_p95": 0.0,
     "frame_ms_p99": 0.0,
     "hitches": 0,
-    "gpu_ms_median": null
+    "gpu_ms_median": null,
+    "render_cpu_ms_median": null
   },
   "frame_hash": "...",
   "screenshot": "",
@@ -589,7 +589,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 ## 8. Open items
 
 - Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
-- Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
+- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`); every run so far fails the gate in §7 (tools build, clamped window), and the [run log](rendering-benchmark-run-log.md) records what was observed. No cell has been validated for publication.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.

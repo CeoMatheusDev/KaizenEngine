@@ -7,11 +7,13 @@ the instrument list and reference configurations are in
 engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
-> **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
-> manual editor procedure without a harness scene**. The harness
-> has never been executed in this environment (no build, GPU, or display). Treat
-> every number it produces as unvalidated until it has been run on real hardware
-> and checked against the validity rules below.
+> **Status:** scenes **S1–S4 and S6 are authored and have been executed once in
+> a tools build; S5 is not written; S7 is a manual editor procedure without a
+> harness scene**. No cell has passed the validity gate: that run used a tools
+> build and a window the compositor clamped below the pinned resolution. Treat
+> every number as unvalidated until a cell passes. See the
+> [run log](../docs/architecture/rendering-benchmark-run-log.md) for what was
+> observed and which defects the run exposed.
 
 ## Layout
 
@@ -195,7 +197,10 @@ One row per sampled frame:
 
 - `frame_us`: wall-clock interval between consecutive `_process` callbacks. This
   includes presentation blocking; it is not a pure CPU measurement.
-- `process_ms`, `physics_ms`: `Performance` monitors.
+- `process_ms`, `physics_ms`: not sampled. `Performance.TIME_PROCESS` and
+  `TIME_PHYSICS_PROCESS` are published as the maximum over 1,000,000 frames
+  (`main/main.cpp:5186`), so inside a run they repeat the startup frame and say
+  nothing about the sampled frames.
 - `draw_calls`, `objects`, `primitives`.
 - `texture_mem`, `buffer_mem`, `video_mem`.
 - `pso_compilations`: **per-frame delta** of the cumulative

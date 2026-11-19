@@ -1,11 +1,11 @@
 # Rendering Benchmark Implementation Report
 
-> **Status:** Implemented, not runtime-validated
+> **Status:** Implemented; smoke-run in a tools build only, never validated for publication
 >
 > - **Implementation range:** `d8e1623` → `7c129d3` (7 commits)
 > - **Reported branch state:** `main` synchronized; working tree clean at `7c129d3`
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** none
+> - **Runtime measurements:** one smoke run on RADV/Forward+, invalid by design ([run log](rendering-benchmark-run-log.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
@@ -94,7 +94,8 @@ The report records effective runtime information, including rendering method, dr
 
 Per-frame samples include:
 
-- `frame_us`, `process_ms`, and `physics_ms`;
+- `frame_us`;
+- `Performance.TIME_PROCESS` and `TIME_PHYSICS_PROCESS` are deliberately not sampled: they are published as a maximum over 1,000,000 frames (`main/main.cpp:5186`), so inside a run they hold the startup frame;
 - draw calls, objects, and primitives;
 - texture, buffer, and video memory monitors;
 - viewport CPU/GPU render time where the backend provides it;

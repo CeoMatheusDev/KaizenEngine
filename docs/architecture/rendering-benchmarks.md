@@ -177,7 +177,7 @@ Steady state (N runs):
 Notes / anomalies:
 ```
 
-## 8. Automation (implemented, never executed)
+## 8. Automation (implemented, executed once in a tools build)
 
 - A GDScript harness (`benchmarks/rd_3d/scripts/bench_harness.gd`) moves the camera by frame index, reads `Performance` monitors, and writes one JSON report per run. The camera is a function of the frame index rather than of elapsed time, so a run covers the same frames at any frame rate; `--fixed-fps` changes the simulation delta, not the rendered frame sequence, and is not required. The harness refuses to run in the editor unless explicitly allowed for scene development, and the report is then marked invalid.
 - The harness does not create or destroy resources during sampling, so results are not mixed with deferred disposal or PSO compilation.
@@ -186,7 +186,7 @@ Notes / anomalies:
 ## 9. Open items
 
 - Scene authoring — **S1–S4 and S6 authored**, S5 **not written**, S7 a **manual editor procedure**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md) and the code in [benchmark projects](../benchmarks/README.md).
-- Harness implementation — **authored and never executed**; no report has passed the validity gate.
-- Every measurement in section 1 — **not measured**; this environment has no build, GPU, or display.
+- Harness implementation — **authored and executed once in a tools build**; no report has passed the validity gate. The observations are in the [run log](rendering-benchmark-run-log.md).
+- Every measurement in section 1 — **not measured**. One smoke run exists on a RADV/Forward+ machine; it is invalid by design and is recorded in the [run log](rendering-benchmark-run-log.md), not in this document.
 - Whether the GLES3 timestamp path behaves on each target driver — **not verified at runtime**.
 - Thermal and battery behavior on mobile — **not measured**.
