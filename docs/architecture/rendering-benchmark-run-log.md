@@ -95,8 +95,15 @@ Image difference against the P0 screenshot of the same run, over every RGBA byte
 
 - **S1 is deterministic.** Two independent runs of S1/400/D1/Q0 produced the
   same `frame_hash` (`c150718e…`) and the same draw-call median; the GPU median
-  spread between them was 0.04%. The camera-by-frame-index contract holds when
-  the engine actually renders.
+  spread between them was 0.04%. A third run with the full protocol window
+  (900 warm-up, 3600 sampled) reproduced the same frame hash, the same 7 draw
+  calls and the same 4802 primitives. The camera-by-frame-index contract holds
+  when the engine actually renders.
+- **A live desktop is not a measurement environment.** The full-protocol S1 run
+  had a 1.4 ms median frame but 737 of 3600 frames above twice the median, a
+  11.8 ms p99 and an 18.6 ms worst frame. Nothing in the scene changed; the
+  presentation path on a composited desktop does. This is why the gate requires
+  a controlled presentation setup and why these runs are not published.
 - **Every scene builds its content from code and runs.** No binary asset is
   needed, and no scene failed to expose `apply_frame` or `scene_parameters`.
 - **The S6 support map matches the renderer.** Forward+ reports support for all
