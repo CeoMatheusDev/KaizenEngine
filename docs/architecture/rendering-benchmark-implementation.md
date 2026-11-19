@@ -4,7 +4,7 @@
 >
 > - **Implementation range:** `d8e1623` → `7c129d3` (7 commits), then the fixes recorded in the [run log](rendering-benchmark-run-log.md)
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** twenty-eight validated cells in five D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 sessions](../../benchmarks/results/README.md))
+> - **Runtime measurements:** twenty-eight validated cells in five D1 sessions, plus D2 (Mobile) and D3 (Compatibility) template batches ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 sessions](../../benchmarks/results/README.md), [D2](../../benchmarks/results/2026-11-19_1252_d2_mobile/README.md), [D3](../../benchmarks/results/2026-11-19_1329_d3_compat/README.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
@@ -24,7 +24,7 @@ The implementation report describes authored code and recorded engineering decis
 | S7 — editor viewport | Manual procedure documented | No automated harness scene |
 | Report checker (`benchmarks/tools/check_report.py`) | Implemented | 34 tests; run against real reports |
 | Harness runtime validation | Performed | Template build, five warm runs and one cold run |
-| Performance measurements | Twenty-eight validated cells | S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells on D1; the rest remain unmeasured |
+| Performance measurements | Twenty-eight D1 + D2 + D3 | S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells on D1; S2, S3a, S3b, S4 and S6 P0 on Mobile; S2, S3a, S3b, S4 and S6 P0+P2 on Compatibility; the rest remain unmeasured |
 
 “Implemented” means the scene and harness source were authored; the S1–S4 and S6 paths have since been executed end to end in a template build.
 
