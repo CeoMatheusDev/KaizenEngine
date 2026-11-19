@@ -3,7 +3,9 @@
 Executable benchmark projects for the Kaizen rendering baseline. The measurement
 contract is defined in [Benchmark scene specification](../docs/architecture/rendering-benchmark-scenes.md);
 the instrument list and reference configurations are in
-[Benchmark methodology](../docs/architecture/rendering-benchmarks.md).
+[Benchmark methodology](../docs/architecture/rendering-benchmarks.md). The implementation history,
+engineering corrections, and current validation status are recorded in the
+[benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
 > **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
 > manual editor procedure without a harness scene**. The harness
@@ -305,6 +307,7 @@ Frame-hash equality across runs is **not** checked by the harness; compare
 
 ## Related documents
 
+- [Benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md)
 - [Benchmark scene specification](../docs/architecture/rendering-benchmark-scenes.md)
 - [Benchmark methodology](../docs/architecture/rendering-benchmarks.md)
 - [Rendering audit (R0)](../docs/architecture/rendering-audit.md)
