@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored; S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells validated and published on D1; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
+> **Status:** Specification — **S1–S6 authored; S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells validated and published on D1; D2 (Mobile) and D3 (Compatibility) template batches published; S5 authored in `benchmarks/rd_2d/`; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 

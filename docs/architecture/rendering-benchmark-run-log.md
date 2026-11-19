@@ -376,4 +376,5 @@ Delta against P0 at the same overdraw level:
 - A second machine and a second GPU, to separate engine behaviour from this
   hardware.
 - S5 (2D) and S7 (manual editor procedure) are still as described in the
-  specification.
+  specification. S5 is now authored in `benchmarks/rd_2d/` and smoke-tested;
+  its matrix is not yet measured.
