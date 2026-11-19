@@ -301,7 +301,7 @@ Frame-hash equality across runs is **not** checked by the harness; compare
   barrier mode and stage-boundary counter sampling). Empty means unavailable.
 - Nothing here validates image quality. S1–S4 have no post-processing; S6 proves
   that an effect changed the frame, not that it looks right. Parity and quality
-  comparisons need the scenes that are not authored yet.
+  comparisons need scenes and tooling that are not written yet.
 
 ## Related documents
 
