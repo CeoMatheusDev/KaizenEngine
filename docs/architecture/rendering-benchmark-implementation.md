@@ -1,10 +1,11 @@
 # Rendering Benchmark Implementation Report
 
-> **Status:** Implemented, not runtime-validated  
-> **Implementation range:** `d8e1623` → `1cfdcbc` (6 commits)  
-> **Reported branch state:** `main` synchronized; working tree clean at `1cfdcbc`  
-> **Scope:** `benchmarks/` and benchmark documentation  
-> **Runtime measurements:** none
+> **Status:** Implemented, not runtime-validated
+>
+> - **Implementation range:** `d8e1623` → `7c129d3` (7 commits)
+> - **Reported branch state:** `main` synchronized; working tree clean at `7c129d3`
+> - **Scope:** `benchmarks/` and benchmark documentation
+> - **Runtime measurements:** none
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
@@ -22,6 +23,7 @@ The implementation report describes authored code and recorded engineering decis
 | S5 — 2D/Canvas | Not authored | Separate project and harness intentionally deferred |
 | S6 — transparency and post-processing | Implemented | Transparent quads and P0–P5 presets |
 | S7 — editor viewport | Manual procedure documented | No automated harness scene |
+| Report checker (`benchmarks/tools/check_report.py`) | Implemented | 24 tests executed; no engine run |
 | Harness runtime validation | Not performed | No template build, GPU, or display was available |
 | Performance measurements | Not available | All runtime values remain unmeasured |
 
@@ -29,7 +31,7 @@ The implementation report describes authored code and recorded engineering decis
 
 ## 2. Change history
 
-The implementation was delivered over six commits:
+The implementation was delivered over seven commits:
 
 | Commit | Delivery |
 |---|---|
@@ -39,8 +41,9 @@ The implementation was delivered over six commits:
 | `3dc9bf8` | Added S6, screenshot capture, image diff, and `--bench-min-diff` |
 | `811b02f` | Documented S7 as a manual procedure and recorded S5/S7 status |
 | `1cfdcbc` | Corrected documentation wording about automation and implementation status |
+| `7c129d3` | Implemented the report checker and its tests, and documented the automated part of the gate |
 
-The reported aggregate change was 19 files under `benchmarks/` and `docs/`, with approximately 1,450 insertions and 150 deletions. The benchmark project contains approximately 1,538 lines of GDScript.
+The aggregate change over this range is 22 files under `benchmarks/` and `docs/`, with approximately 2,345 insertions and 151 deletions. The benchmark project contains approximately 1,538 lines of GDScript.
 
 ## 3. Project architecture
 
@@ -66,7 +69,7 @@ benchmarks/rd_3d/
     scene_s6.gd                   S6 content and frame-indexed camera
 ```
 
-Scene content is generated procedurally. No binary assets are required. Integer seeds/hashes and a camera driven by frame index make the 300-frame camera sequence independent of the machine's achieved FPS. The harness does not use `--fixed-fps` to enforce determinism.
+Scene content is generated procedurally. No binary assets are required. Integer seeds and hashes make the content reproducible, and a camera driven by frame index makes the 300-frame sequence independent of the machine's achieved FPS. The harness does not use `--fixed-fps` to enforce determinism.
 
 The shared project pins its benchmark settings, including a 1920×1080 window, VSync disabled, MSAA disabled, prepass enabled, and SSAO/SSIL quality set to 2. The effective runtime configuration is recorded separately so command-line overrides are not confused with project defaults.
 
@@ -103,7 +106,7 @@ A single JSON report includes the content hash, frame-299 SHA-256 hash, timing s
 
 Pipeline compilation counters are cumulative from engine startup. Therefore, absolute totals are not a valid steady-state gate. The harness samples per-frame deltas.
 
-- `pipeline_compilations.first_120` captures the first 120 rendered frames **before the target scene is loaded**, so scene-load and first-draw pipeline creation are included. This is the S3b observation window.
+- `pipeline_compilations.first_120` **starts before the target scene is loaded** and ends after the first 120 frames the harness renders, so the compiles caused by loading and first drawing that scene are included. This is the S3b observation window.
 - `pipeline_compilations.total` is cumulative for the run and includes warm-up. A non-zero value is not by itself a failure.
 - `timing.pso_in_sample` is the steady-state gate. It must be zero throughout the sampling window.
 
@@ -122,7 +125,7 @@ A valid published cell requires, among other conditions:
 - a successful frame-hash capture;
 - backend GPU timing represented as unavailable when unsupported, never fabricated as zero.
 
-The harness does not itself establish cross-run frame-hash equality; the collector must compare hashes between repetitions.
+The harness does not itself establish cross-run frame-hash equality. The mechanical part of this gate is implemented in `benchmarks/tools/check_report.py`, which also compares repeated runs of one cell (frame hash, draw-call median, and S3b `first_120`). Driver-forced VSync, thermal throttling, and wrong content on screen remain manual checks.
 
 ## 5. Scene-specific implementation decisions
 
@@ -145,7 +148,7 @@ ORM material setup uses `ORMMaterial3D`, because `orm_texture` is registered on 
 
 ### 5.3 S4 — lights and shadows
 
-S4 exposes spot and omni counts through `--bench-spots` and `--bench-omnis`, plus a shadow variant. The configured sweep is:
+S4 exposes spot and omni counts through `--bench-spots` and `--bench-omnis`, plus a shadow variant selected with `--bench-variant shadows`. The configured sweep is:
 
 `(0,0), (8,0), (0,32), (8,32), (32,64)`
 
@@ -167,10 +170,10 @@ The implementation work recorded these source/API constraints:
 
 1. ORM texture assignment requires `ORMMaterial3D`; the property is registered by that class.
 2. `Node3D.look_at()` requires the node to be inside the scene tree. Spot-light setup uses `look_at_from_position()` where the node is not yet in-tree.
-3. `Basis.looking_at()` uses the negative Z axis as its forward direction. S6 quads pass the direction from the quad toward the camera so their positive-Z face points toward the camera.
+3. `Basis.looking_at()` makes the negative Z axis point along the direction it is given. S6 quads pass the direction from the camera toward the quad, which leaves their positive-Z face pointing back at the camera.
 4. S1 draw-call expectations must account for Forward+ surface repetition/instancing rather than assume one draw per node.
 5. PSO monitors are cumulative and must be interpreted as deltas for per-frame and in-window checks.
-6. The first-120 PSO window is deliberately captured before loading the target scene.
+6. The first-120 PSO baseline is captured before the target scene is loaded, so the window includes scene-load and first-draw compiles.
 
 These are implementation notes, not substitutes for the upstream API contract. If the engine source changes, re-check the relevant call sites and property registration.
 
@@ -182,7 +185,8 @@ These are implementation notes, not substitutes for the upstream API contract. I
 - Script structure, indentation, and whitespace were reviewed.
 - `git diff --check` passed.
 - Documentation consistency was reviewed for status labels, JSON fields, command-line arguments, and acceptance criteria.
-- The final reported repository state at `1cfdcbc` was `main` synchronized with a clean working tree.
+- The report checker's 24 unit tests were executed in this environment and passed.
+- The final reported repository state at `7c129d3` was `main` synchronized with a clean working tree.
 
 ### Runtime validation not performed
 
@@ -202,7 +206,7 @@ The first real cell must be **S1/Q0** on one known configuration, preferably D1 
 
 1. Build an exported template for the target platform and renderer.
 2. Run S1/Q0 with the documented warm-up and sample window.
-3. Confirm the report is valid and inspect `timing.pso_in_sample == 0`.
+3. Confirm the report is valid, inspect `timing.pso_in_sample == 0`, and run it through `benchmarks/tools/check_report.py`.
 4. Compare frame hashes across repeated S1 runs.
 5. Check draw-call stability and primitive-count sanity.
 6. Only after S1 validates the harness, proceed to S2, S3a/S3b, S4, and S6.
