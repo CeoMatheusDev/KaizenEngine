@@ -76,7 +76,6 @@ def make_report(**overrides):
         },
         "frames": {
             "frame_us": [16000] * SAMPLED,
-            "process_ms": [1.0] * SAMPLED,
             "draw_calls": [2] * SAMPLED,
             "objects": [401] * SAMPLED,
             "primitives": [4802] * SAMPLED,
@@ -97,7 +96,7 @@ def make_report(**overrides):
             "frame_ms_min": 15.9,
             "hitches": 0,
             "gpu_ms_median": None,
-            "cpu_ms_median": 1.0,
+            "render_cpu_ms_median": 4.0,
         },
         "frame_hash": "hash-a",
         "screenshot": "",
@@ -256,6 +255,11 @@ class CheckReportTests(unittest.TestCase):
         )
         self.assertEqual(self.check(report), 0)
 
+    def test_window_size_mismatch_fails(self):
+        report = make_report()
+        report["runtime"]["window_size"] = [1600, 834]
+        self.assertGreater(self.check(report), 0)
+
     def test_gpu_unavailable_is_allowed(self):
         self.assertEqual(self.check(make_report()), 0)
 
@@ -264,6 +268,17 @@ class CheckReportTests(unittest.TestCase):
         report["frames"]["viewport_gpu_ms"] = [8.0] * SAMPLED
         report["summary"]["gpu_ms_median"] = None
         self.assertGreater(self.check(report), 0)
+
+    def test_cpu_values_with_empty_frames_fail(self):
+        report = make_report()
+        report["frames"]["viewport_cpu_ms"] = []
+        self.assertGreater(self.check(report), 0)
+
+    def test_unavailable_cpu_timing_passes(self):
+        report = make_report()
+        report["frames"]["viewport_cpu_ms"] = []
+        report["summary"]["render_cpu_ms_median"] = None
+        self.assertEqual(self.check(report), 0)
 
     def test_repeated_runs_with_different_hash_fail(self):
         first = make_report()

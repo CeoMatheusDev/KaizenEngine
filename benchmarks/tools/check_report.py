@@ -149,17 +149,22 @@ def _check_report(report):
     if isinstance(sampled, int) and summary.get("frames") != sampled:
         fail("summary.frames is %r, timing.sampled_frames is %d" % (summary.get("frames"), sampled))
 
-    gpu_ms = frames.get("viewport_gpu_ms")
-    if isinstance(gpu_ms, list):
-        if gpu_ms and isinstance(sampled, int) and len(gpu_ms) != sampled:
+    for key, median_key in (
+        ("viewport_gpu_ms", "gpu_ms_median"),
+        ("viewport_cpu_ms", "render_cpu_ms_median"),
+    ):
+        values = frames.get(key)
+        if not isinstance(values, list):
+            continue
+        if values and isinstance(sampled, int) and len(values) != sampled:
             fail(
-                "frames.viewport_gpu_ms has %d entries, timing.sampled_frames is %d"
-                % (len(gpu_ms), sampled)
+                "frames.%s has %d entries, timing.sampled_frames is %d"
+                % (key, len(values), sampled)
             )
-        if not gpu_ms and summary.get("gpu_ms_median") is not None:
-            fail("summary.gpu_ms_median has a value but frames.viewport_gpu_ms is empty")
-        if gpu_ms and summary.get("gpu_ms_median") is None:
-            fail("frames.viewport_gpu_ms has values but summary.gpu_ms_median is null")
+        if not values and summary.get(median_key) is not None:
+            fail("summary.%s has a value but frames.%s is empty" % (median_key, key))
+        if values and summary.get(median_key) is None:
+            fail("frames.%s has values but summary.%s is null" % (key, median_key))
 
     if not report.get("frame_hash"):
         fail("frame_hash is empty; frame determinism cannot be checked (do not use --bench-no-hash for a published cell)")
@@ -175,8 +180,8 @@ def _check_report(report):
     if isinstance(window_size, list) and len(window_size) == 2:
         if expected_width is not None and expected_height is not None:
             if window_size[0] != expected_width or window_size[1] != expected_height:
-                warn(
-                    "window size %dx%d differs from the project viewport %sx%s"
+                fail(
+                    "window size %dx%d differs from the project viewport %sx%s; the frame was rendered at another resolution"
                     % (window_size[0], window_size[1], expected_width, expected_height)
                 )
     else:

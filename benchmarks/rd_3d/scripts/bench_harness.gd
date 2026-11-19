@@ -95,8 +95,6 @@ var _total := 0
 var _sampled := 0
 var _last_us := 0
 var _frame_us := PackedInt64Array()
-var _process_ms := PackedFloat64Array()
-var _physics_ms := PackedFloat64Array()
 var _draw_calls := PackedInt64Array()
 var _objects := PackedInt64Array()
 var _primitives := PackedInt64Array()
@@ -258,8 +256,6 @@ func _start() -> void:
 	_buffer_mem.resize(_frames)
 	_video_mem.resize(_frames)
 	_pso_delta.resize(_frames)
-	_process_ms.resize(_frames)
-	_physics_ms.resize(_frames)
 	_viewport_cpu_ms.resize(_frames)
 	_viewport_gpu_ms.resize(_frames)
 
@@ -327,8 +323,10 @@ func _process(_delta: float) -> void:
 
 func _store(p_index: int, p_us: int, p_pso_delta: int) -> void:
 	_frame_us[p_index] = p_us
-	_process_ms[p_index] = float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
-	_physics_ms[p_index] = float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
+	# Performance.TIME_PROCESS and TIME_PHYSICS_PROCESS are not used: main.cpp
+	# publishes them as the maximum over a 1,000,000-frame window, so within a
+	# run they hold the startup frame and never change. viewport_cpu_ms is the
+	# renderer's own measurement for the frames that were actually sampled.
 	_draw_calls[p_index] = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	_objects[p_index] = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
 	_primitives[p_index] = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
@@ -464,11 +462,9 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 
 	var frame_us := Array(_frame_us.slice(0, _sampled))
 	var gpu := Array(_viewport_gpu_ms.slice(0, _sampled))
-	var gpu_available := false
-	for value in gpu:
-		if float(value) > 0.0:
-			gpu_available = true
-			break
+	var gpu_available := _has_nonzero(gpu)
+	var cpu := Array(_viewport_cpu_ms.slice(0, _sampled))
+	var cpu_available := _has_nonzero(cpu)
 
 	var settings := {}
 	for key in PINNED_SETTINGS:
@@ -527,8 +523,6 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 		},
 		"frames": {
 			"frame_us": frame_us,
-			"process_ms": Array(_process_ms.slice(0, _sampled)),
-			"physics_ms": Array(_physics_ms.slice(0, _sampled)),
 			"draw_calls": Array(_draw_calls.slice(0, _sampled)),
 			"objects": Array(_objects.slice(0, _sampled)),
 			"primitives": Array(_primitives.slice(0, _sampled)),
@@ -536,10 +530,10 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 			"buffer_mem": Array(_buffer_mem.slice(0, _sampled)),
 			"video_mem": Array(_video_mem.slice(0, _sampled)),
 			"pso_compilations": Array(_pso_delta.slice(0, _sampled)),
-			"viewport_cpu_ms": Array(_viewport_cpu_ms.slice(0, _sampled)),
+			"viewport_cpu_ms": cpu if cpu_available else [],
 			"viewport_gpu_ms": gpu if gpu_available else [],
 		},
-		"summary": _summarize(frame_us, gpu if gpu_available else []),
+		"summary": _summarize(frame_us, gpu if gpu_available else [], cpu if cpu_available else []),
 		"frame_hash": _frame_hash,
 		"screenshot": _screenshot_path,
 		"image_diff": _image_diff,
@@ -547,6 +541,8 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 			"frame_us is the wall-clock interval between consecutive process callbacks; it includes presentation blocking.",
 			"pso_compilations is a per-frame delta of the cumulative pipeline compilation counters.",
 			"viewport_gpu_ms is empty when the backend never reported a GPU timestamp.",
+			"viewport_cpu_ms is the renderer's measured CPU render time for the viewport, not the whole process time.",
+			"Performance.TIME_PROCESS and TIME_PHYSICS_PROCESS are omitted: main.cpp publishes them as a maximum over 1,000,000 frames, so they are stale inside a run.",
 		],
 	}
 
@@ -559,7 +555,13 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 	print("bench: report written to %s" % report_path)
 	return true
 
-func _summarize(p_frame_us: Array, p_gpu_ms: Array) -> Dictionary:
+func _has_nonzero(p_values: Array) -> bool:
+	for value in p_values:
+		if float(value) > 0.0:
+			return true
+	return false
+
+func _summarize(p_frame_us: Array, p_gpu_ms: Array, p_cpu_ms: Array) -> Dictionary:
 	if p_frame_us.is_empty():
 		return {}
 
@@ -576,8 +578,6 @@ func _summarize(p_frame_us: Array, p_gpu_ms: Array) -> Dictionary:
 		if int(value) > median_us * 2:
 			hitches += 1
 
-	var cpu_sorted := _array_sorted(Array(_process_ms.slice(0, n)))
-
 	var result := {
 		"frames": n,
 		"fps_median": 1000000.0 / float(median_us) if median_us > 0 else 0.0,
@@ -588,11 +588,13 @@ func _summarize(p_frame_us: Array, p_gpu_ms: Array) -> Dictionary:
 		"frame_ms_min": float(sorted_us[0]) / 1000.0,
 		"hitches": hitches,
 		"gpu_ms_median": null,
-		"cpu_ms_median": _median(cpu_sorted),
+		"render_cpu_ms_median": null,
 	}
 
 	if not p_gpu_ms.is_empty():
 		result.gpu_ms_median = float(_median(_array_sorted(p_gpu_ms)))
+	if not p_cpu_ms.is_empty():
+		result.render_cpu_ms_median = float(_median(_array_sorted(p_cpu_ms)))
 
 	return result
 

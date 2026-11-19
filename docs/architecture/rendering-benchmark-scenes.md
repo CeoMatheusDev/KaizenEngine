@@ -10,7 +10,7 @@ The goal is comparability. A result is only meaningful if the frame content, res
 
 ## 1. Global rules
 
-1. **One project per scene group.** S1–S4 and S6 share a 3D project; S5 is a 2D project; S7 reuses the 3D project in the editor. Each project pins every rendering setting in `project.godot`; nothing may depend on engine defaults, because defaults change between commits.
+1. **One project per scene group.** S1–S4 and S6 share a 3D project; S5 is a 2D project; S7 reuses the 3D project in the editor. Each project pins every rendering setting in `project.kaizen`; nothing may depend on engine defaults, because defaults change between commits.
 2. **Content is generated, not imported.** Meshes and textures are produced at startup by a deterministic generator (fixed seed, integer hashing, no `randf()`), so the repository stays asset-free and the same content is used on every backend. Generation cost is first-frame only and excluded from sampling (§5).
 3. **Animation is frame-indexed, not time-indexed.** Camera and object movement advance by rendered frame index, never by `delta`. A 300-frame loop therefore renders the same 300 images on a 30 FPS run and a 300 FPS run.
 4. **No simulation.** No physics bodies, no navigation, no particles, no animation players, no scripts beyond the camera driver and the measurement harness.
@@ -356,7 +356,7 @@ sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
   They share one mesh and one material, so the only thing that changes with
   `quad_count` is overdraw.
 - Environment: the shared solid background and ambient energy 0.3. SSAO and
-  SSIL quality are pinned in `project.godot` to `2` (Medium), and the report
+  SSIL quality are pinned in `project.kaizen` to `2` (Medium), and the report
   records those project settings.
 - `scene.parameters.post` states the preset, which toggles were applied, and a
   `support` map for glow, SSAO, SSIL, and volumetric fog derived from

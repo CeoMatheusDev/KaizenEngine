@@ -22,7 +22,7 @@ loads.
 ```text
 benchmarks/
   rd_3d/
-    project.godot
+    project.kaizen
     scenes/bootstrap.tscn          empty main scene; the harness loads the real one
     scenes/s1_static.tscn          S1: separate MeshInstance3D boxes
     scenes/s2_instancing.tscn      S2: one MultiMesh
@@ -141,7 +141,7 @@ For scene development only, a tools build can run the same command with
 `--bench-allow-editor`; the JSON then contains `"valid": false` and the reason.
 
 **Q1 is not automated.** The project pins the Q0 settings. A Q1 cell requires
-editing `project.godot` (MSAA 4×, which is `msaa_3d = 2`, and soft shadow
+editing `project.kaizen` (MSAA 4×, which is `msaa_3d = 2`, and soft shadow
 quality 4) and the scene environment (SSAO medium, SSIL medium, glow on at
 intensity 0.8), then recording the resulting values. The harness writes whatever
 settings are in effect and uses `--bench-preset` only as a label; it cannot prove

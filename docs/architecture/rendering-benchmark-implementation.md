@@ -51,7 +51,7 @@ S1–S4 and S6 share one Godot-style project because they use the same renderer 
 
 ```text
 benchmarks/rd_3d/
-  project.godot                  fixed benchmark settings
+  project.kaizen                 fixed benchmark settings
   scenes/
     bootstrap.tscn                empty startup scene; harness loads target scene
     s1_static.tscn                S1: opaque boxes
