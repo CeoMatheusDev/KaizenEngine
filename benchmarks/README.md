@@ -5,21 +5,32 @@ contract is defined in [Benchmark scene specification](../docs/architecture/rend
 the instrument list and reference configurations are in
 [Benchmark methodology](../docs/architecture/rendering-benchmarks.md).
 
-> **Status:** scene **S1 is authored; S2–S7 are not**. The harness has never been
-> executed in this environment (no build, GPU, or display). Treat every number it
-> produces as unvalidated until it has been run on real hardware and checked
-> against the validity rules below.
+> **Status:** scenes **S1 and S2 are authored; S3–S7 are not**. The harness has
+> never been executed in this environment (no build, GPU, or display). Treat every
+> number it produces as unvalidated until it has been run on real hardware and
+> checked against the validity rules below.
 
 ## Layout
 
+S1–S4 and S6 share one project, because they use the same renderer settings and
+differ only in scene content. `--bench-scene` selects which scene the harness
+loads.
+
 ```text
 benchmarks/
-  s1_static/
+  rd_3d/
     project.godot
-    scenes/s1_static.tscn
-    scripts/bench_harness.gd   autoload: sampling, monitors, JSON report
-    scripts/s1_static.gd       deterministic content + frame-indexed camera
+    scenes/bootstrap.tscn          empty main scene; the harness loads the real one
+    scenes/s1_static.tscn          S1: separate MeshInstance3D boxes
+    scenes/s2_instancing.tscn      S2: one MultiMesh
+    scripts/bench_harness.gd       autoload: scene registry, sampling, JSON report
+    scripts/bench_scene_common.gd  shared deterministic material/light/environment
+    scripts/scene_s1.gd            S1 content and frame-indexed camera
+    scripts/scene_s2.gd            S2 content and frame-indexed camera
 ```
+
+Adding a scene means adding its `.tscn`, its script, and one entry in the
+`SCENES` registry at the top of `bench_harness.gd`.
 
 ## Requirements
 
@@ -36,11 +47,14 @@ Export the project with the preset for the target platform, then run the
 template binary:
 
 ```text
-<kaizen-template> --path benchmarks/s1_static -- \
-    --bench-scene S1 --bench-count 400 --bench-preset Q0 \
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S1 --bench-count 400 --bench-preset Q0 --bench-config D1 \
     --bench-frames 3600 --bench-warmup 900 \
     --bench-out /absolute/path/S1_D1_Q0.json
 ```
+
+S2 uses the same command with `--bench-scene S2` and its own count, for example
+`--bench-count 16384`.
 
 Without `--bench-out` the report goes to `user://bench/<scene>_<preset>.json`,
 and its absolute path is printed on exit.
@@ -48,34 +62,48 @@ and its absolute path is printed on exit.
 For scene development only, a tools build can run the same command with
 `--bench-allow-editor`; the JSON then contains `"valid": false` and the reason.
 
+**Q1 is not automated.** The project pins the Q0 settings. A Q1 cell requires
+editing `project.godot` (MSAA 4×, which is `msaa_3d = 2`, and soft shadow
+quality 4) and the scene environment (SSAO medium, SSIL medium, glow on at
+intensity 0.8), then recording the resulting values. The harness writes whatever
+settings are in effect and uses `--bench-preset` only as a label; it cannot prove
+a run labelled Q1 matches the Q1 definition.
+
 ### Arguments
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `--bench-scene` | `S1` | Report label |
-| `--bench-count` | scene default (400) | Forwarded to the scene as its content count |
+| `--bench-scene` | `S1` | Scene to load and report label: `S1` or `S2` |
+| `--bench-count` | scene default (400 for S1, 4096 for S2) | Forwarded to the scene as its content count |
 | `--bench-preset` | `Q0` | Report label only; presets are project settings |
+| `--bench-config` | empty | Configuration label recorded in the report (`D1`, `M1`, ...) |
 | `--bench-frames` | `3600` | Sampled frames, rounded up to a multiple of 300 |
 | `--bench-warmup` | `900` | Frames before sampling, rounded up to a multiple of 300 |
 | `--bench-out` | `user://bench/...` | Absolute report path |
 | `--bench-no-hash` | off | Skip the frame-hash capture |
 | `--bench-allow-editor` | off | Allow a tools build (report marked invalid) |
 
-Sampling always starts at a fixed frame index (default 900) and the reported
-window is exactly 3600 frames, so every run covers the same camera frames.
+With the defaults, sampling starts at frame 900 and covers exactly 3600 frames,
+so every run covers the same camera frames. Both windows are rounded up to a
+multiple of the 300-frame loop.
 
 ### Renderer selection
 
 The project pins Forward+, but the CLI overrides it per run:
 
 ```text
-<kaizen-template> --path benchmarks/s1_static --rendering-method mobile \
+<kaizen-template> --path benchmarks/rd_3d --rendering-method mobile \
     --rendering-driver metal -- --bench-scene S1 --bench-count 400 ...
 ```
 
-The report records the **effective** method, driver, adapter name, adapter
-vendor, and API version as reported by `RenderingServer`, so a run started with
-an override cannot be mistaken for the project setting.
+The report records the **effective** method, driver, display server, vsync
+setting, viewport MSAA/TAA/3D scaling, adapter name, adapter vendor, and API
+version as reported by `RenderingServer`, `DisplayServer`, and `Viewport`, so a
+run started with an override cannot be mistaken for the project setting.
+`window_get_vsync_mode` reports what the display server believes it is using; it
+cannot prove the driver is not forcing a swap interval, which is why the
+specification still treats a flat frame-time histogram pinned to the refresh
+rate as a validity failure.
 
 ## What the harness records
 
@@ -102,13 +130,34 @@ summary (median / p95 / p99 / worst / hitches), the engine version and hash, the
 pinned project settings, the scene parameters, a content hash, and a frame hash
 of rendered frame 299.
 
+## Scene checks
+
+The harness does not reject a cell on geometry grounds; it reports the numbers
+and the person collecting results applies the acceptance criteria from the
+specification:
+
+- **S1** — `primitives ≈ 12·box_count + 2` (±1%). `draw_calls` is
+  renderer-dependent: Forward+ merges the identical boxes into one instanced
+  draw (expect ≈ 2 draw calls regardless of `box_count`), while Mobile reports
+  one draw per instance (≈ `box_count + 1`). S1 therefore checks stability
+  across repeated runs, not a fixed draw-call target.
+- **S2** — `draw_calls` must stay constant (±1) across the whole
+  `instance_count` sweep, and `primitives` must scale linearly (±1%). Draw calls
+  that grow with the instance count mean the MultiMesh is misconfigured.
+
+Both scenes must show no increase in the PSO counters during sampling and the
+same `frame_hash` for repeated runs of one configuration.
+
 ## Validity
 
 A report is written even when the run is suspect; `"valid"` and
 `"invalid_reason"` state why. Exit code is `0` for a valid report, `3` for an
-invalid one, and `2` when the harness cannot start. A cell is invalid when:
+invalid one, `2` when the harness cannot start, and `4` when the report cannot
+be written. A cell is invalid when:
 
 - the build is a tools build (unless explicitly allowed, and then still invalid);
+- the process runs under `--headless` (the harness refuses to start, exit code 2);
+- the display server reports a vsync mode other than disabled;
 - pipeline compilations occur during the sampling window or within 120 frames
   before it;
 - the frame hash is missing because capture failed;
@@ -123,12 +172,12 @@ Frame-hash equality across runs is **not** checked by the harness; compare
 - `frame_us` comes from a script callback timer, not the engine's internal frame
   profiler. It measures the interval the main loop observes, which is what a
   game experiences, but it cannot separate submission from presentation.
-- The harness itself reads ~13 monitors per frame. That cost is identical in
-  every configuration and is disclosed, not subtracted.
+- The harness itself performs ~15 monitor reads per frame. That cost is identical
+  in every configuration and is disclosed, not subtracted.
 - GPU timestamps are unavailable on some backends (WebGL 2, and Metal without
   barrier mode and stage-boundary counter sampling). Empty means unavailable.
-- Nothing here validates image quality. S1 has no post-processing; parity and
-  quality comparisons need the scenes that are not authored yet.
+- Nothing here validates image quality. S1 and S2 have no post-processing; parity
+  and quality comparisons need the scenes that are not authored yet.
 
 ## Related documents
 

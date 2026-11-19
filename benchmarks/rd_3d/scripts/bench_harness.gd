@@ -12,12 +12,13 @@ extends Node
 ## invalid.
 ##
 ## CLI (after the engine's `--` separator):
-##   --bench-scene <name>        Label written to the report (default S1)
+##   --bench-scene <S1|S2>       Scene to load and report label (default S1)
 ##   --bench-count <n>           Forwarded to the scene as its content count
 ##   --bench-preset <Q0|Q1>      Label written to the report (default Q0)
+##   --bench-config <label>      Configuration label written to the report (D1, M1, ...)
 ##   --bench-frames <n>          Sampled frames, multiple of 300 (default 3600)
 ##   --bench-warmup <n>          Warm-up frames, multiple of 300 (default 900)
-##   --bench-out <abs path>      Report path (default user://bench/<scene>.json)
+##   --bench-out <abs path>      Report path (default user://bench/<scene>_<preset>.json)
 ##   --bench-no-hash             Skip the frame-hash capture
 ##   --bench-allow-editor        Allow a tools build (report marked invalid)
 
@@ -45,10 +46,18 @@ const PINNED_SETTINGS := [
 	"rendering/driver/depth_prepass/enable",
 ]
 
+## Scene registry: the project is shared by all 3D scenes, and --bench-scene
+## selects which one is loaded. Adding a scene means adding its entry here.
+const SCENES := {
+	"S1": "res://scenes/s1_static.tscn",
+	"S2": "res://scenes/s2_instancing.tscn",
+}
+
 var config := {
 	"scene": "S1",
 	"count": -1,
 	"preset": "Q0",
+	"config": "",
 	"frames": DEFAULT_SAMPLE_FRAMES,
 	"warmup": DEFAULT_WARMUP_FRAMES,
 	"out": "",
@@ -83,9 +92,10 @@ var _viewport_gpu_ms := PackedFloat64Array()
 var _pso_prev := 0
 var _pso_at_start := 0
 var _pso_in_sample := 0
-var _last_compile_frame := -1000000
+var _last_compile_frame := -1
 var _frame_hash := ""
 var _hash_started := false
+var _hash_pause := false
 var _invalid_reason := ""
 
 func _ready() -> void:
@@ -114,6 +124,10 @@ func _parse_args() -> void:
 				if i + 1 < args.size():
 					i += 1
 					config.preset = args[i]
+			"--bench-config":
+				if i + 1 < args.size():
+					i += 1
+					config.config = args[i]
 			"--bench-frames":
 				if i + 1 < args.size():
 					i += 1
@@ -139,17 +153,37 @@ func _start() -> void:
 			return
 		_add_invalid("tools build (development override)")
 
+	if DisplayServer.get_name() == "headless":
+		_fail("benchmarks must run with a rendering surface; --headless performs no GPU work")
+		return
+
 	await get_tree().process_frame
 
-	# The main scene is instantiated after autoloads; wait until SceneTree exposes it.
-	for _attempt in 8:
+	# The project starts on an empty bootstrap scene; load the requested scene.
+	var path := String(SCENES.get(String(config.scene), ""))
+	if path.is_empty():
+		_fail("unknown scene '%s' (expected one of: %s)" % [String(config.scene), ", ".join(PackedStringArray(SCENES.keys()))])
+		return
+
+	var current := get_tree().current_scene
+	if current == null or current.scene_file_path != path:
+		var change_error := get_tree().change_scene_to_file(path)
+		if change_error != OK:
+			_fail("cannot load %s (error %d)" % [path, change_error])
+			return
+
+	# change_scene_to_file is deferred; wait until the requested scene is current.
+	for _attempt in 16:
 		_scene = get_tree().current_scene
-		if _scene != null:
+		if _scene != null and _scene.scene_file_path == path:
 			break
 		await get_tree().process_frame
 
-	if _scene == null or not _scene.has_method("apply_frame"):
-		_fail("main scene must expose apply_frame(frame_index)")
+	if _scene == null or _scene.scene_file_path != path:
+		_fail("scene %s did not become current" % path)
+		return
+	if not _scene.has_method("apply_frame"):
+		_fail("scene %s must expose apply_frame(frame_index)" % path)
 		return
 
 	_frames = maxi(int(config.frames), LOOP_FRAMES)
@@ -185,6 +219,16 @@ func _process(_delta: float) -> void:
 	if not _running:
 		return
 
+	# The frame-hash capture holds the camera for one extra (uncounted) render so
+	# that the image belongs to the requested frame index. Resume the sequence on
+	# the next callback without shifting any later frame.
+	if _hash_pause:
+		_hash_pause = false
+		_last_us = Time.get_ticks_usec()
+		_scene.call("apply_frame", _total)
+		_total += 1
+		return
+
 	var now := Time.get_ticks_usec()
 	var frame_done := _total - 1
 
@@ -208,7 +252,9 @@ func _process(_delta: float) -> void:
 
 	if bool(config.capture_hash) and not _hash_started and frame_done == _hash_frame:
 		_hash_started = true
+		_hash_pause = true
 		_capture_hash()
+		return
 
 	_last_us = now
 	_scene.call("apply_frame", _total)
@@ -257,11 +303,15 @@ func _finish() -> void:
 		_add_invalid("pipeline compilations during the sampling window (%d)" % _pso_in_sample)
 	if _last_compile_frame >= 0 and _sample_start > 0 and _sample_start - 1 - _last_compile_frame < STABLE_WINDOW:
 		_add_invalid("pipeline compilations within %d frames of sampling start" % STABLE_WINDOW)
+	if int(DisplayServer.window_get_vsync_mode()) != 0:
+		_add_invalid("display vsync mode is %d, expected 0 (disabled)" % int(DisplayServer.window_get_vsync_mode()))
 
-	_write_report()
+	if not _write_report():
+		get_tree().quit(4)
+		return
 	get_tree().quit(0 if _invalid_reason.is_empty() else 3)
 
-func _write_report() -> void:
+func _write_report() -> bool:
 	var report_path := String(config.out)
 	if report_path.is_empty():
 		report_path = "user://bench/%s_%s.json" % [String(config.scene).validate_filename(), String(config.preset)]
@@ -286,9 +336,16 @@ func _write_report() -> void:
 	# Effective values, not project defaults: --rendering-method / --rendering-driver
 	# override the project at startup and must be captured for the cell to be valid.
 	var window_size := DisplayServer.window_get_size()
+	var viewport := get_viewport()
 	var runtime := {
 		"rendering_method": RenderingServer.get_current_rendering_method(),
 		"rendering_driver": RenderingServer.get_current_rendering_driver_name(),
+		"display_server": DisplayServer.get_name(),
+		"vsync_mode": int(DisplayServer.window_get_vsync_mode()),
+		"msaa_3d": int(viewport.msaa_3d),
+		"use_taa": viewport.use_taa,
+		"scaling_3d_mode": int(viewport.scaling_3d_mode),
+		"scaling_3d_scale": viewport.scaling_3d_scale,
 		"adapter_name": RenderingServer.get_video_adapter_name(),
 		"adapter_vendor": RenderingServer.get_video_adapter_vendor(),
 		"api_version": RenderingServer.get_video_adapter_api_version(),
@@ -301,13 +358,15 @@ func _write_report() -> void:
 		"build": {
 			"type": "template" if OS.has_feature("template") else "tools",
 			"flags": OS.get_cmdline_args(),
+			"user_args": OS.get_cmdline_user_args(),
 		},
 		"scene": {
 			"id": String(config.scene),
 			"parameters": _scene_parameters(),
-			"content_hash": _content_hash(settings, runtime),
+			"content_hash": _content_hash(settings),
 		},
 		"preset": String(config.preset),
+		"configuration": String(config.config),
 		"valid": _invalid_reason.is_empty(),
 		"invalid_reason": _invalid_reason,
 		"project_settings": settings,
@@ -347,10 +406,11 @@ func _write_report() -> void:
 	var file := FileAccess.open(report_path, FileAccess.WRITE)
 	if file == null:
 		push_error("bench: cannot write report to %s" % report_path)
-		return
+		return false
 	file.store_string(JSON.stringify(document, "  ", true))
 	file.close()
 	print("bench: report written to %s" % report_path)
+	return true
 
 func _summarize(p_frame_us: Array, p_gpu_ms: Array) -> Dictionary:
 	if p_frame_us.is_empty():
@@ -414,11 +474,10 @@ func _scene_parameters() -> Dictionary:
 		return _scene.call("scene_parameters")
 	return {}
 
-func _content_hash(p_settings: Dictionary, p_runtime: Dictionary) -> String:
+func _content_hash(p_settings: Dictionary) -> String:
 	var payload := {
-		"engine": Engine.get_version_info().get("hash", ""),
+		"engine": Engine.get_version_info(),
 		"settings": p_settings,
-		"runtime": p_runtime,
 		"parameters": _scene_parameters(),
 		"scene": String(config.scene),
 		"preset": String(config.preset),

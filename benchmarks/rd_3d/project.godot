@@ -1,4 +1,5 @@
-; Kaizen benchmark project: S1 "Static 3D".
+; Kaizen 3D benchmark project: scenes S1-S4 and S6 share this project.
+; --bench-scene selects which scene the harness loads; see benchmarks/README.md.
 ; Every setting here is pinned deliberately; changing one invalidates comparison
 ; with earlier results. See docs/architecture/rendering-benchmark-scenes.md.
 
@@ -6,9 +7,9 @@ config_version=5
 
 [application]
 
-config/name="Kaizen Benchmark S1"
-config/description="Deterministic static-geometry benchmark scene for the Kaizen rendering baseline."
-run/main_scene="res://scenes/s1_static.tscn"
+config/name="Kaizen Benchmarks (3D)"
+config/description="Deterministic 3D benchmark scenes for the Kaizen rendering baseline."
+run/main_scene="res://scenes/bootstrap.tscn"
 config/features=PackedStringArray("4.8", "Forward Plus")
 
 [autoload]

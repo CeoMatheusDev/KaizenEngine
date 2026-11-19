@@ -59,14 +59,14 @@ Two presets are measured for every 3D scene, plus scene-specific post effects in
 
 | Setting | Q0 (baseline) | Q1 (high) |
 |---|---|---|
-| MSAA 3D | 0 | 4 |
+| MSAA 3D | 0 (disabled) | 4× (`msaa_3d = 2`) |
 | SSAO | off | Medium |
 | SSIL | off | Medium |
 | Glow | off | on, intensity 0.8 |
 | Volumetric fog | off | off (S6 only, Forward+ only) |
 | Directional shadow size | 4096 | 4096 |
 | Soft shadow quality | 2 | 4 |
-| Depth prepass | engine default | engine default |
+| Depth prepass | `true` (engine may disable it per vendor) | `true` (same) |
 
 Q0 answers "what does the renderer cost with the least work"; Q1 answers "what does a typical high-quality frame cost". Both are required; a report with only one preset is incomplete.
 
@@ -82,9 +82,9 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S1 — Static 3D
 
-> Implemented in `benchmarks/s1_static/`. See [benchmark projects](../benchmarks/README.md) for how to run it; the implementation has not been validated on hardware yet.
+> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it; the implementation has not been validated on hardware yet.
 
-**Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against.
+**Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against. On Forward+ it is a throughput baseline, not a per-draw probe: identical surfaces are merged into instanced draws automatically (see the acceptance criteria).
 
 **Content**
 
@@ -104,16 +104,21 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 **Acceptance criteria**
 
-- `raster/total_draw_calls` ≈ `box_count + 1` (±5%). If it is much lower, instancing was introduced accidentally; if much higher, the material or mesh is being duplicated.
-- `raster/total_primitives_drawn` ≈ `12 × box_count + 2`.
+- `raster/total_primitives_drawn` ≈ `12 × box_count + 2` (±1%). Primitive count does not depend on how the renderer batches.
+- `raster/total_draw_calls` is **renderer-dependent and must be recorded, not asserted as a fixed number**:
+  - Forward+ sorts the opaque list by material/shader/geometry key and merges adjacent identical surfaces into one instanced draw (`RenderElementInfo::repeat`, `MAX_REPEATS = 2^20 − 1` in `forward_clustered/render_forward_clustered.h`). One material plus one shared `BoxMesh` therefore collapses all boxes into a single draw: expect roughly two draw calls (ground and boxes) regardless of `box_count`.
+  - Mobile reports one draw call per instance (`forward_mobile/render_forward_mobile.cpp` sets the counter from `instances->size()`), so the same scene reports ≈ `box_count + 1`.
+  - The acceptance criterion is **stability across repeated runs of the same configuration**, not a target count. A draw-call count that changes between two runs of one configuration invalidates the cell.
 - No increase in `pipeline/compilations_*` during the sampling window. These counters are cumulative since startup, so the check is on the per-frame delta, never on the absolute value.
 - The frame at index 299 is bit-identical across runs of the same configuration (screenshot hash), proving determinism.
 
-**Non-goals:** shadows, transparency, post-processing, instancing, culling stress.
+**Non-goals:** shadows, transparency, post-processing, per-draw overhead (Forward+ batches this scene), culling stress.
 
 ---
 
 ### S2 — Instancing
+
+> Implemented in `benchmarks/rd_3d/` (`scenes/s2_instancing.tscn`); not validated on hardware yet.
 
 **Purpose:** draw-call scaling. Separates per-draw overhead from per-primitive cost.
 
@@ -351,15 +356,16 @@ This matrix is deliberately larger than a first pass can execute. The recommende
 
 Hitches are defined as frames whose time exceeds twice the run median. The count and the worst frame are reported; a run with hitches inside the sampling window is still valid but is flagged.
 
-## 6. Harness contract (not implemented)
+## 6. Harness contract (implemented, never executed)
 
-The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor. A tools build can be used for scene development with `--bench-allow-editor`, which marks the report invalid.
+The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor. A tools build can be used for scene development with `--bench-allow-editor`, which marks the report invalid. The project starts on an empty bootstrap scene; the harness loads the scene named by `--bench-scene` from its internal registry.
 
-Proposed invocation:
+Invocation:
 
 ```text
-kaizen --path <project> -- --bench-scene S1 --bench-count 400 --bench-preset Q0 \
-       --bench-frames 3600 --bench-warmup 600 --bench-out /abs/path/S1_D1_Q0.json
+kaizen --path benchmarks/rd_3d -- --bench-scene S1 --bench-count 400 --bench-preset Q0 \
+       --bench-config D1 --bench-frames 3600 --bench-warmup 900 \
+       --bench-out /abs/path/S1_D1_Q0.json
 ```
 
 User arguments after `--` are read with `OS.get_cmdline_user_args()`.
@@ -380,41 +386,72 @@ Constraints on the harness itself:
 - Write the JSON once, after sampling.
 - Read the monitor array as a whole; per-frame `get_monitor` calls have a measurable cost that must be identical across configurations. The harness cost is part of every cell and is disclosed, not subtracted.
 
-Proposed output (one JSON document per run). The implementation in `benchmarks/s1_static/scripts/bench_harness.gd` is authoritative where it differs from this example; its field list and argument names are documented in [benchmark projects](../benchmarks/README.md).
+Output (one JSON document per run, abbreviated here; the implementation in `benchmarks/rd_3d/scripts/bench_harness.gd` is authoritative):
 
 ```json
 {
   "schema": 1,
-  "engine_commit": "...",
-  "build": { "type": "template", "flags": "..." },
-  "scene": { "id": "S1", "parameters": { "box_count": 400 }, "hash": "..." },
+  "engine": { "major": 4, "minor": 8, "patch": 0, "status": "beta", "hash": "..." },
+  "build": { "type": "template", "flags": ["..."], "user_args": ["--bench-scene", "S1"] },
+  "scene": {
+    "id": "S1",
+    "parameters": { "box_count": 400, "...": "..." },
+    "content_hash": "..."
+  },
   "preset": "Q0",
   "configuration": "D1",
-  "hardware": { "cpu": "...", "gpu": "...", "ram_mb": 0 },
-  "driver": { "api": "vulkan", "version": "..." },
-  "resolution": [1920, 1080],
+  "valid": true,
+  "invalid_reason": "",
+  "project_settings": { "...": "..." },
+  "runtime": {
+    "rendering_method": "forward_plus",
+    "rendering_driver": "vulkan",
+    "display_server": "x11",
+    "vsync_mode": 0,
+    "msaa_3d": 0,
+    "use_taa": false,
+    "scaling_3d_mode": 0,
+    "scaling_3d_scale": 1.0,
+    "adapter_name": "...",
+    "adapter_vendor": "...",
+    "api_version": "...",
+    "window_size": [1920, 1080]
+  },
+  "timing": {
+    "first_frame": 900,
+    "last_frame": 4499,
+    "warmup_frames": 900,
+    "sampled_frames": 3600,
+    "pso_at_start": 0,
+    "pso_in_sample": 0,
+    "last_compile_frame": -1
+  },
   "frames": {
-    "warmup": 600,
-    "sampled": 3600,
-    "frame_us": [0, 0, 0],
-    "draw_calls": [0, 0, 0],
-    "primitives": [0, 0, 0],
-    "pso_compilations": [0, 0, 0],
+    "frame_us": [0],
+    "process_ms": [0.0],
+    "draw_calls": [0],
+    "primitives": [0],
+    "pso_compilations": [0],
     "viewport_cpu_ms": [0.0],
-    "viewport_gpu_ms": [0.0]
+    "viewport_gpu_ms": []
   },
   "summary": {
-    "fps_median": 0.0, "fps_p95": 0.0,
-    "frame_ms_median": 0.0, "frame_ms_p95": 0.0, "frame_ms_p99": 0.0,
-    "hitches": 0, "worst_frame_ms": 0.0,
-    "gpu_total_ms": null
+    "frames": 3600,
+    "fps_median": 0.0,
+    "frame_ms_median": 0.0,
+    "frame_ms_p95": 0.0,
+    "frame_ms_p99": 0.0,
+    "hitches": 0,
+    "gpu_ms_median": null
   },
-  "frame_hash_299": "...",
-  "notes": []
+  "frame_hash": "...",
+  "notes": ["..."]
 }
 ```
 
 `null` for GPU time means "not available on this backend", never zero and never an estimate.
+
+The frame-hash capture holds the camera for one extra render of frame 299, then resumes the sequence. That render happens before warm-up and is neither counted nor sampled.
 
 ## 7. Validity gate
 
@@ -430,8 +467,8 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1 authored** in `benchmarks/s1_static/` (see [benchmark projects](../benchmarks/README.md)); S2–S7 **not started**.
-- Harness implementation — **authored** (`benchmarks/s1_static/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
+- Scene authoring — **S1 and S2 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S3–S7 **not started**.
+- Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.

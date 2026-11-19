@@ -7,6 +7,8 @@ extends Node3D
 ##
 ## See docs/architecture/rendering-benchmark-scenes.md, section "S1 - Static 3D".
 
+const Common = preload("res://scripts/bench_scene_common.gd")
+
 const LOOP_FRAMES := 300
 const SPACING := 8.0
 const BOX_SIZE := 2.0
@@ -41,29 +43,12 @@ func _build() -> void:
 	_radius = 2.2 * _extent
 	_height = 0.9 * _extent
 
-	var material := _make_material()
+	var material := Common.make_checker_material()
 	_add_ground(material)
 	_add_boxes(material)
-	_add_light_and_environment()
+	add_child(Common.make_sun())
+	Common.add_world_environment(self)
 	_add_camera()
-
-func _make_material() -> StandardMaterial3D:
-	# 32x32 checker upscaled to 1024x1024 with nearest filtering: deterministic,
-	# generated once, and cheap enough to build in GDScript.
-	var image := Image.create_empty(32, 32, false, Image.FORMAT_RGBA8)
-	for y in 32:
-		for x in 32:
-			var on_square := (int(x / 4) + int(y / 4)) % 2 == 0
-			image.set_pixel(x, y, Color(0.62, 0.62, 0.62) if on_square else Color(0.34, 0.34, 0.34))
-	image.resize(1024, 1024, Image.INTERPOLATE_NEAREST)
-	image.generate_mipmaps()
-
-	var texture := ImageTexture.create_from_image(image)
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = texture
-	material.roughness = 0.6
-	material.metallic = 0.0
-	return material
 
 func _add_ground(p_material: StandardMaterial3D) -> void:
 	var mesh := PlaneMesh.new()
@@ -92,34 +77,14 @@ func _add_boxes(p_material: StandardMaterial3D) -> void:
 				(float(row) - offset) * SPACING)
 		add_child(node)
 
-func _add_light_and_environment() -> void:
-	var light := DirectionalLight3D.new()
-	light.name = "KeyLight"
-	light.light_energy = 1.0
-	light.shadow_enabled = false
-	light.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
-	add_child(light)
-
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.05, 0.05, 0.07)
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(1.0, 1.0, 1.0)
-	environment.ambient_light_energy = 0.3
-
-	var world_environment := WorldEnvironment.new()
-	world_environment.name = "Environment"
-	world_environment.environment = environment
-	add_child(world_environment)
-
 func _add_camera() -> void:
 	_camera = Camera3D.new()
 	_camera.name = "BenchCamera"
 	_camera.fov = 75.0
 	_camera.near = 0.05
 	_camera.far = 4.0 * _extent + 200.0
-	_camera.current = true
 	add_child(_camera)
+	_camera.current = true
 
 ## Called by the harness once per rendered frame. Frame-indexed on purpose:
 ## the same frame index must produce the same camera pose on any frame rate.

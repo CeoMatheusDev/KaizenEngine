@@ -179,14 +179,14 @@ Notes / anomalies:
 
 ## 8. Automation plan (not implemented)
 
-- A GDScript harness can set `--fixed-fps`, move the camera along a recorded path, read `Performance` monitors, and write one JSON row per run. It must run against an exported template, not the editor.
+- A GDScript harness moves the camera by frame index, reads `Performance` monitors, and writes one JSON report per run. The camera must be a function of the frame index rather than of elapsed time, so a run covers the same frames at any frame rate; `--fixed-fps` changes the simulation delta, not the rendered frame sequence, and is not required. The harness must run against an exported template, not the editor.
 - The harness must not create or destroy resources during sampling, so that results are not mixed with deferred disposal or PSO compilation.
 - Results are appended to a versioned data file; the documentation reports summaries, not hand-copied numbers.
 
 ## 9. Open items
 
-- Scene authoring (S1–S7) — **not started**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md).
-- Harness implementation — **not started**.
+- Scene authoring — **S1 and S2 authored**, S3–S7 **not started**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md) and the code in [benchmark projects](../benchmarks/README.md).
+- Harness implementation — **authored and never executed**; no report has passed the validity gate.
 - Every measurement in section 1 — **not measured**; this environment has no build, GPU, or display.
 - Whether the GLES3 timestamp path behaves on each target driver — **not verified at runtime**.
 - Thermal and battery behavior on mobile — **not measured**.
