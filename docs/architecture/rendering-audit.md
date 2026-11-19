@@ -118,7 +118,27 @@ The tree already contains `RenderingDeviceGraph` (`servers/rendering/rendering_d
 6. Mobile device capability profiles and thermal behavior — **not measured**.
 7. WebGL 2 constraints — **source-level mapping done**: see [Web export runtime](rendering-web-runtime.md) (WebGL 2 is a hard requirement with no WebGL 1 fallback, threading is off by default, no shader/pipeline cache exists on Web, and several features are extension-gated). Actual browser behavior and performance remain **unverified**.
 
-## 11. Recommended next actions
+## 12. Differential audit (2026-11-19)
+
+### Finding: zero functional changes
+
+KaizenEngine is a fork of Godot 4.8.0-beta. A differential audit comparing
+`git diff 0f54129..HEAD` for all files under `servers/`, `drivers/`,
+`modules/`, `core/`, `scene/`, and `editor/` found **zero functional changes**
+to the renderer or graphics driver source code. All 390 modified files contain
+only cosmetic license header updates (`LICENSE` → `LICENSE.txt`).
+
+### Classification of known issues
+
+All 7 identified issues are inherited from upstream Godot 4.8, not regressions
+introduced by Kaizen. See `docs/upstream-differences.md` for the full inventory.
+
+### Policy
+
+- Upstream code is preserved intact. No functional modifications.
+- Known issues are documented and classified by severity.
+- Fixes are applied as isolated patches in `patches/`.
+- New Kaizen functionality is developed in `kaizen/` subsystems.
 
 Complete R0 before starting R1:
 
