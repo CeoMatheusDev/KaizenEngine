@@ -12,8 +12,9 @@ extends Node
 ## invalid.
 ##
 ## CLI (after the engine's `--` separator):
-##   --bench-scene <S1|S2>       Scene to load and report label (default S1)
+##   --bench-scene <S1|S2|S3>    Scene to load and report label (default S1)
 ##   --bench-count <n>           Forwarded to the scene as its content count
+##   --bench-variant <a|b|...>   Forwarded to the scene as its variant label
 ##   --bench-preset <Q0|Q1>      Label written to the report (default Q0)
 ##   --bench-config <label>      Configuration label written to the report (D1, M1, ...)
 ##   --bench-frames <n>          Sampled frames, multiple of 300 (default 3600)
@@ -27,6 +28,7 @@ const DEFAULT_SAMPLE_FRAMES := 3600
 const DEFAULT_WARMUP_FRAMES := 900
 const HASH_FRAME := 299
 const STABLE_WINDOW := 120
+const FIRST_WINDOW := 120
 
 ## Project settings copied into the report and into the content hash. These are
 ## the settings that change frame content or cost most directly.
@@ -51,11 +53,13 @@ const PINNED_SETTINGS := [
 const SCENES := {
 	"S1": "res://scenes/s1_static.tscn",
 	"S2": "res://scenes/s2_instancing.tscn",
+	"S3": "res://scenes/s3_materials.tscn",
 }
 
 var config := {
 	"scene": "S1",
 	"count": -1,
+	"variant": "",
 	"preset": "Q0",
 	"config": "",
 	"frames": DEFAULT_SAMPLE_FRAMES,
@@ -92,6 +96,10 @@ var _viewport_gpu_ms := PackedFloat64Array()
 var _pso_prev := 0
 var _pso_at_start := 0
 var _pso_in_sample := 0
+var _pso_before_scene := {}
+var _pso_sources_start := {}
+var _pso_first_window := {}
+var _first_window_taken := false
 var _last_compile_frame := -1
 var _frame_hash := ""
 var _hash_started := false
@@ -120,6 +128,10 @@ func _parse_args() -> void:
 				if i + 1 < args.size():
 					i += 1
 					config.count = int(args[i])
+			"--bench-variant":
+				if i + 1 < args.size():
+					i += 1
+					config.variant = args[i]
 			"--bench-preset":
 				if i + 1 < args.size():
 					i += 1
@@ -165,6 +177,10 @@ func _start() -> void:
 		_fail("unknown scene '%s' (expected one of: %s)" % [String(config.scene), ", ".join(PackedStringArray(SCENES.keys()))])
 		return
 
+	# Baseline for the first-window pipeline count: everything the scene causes,
+	# including compiles during its first rendered frames, must be counted.
+	_pso_before_scene = _pso_sources()
+
 	var current := get_tree().current_scene
 	if current == null or current.scene_file_path != path:
 		var change_error := get_tree().change_scene_to_file(path)
@@ -208,7 +224,8 @@ func _start() -> void:
 	_viewport_rid = get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(_viewport_rid, true)
 
-	_pso_prev = _pso_total()
+	_pso_sources_start = _pso_sources()
+	_pso_prev = _sum_sources(_pso_sources_start)
 	_pso_at_start = _pso_prev
 	_last_us = Time.get_ticks_usec()
 	_total = 0
@@ -234,9 +251,14 @@ func _process(_delta: float) -> void:
 
 	if _total > 0:
 		var us := now - _last_us
-		var pso_total := _pso_total()
+		var sources := _pso_sources()
+		var pso_total := _sum_sources(sources)
 		var delta := pso_total - _pso_prev
 		_pso_prev = pso_total
+
+		if frame_done == FIRST_WINDOW - 1 and not _first_window_taken:
+			_pso_first_window = _delta_sources(_pso_before_scene, sources)
+			_first_window_taken = true
 
 		if frame_done < _sample_start:
 			if delta > 0:
@@ -274,14 +296,26 @@ func _store(p_index: int, p_us: int, p_pso_delta: int) -> void:
 	_viewport_cpu_ms[p_index] = RenderingServer.viewport_get_measured_render_time_cpu(_viewport_rid)
 	_viewport_gpu_ms[p_index] = RenderingServer.viewport_get_measured_render_time_gpu(_viewport_rid)
 
-func _pso_total() -> int:
-	return (
-			int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_CANVAS))
-			+ int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_MESH))
-			+ int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SURFACE))
-			+ int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW))
-			+ int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SPECIALIZATION))
-	)
+func _pso_sources() -> Dictionary:
+	return {
+		"canvas": int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_CANVAS)),
+		"mesh": int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_MESH)),
+		"surface": int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SURFACE)),
+		"draw": int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW)),
+		"specialization": int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SPECIALIZATION)),
+	}
+
+func _sum_sources(p_sources: Dictionary) -> int:
+	var total := 0
+	for value in p_sources.values():
+		total += int(value)
+	return total
+
+func _delta_sources(p_before: Dictionary, p_after: Dictionary) -> Dictionary:
+	var delta := {}
+	for key in p_after.keys():
+		delta[key] = int(p_after[key]) - int(p_before.get(key, 0))
+	return delta
 
 func _capture_hash() -> void:
 	await RenderingServer.frame_post_draw
@@ -306,12 +340,13 @@ func _finish() -> void:
 	if int(DisplayServer.window_get_vsync_mode()) != 0:
 		_add_invalid("display vsync mode is %d, expected 0 (disabled)" % int(DisplayServer.window_get_vsync_mode()))
 
-	if not _write_report():
+	var pso_total_delta := _delta_sources(_pso_sources_start, _pso_sources())
+	if not _write_report(pso_total_delta):
 		get_tree().quit(4)
 		return
 	get_tree().quit(0 if _invalid_reason.is_empty() else 3)
 
-func _write_report() -> bool:
+func _write_report(p_pso_total_delta: Dictionary) -> bool:
 	var report_path := String(config.out)
 	if report_path.is_empty():
 		report_path = "user://bench/%s_%s.json" % [String(config.scene).validate_filename(), String(config.preset)]
@@ -379,6 +414,10 @@ func _write_report() -> bool:
 			"pso_at_start": _pso_at_start,
 			"pso_in_sample": _pso_in_sample,
 			"last_compile_frame": _last_compile_frame,
+		},
+		"pipeline_compilations": {
+			"first_120": _pso_first_window,
+			"total": p_pso_total_delta,
 		},
 		"frames": {
 			"frame_us": frame_us,

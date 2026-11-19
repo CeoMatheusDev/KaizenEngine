@@ -189,6 +189,26 @@ Eight feature combinations, cycled across the 64 nodes:
 
 **Non-goals:** lighting cost, texture bandwidth (textures are 512² and fit in cache).
 
+**Implemented** in `benchmarks/rd_3d/scripts/scene_s3.gd`; `--bench-variant a|b`
+selects the sub-scene, `--bench-count` sets `material_count` for S3a.
+
+- The 64 nodes share one `SphereMesh` (32×16) and get a per-node
+  `material_override`; the mesh itself carries no material.
+- S3a materials are `StandardMaterial3D` with identical features. Albedo hue is
+  `fmod(index × 0.618…, 1)`, saturation, roughness, and metallic come from the
+  integer hash in `bench_scene_common.gd`, so material *n* is identical on every
+  run and platform.
+- S3b generates one 512² tangent-space normal map and one 512² packed ORM
+  texture on the CPU at startup and cycles the eight features across the nodes.
+  Feature 3 uses `ORMMaterial3D`: the packed `orm_texture` property is only
+  registered by that class (`scene/resources/material.cpp:3654`, `:936` of
+  `material.h`); `StandardMaterial3D` would read separate roughness/metallic
+  textures instead.
+- Adjacent-batch merging applies here too: on Forward+, `material_count = 1`
+  merges all 64 identical spheres into one instanced draw, while 16 or 64
+  distinct materials cannot merge. The acceptance criterion is the PSO count,
+  not a fixed draw-call number.
+
 ---
 
 ### S4 — Lighting and shadows
@@ -368,6 +388,8 @@ kaizen --path benchmarks/rd_3d -- --bench-scene S1 --bench-count 400 --bench-pre
        --bench-out /abs/path/S1_D1_Q0.json
 ```
 
+`--bench-variant a|b` is forwarded to the scene and selects the S3 sub-scene.
+
 User arguments after `--` are read with `OS.get_cmdline_user_args()`.
 
 Per-frame data comes from:
@@ -426,6 +448,10 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
     "pso_in_sample": 0,
     "last_compile_frame": -1
   },
+  "pipeline_compilations": {
+    "first_120": { "canvas": 0, "mesh": 0, "surface": 0, "draw": 0, "specialization": 0 },
+    "total": { "canvas": 0, "mesh": 0, "surface": 0, "draw": 0, "specialization": 0 }
+  },
   "frames": {
     "frame_us": [0],
     "process_ms": [0.0],
@@ -451,6 +477,16 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
 
 `null` for GPU time means "not available on this backend", never zero and never an estimate.
 
+`pipeline_compilations.first_120` is measured from **before the scene is loaded**
+to the end of the first 120 frames the harness renders, so it contains the
+compiles caused by that scene's materials and first draw. It is the S3b
+instrument. `total` starts when the scene is current and therefore includes the
+warm-up; it is not expected to be zero in a valid run. Steady state is
+`timing.pso_in_sample`, which counts the sampling window only.
+
+The window is computed from frame index, not wall-clock time, so it contains the
+same frames on every run.
+
 The frame-hash capture holds the camera for one extra render of frame 299, then resumes the sequence. That render happens before warm-up and is neither counted nor sampled.
 
 ## 7. Validity gate
@@ -467,7 +503,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1 and S2 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S3–S7 **not started**.
+- Scene authoring — **S1, S2, and S3 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S4–S7 **not started**.
 - Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).

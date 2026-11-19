@@ -5,10 +5,10 @@ contract is defined in [Benchmark scene specification](../docs/architecture/rend
 the instrument list and reference configurations are in
 [Benchmark methodology](../docs/architecture/rendering-benchmarks.md).
 
-> **Status:** scenes **S1 and S2 are authored; S3–S7 are not**. The harness has
-> never been executed in this environment (no build, GPU, or display). Treat every
-> number it produces as unvalidated until it has been run on real hardware and
-> checked against the validity rules below.
+> **Status:** scenes **S1, S2, and S3 are authored; S4–S7 are not**. The harness
+> has never been executed in this environment (no build, GPU, or display). Treat
+> every number it produces as unvalidated until it has been run on real hardware
+> and checked against the validity rules below.
 
 ## Layout
 
@@ -23,10 +23,12 @@ benchmarks/
     scenes/bootstrap.tscn          empty main scene; the harness loads the real one
     scenes/s1_static.tscn          S1: separate MeshInstance3D boxes
     scenes/s2_instancing.tscn      S2: one MultiMesh
+    scenes/s3_materials.tscn       S3: 64 meshes with separate materials
     scripts/bench_harness.gd       autoload: scene registry, sampling, JSON report
     scripts/bench_scene_common.gd  shared deterministic material/light/environment
     scripts/scene_s1.gd            S1 content and frame-indexed camera
     scripts/scene_s2.gd            S2 content and frame-indexed camera
+    scripts/scene_s3.gd            S3 content, variants, and camera
 ```
 
 Adding a scene means adding its `.tscn`, its script, and one entry in the
@@ -56,6 +58,22 @@ template binary:
 S2 uses the same command with `--bench-scene S2` and its own count, for example
 `--bench-count 16384`.
 
+S3 has two variants selected with `--bench-variant`:
+
+```text
+# S3a: uniform variety only. material_count sweep: 1, 16, 64.
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S3 --bench-variant a --bench-count 64 \
+    --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S3a_D1_Q0.json
+
+# S3b: eight shader-feature combinations instead.
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S3 --bench-variant b \
+    --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S3b_D1_Q0.json
+```
+
+`--bench-count` is ignored in S3b, which always uses the eight features.
+
 Without `--bench-out` the report goes to `user://bench/<scene>_<preset>.json`,
 and its absolute path is printed on exit.
 
@@ -73,8 +91,9 @@ a run labelled Q1 matches the Q1 definition.
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `--bench-scene` | `S1` | Scene to load and report label: `S1` or `S2` |
-| `--bench-count` | scene default (400 for S1, 4096 for S2) | Forwarded to the scene as its content count |
+| `--bench-scene` | `S1` | Scene to load and report label: `S1`, `S2`, or `S3` |
+| `--bench-count` | scene default (400 for S1, 4096 for S2, 64 for S3) | Forwarded to the scene as its content count |
+| `--bench-variant` | scene default (`a` for S3) | Forwarded to the scene as its variant label |
 | `--bench-preset` | `Q0` | Report label only; presets are project settings |
 | `--bench-config` | empty | Configuration label recorded in the report (`D1`, `M1`, ...) |
 | `--bench-frames` | `3600` | Sampled frames, rounded up to a multiple of 300 |
@@ -130,6 +149,15 @@ summary (median / p95 / p99 / worst / hitches), the engine version and hash, the
 pinned project settings, the scene parameters, a content hash, and a frame hash
 of rendered frame 299.
 
+It also writes `pipeline_compilations.first_120` and
+`pipeline_compilations.total`, both broken down by counter (`canvas`, `mesh`,
+`surface`, `draw`, `specialization`). `first_120` starts **before the scene is
+loaded** and ends after the first 120 frames the harness renders, so it includes
+the compiles caused by loading and first drawing that scene. `total` runs from
+the moment the scene is current to the end of the run, so it includes the warm-up
+and is normally non-zero even in a valid cell; the steady-state signal is
+`timing.pso_in_sample`, which counts only the sampling window and must be zero.
+
 ## Scene checks
 
 The harness does not reject a cell on geometry grounds; it reports the numbers
@@ -144,9 +172,19 @@ specification:
 - **S2** — `draw_calls` must stay constant (±1) across the whole
   `instance_count` sweep, and `primitives` must scale linearly (±1%). Draw calls
   that grow with the instance count mean the MultiMesh is misconfigured.
+- **S3a** — `timing.pso_in_sample` must be zero and every
+  `frames.pso_compilations` entry must be zero, even at `material_count = 64`.
+  `draw_calls` follows the same renderer rule as S1: with
+  one material the 64 identical spheres merge into one instanced draw on
+  Forward+, while 16 or 64 distinct materials cannot merge. Compare runs, not a
+  fixed number.
+- **S3b** — `pipeline_compilations.first_120` must be recorded exactly and be
+  identical across repeated runs of the same configuration. The per-counter
+  breakdown says which compile path moved; do not assume a feature maps to a
+  specific counter.
 
-Both scenes must show no increase in the PSO counters during sampling and the
-same `frame_hash` for repeated runs of one configuration.
+All three scenes must show no increase in the PSO counters during sampling and
+the same `frame_hash` for repeated runs of one configuration.
 
 ## Validity
 
@@ -174,10 +212,13 @@ Frame-hash equality across runs is **not** checked by the harness; compare
   game experiences, but it cannot separate submission from presentation.
 - The harness itself performs ~15 monitor reads per frame. That cost is identical
   in every configuration and is disclosed, not subtracted.
+- S3b builds its normal and ORM textures on the CPU at startup (512², smooth
+  analytic patterns). That is content setup, not sampling work, and it is
+  identical in every configuration.
 - GPU timestamps are unavailable on some backends (WebGL 2, and Metal without
   barrier mode and stage-boundary counter sampling). Empty means unavailable.
-- Nothing here validates image quality. S1 and S2 have no post-processing; parity
-  and quality comparisons need the scenes that are not authored yet.
+- Nothing here validates image quality. S1–S3 have no post-processing; parity and
+  quality comparisons need the scenes that are not authored yet.
 
 ## Related documents
 

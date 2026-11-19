@@ -12,10 +12,6 @@ const Common = preload("res://scripts/bench_scene_common.gd")
 
 const LOOP_FRAMES := 300
 const SPACING := 2.5
-const SPHERE_RADIUS := 0.5
-const SPHERE_HEIGHT := 1.0
-const SPHERE_SEGMENTS := 32
-const SPHERE_RINGS := 16
 const JITTER_RATIO := 0.1
 
 ## Overridden by --bench-count before this node is ready.
@@ -26,7 +22,7 @@ var _side: int = 0
 var _extent: float = 0.0
 var _radius: float = 0.0
 var _height: float = 0.0
-var _look_target := Vector3(0.0, SPHERE_RADIUS, 0.0)
+var _look_target := Vector3(0.0, Common.SPHERE_RADIUS, 0.0)
 
 func _ready() -> void:
 	_apply_harness_overrides()
@@ -47,12 +43,7 @@ func _build() -> void:
 	_radius = 2.2 * _extent
 	_height = 0.9 * _extent
 
-	var sphere := SphereMesh.new()
-	sphere.radius = SPHERE_RADIUS
-	sphere.height = SPHERE_HEIGHT
-	sphere.radial_segments = SPHERE_SEGMENTS
-	sphere.rings = SPHERE_RINGS
-	sphere.material = Common.make_checker_material()
+	var sphere := Common.make_bench_sphere(Common.make_checker_material())
 
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -64,11 +55,11 @@ func _build() -> void:
 	for index in instance_count:
 		var column := index % _side
 		var row := int(index / _side)
-		var jitter_x := (_hash01(index, 101) * 2.0 - 1.0) * SPACING * JITTER_RATIO
-		var jitter_z := (_hash01(index, 211) * 2.0 - 1.0) * SPACING * JITTER_RATIO
+		var jitter_x := (Common.hash01(index, 101) * 2.0 - 1.0) * SPACING * JITTER_RATIO
+		var jitter_z := (Common.hash01(index, 211) * 2.0 - 1.0) * SPACING * JITTER_RATIO
 		var point := Vector3(
 				(float(column) - offset) * SPACING + jitter_x,
-				SPHERE_RADIUS,
+				Common.SPHERE_RADIUS,
 				(float(row) - offset) * SPACING + jitter_z)
 		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, point))
 
@@ -80,13 +71,6 @@ func _build() -> void:
 	add_child(Common.make_sun())
 	Common.add_world_environment(self)
 	_add_camera()
-
-## Deterministic integer hash in [0, 1). Integer-only arithmetic so the jitter
-## is identical on every platform, unlike sin/cos-based hashing.
-func _hash01(p_index: int, p_salt: int) -> float:
-	var hash_value := (p_index * 73856093) ^ (p_salt * 19349663)
-	hash_value = (hash_value ^ (hash_value >> 13)) * 1274126177
-	return float((hash_value & 0x7FFFFFFF) % 10000) / 10000.0
 
 func _add_camera() -> void:
 	_camera = Camera3D.new()
@@ -109,10 +93,10 @@ func scene_parameters() -> Dictionary:
 		"grid_side": _side,
 		"spacing": SPACING,
 		"jitter_ratio": JITTER_RATIO,
-		"sphere_radius": SPHERE_RADIUS,
-		"sphere_height": SPHERE_HEIGHT,
-		"sphere_radial_segments": SPHERE_SEGMENTS,
-		"sphere_rings": SPHERE_RINGS,
+		"sphere_radius": Common.SPHERE_RADIUS,
+		"sphere_height": Common.SPHERE_HEIGHT,
+		"sphere_radial_segments": Common.SPHERE_RADIAL_SEGMENTS,
+		"sphere_rings": Common.SPHERE_RINGS,
 		"camera_radius": _radius,
 		"camera_height": _height,
 		"camera_fov": 75.0,
