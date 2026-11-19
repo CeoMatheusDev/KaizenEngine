@@ -101,20 +101,20 @@ The tree already contains `RenderingDeviceGraph` (`servers/rendering/rendering_d
 
 ## 9. Open questions (must not be treated as verified)
 
-1. Exact per-resource lifetime rules across multiple frames in flight.
-2. Editor viewport rendering path and its interaction with the render thread (editor is forced single-threaded, but the viewport path itself was not traced).
-3. Pipeline cache persistence and invalidation behavior.
-4. Metal renderer selection and quality parity with Vulkan.
+1. ~~Exact per-resource lifetime rules across multiple frames in flight.~~ **Documented** in [Rendering resource lifetime](rendering-resource-lifetime.md): RIDs are removed immediately; GPU objects are disposed when the frame ring slot is recycled, after the slot fence is waited.
+2. Editor viewport rendering path — **partially verified**: `Node3DEditorViewport` embeds a `SubViewportContainer` (stretch) with a `SubViewport` and a `Camera3D` (`editor/scene/3d/node_3d_editor_viewport.cpp:6941-6953`). The editor is forced single-threaded (`main.cpp:2792-2795`), so editor viewport rendering runs on the main thread. The detailed per-frame viewport update path was not traced.
+3. Pipeline cache persistence and invalidation behavior — **not verified**.
+4. Metal renderer selection — **selection verified**: `rendering/rendering_device/driver.macos` defaults to `metal` (`main.cpp:2395`); the Metal build option defaults to enabled but is **disabled for non-arm64 targets** (`platform/macos/detect.py:333-335`); the display server registers `metal` and branches on the driver name (`platform/macos/display_server_macos.mm:3629`, `:202`). Quality parity and runtime behavior were **not** verified.
 5. Runtime baselines: CPU/GPU frame times, memory, frame pacing — **not measured**.
 6. Mobile device capability profiles and thermal behavior — **not measured**.
-7. WebGL 2 feature limits as actually enforced by the Compatibility renderer at runtime.
+7. WebGL 2 feature limits as actually enforced by the Compatibility renderer at runtime — **not verified**.
 
 ## 10. Recommended next actions
 
 Complete R0 before starting R1:
 
-1. Produce the resource-lifetime map required by R1 (RID → renderer storage → RenderingDevice object, including deferred destruction and frames in flight).
-2. Trace the editor viewport rendering path.
-3. Establish repeatable benchmark scenes and capture CPU/GPU/memory baselines on the Reference configurations documented in the build guide.
-4. Audit the Metal path and Web export runtime.
+1. ~~Produce the resource-lifetime map required by R1.~~ **Done** — see [Rendering resource lifetime](rendering-resource-lifetime.md); remaining gaps are listed in its section 8.
+2. Trace the detailed editor viewport per-frame update path.
+3. Establish repeatable benchmark scenes and capture CPU/GPU/memory baselines on the reference configurations documented in the build guide.
+4. Audit Metal runtime behavior (quality parity with Vulkan) and the Web export runtime.
 5. Update the rendering roadmap with any finding that changes its assumptions — particularly the reuse of `RenderingDeviceGraph`.

@@ -6,6 +6,7 @@ This directory contains Kaizen-specific engineering documentation. It complement
 
 - [Architecture overview](architecture/overview.md) — current architectural baseline, inherited subsystems, extension boundaries, and engineering constraints.
 - [Rendering audit (R0)](architecture/rendering-audit.md) — source-verified baseline of renderer selection, threading, resource lifetime entry points, and the shader pipeline.
+- [Rendering resource lifetime](architecture/rendering-resource-lifetime.md) — how RIDs reach the graphics API and when objects are actually destroyed (deferred disposal, frame ring, dependency order).
 - [Rendering architecture and roadmap](architecture/rendering-roadmap.md) — the technical plan for evolving Kaizen's rendering stack toward a custom high-quality renderer across desktop, mobile, and Web.
 
 ## Documentation principles
