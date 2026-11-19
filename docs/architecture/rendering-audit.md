@@ -5,7 +5,7 @@
 > **Method:** direct reading of the current source tree. No runtime profiling, device testing, or mobile/Web execution was performed.
 > **Scope:** renderer selection, initialization and ownership, threading model, resource lifetime entry points, shader pipeline, and the existing rendering device graph.
 
-This document records only what was confirmed in the source. Items not confirmed are listed in section 9 as open questions and must not be treated as established behavior.
+This document records only what was confirmed in the source. Items not confirmed are listed in section 10 as open questions and must not be treated as established behavior.
 
 ## 1. Method and limitations
 
@@ -99,22 +99,31 @@ The tree already contains `RenderingDeviceGraph` (`servers/rendering/rendering_d
 | Headless | Dummy rasterizer (`display_server_headless.cpp:50`). |
 | macOS / Metal | Driver sources exist under `drivers/metal/`, but the selection and runtime path were **not** audited. |
 
-## 9. Open questions (must not be treated as verified)
+## 9. Editor viewport frame path (verified)
+
+- `Node3DEditorViewport` embeds a `SubViewportContainer` (stretch enabled) containing a `SubViewport` (input disabled) with a `Camera3D`; gizmo layers are configured on the camera's cull mask (`editor/scene/3d/node_3d_editor_viewport.cpp:6941-6953`).
+- The main loop triggers rendering with `RenderingServer::get_singleton()->draw(wants_present, scaled_step)` (`main.cpp:5139`, `:5143`).
+- `RenderingServerDefault::draw()` pushes `_draw` to the server thread when threaded; otherwise it runs directly (`rendering_server_default.cpp`, `draw()`).
+- `_draw()` calls `RSG::rasterizer->begin_frame()`, then `RSG::viewport->draw_viewports(p_swap_buffers)`, then `RSG::rasterizer->end_frame(p_swap_buffers)` (`rendering_server_default.cpp`, `_draw()`).
+- `RendererViewport::draw_viewports()` sorts active viewports (parent dependency order, rendered in reverse order) and renders each through the scene renderer (`servers/rendering/renderer_viewport.cpp:805`).
+- Editor and project manager are forced single-threaded (`main.cpp:2792-2795`), so in the editor this entire path runs on the main thread; the 3D viewport's `SubViewport` is simply one more active viewport in the same pass.
+
+## 10. Open questions (must not be treated as verified)
 
 1. ~~Exact per-resource lifetime rules across multiple frames in flight.~~ **Documented** in [Rendering resource lifetime](rendering-resource-lifetime.md): RIDs are removed immediately; GPU objects are disposed when the frame ring slot is recycled, after the slot fence is waited.
-2. Editor viewport rendering path — **partially verified**: `Node3DEditorViewport` embeds a `SubViewportContainer` (stretch) with a `SubViewport` and a `Camera3D` (`editor/scene/3d/node_3d_editor_viewport.cpp:6941-6953`). The editor is forced single-threaded (`main.cpp:2792-2795`), so editor viewport rendering runs on the main thread. The detailed per-frame viewport update path was not traced.
-3. Pipeline cache persistence and invalidation behavior — **not verified**.
+2. ~~Editor viewport rendering path — **partially verified**~~ **Verified**: see section 9. The `SubViewport` is one of the active viewports rendered by `draw_viewports()`; the editor runs the whole path single-threaded.
+3. Pipeline cache persistence and invalidation behavior — **verified**; see [Pipeline cache and shader variants](rendering-pipeline-cache.md). Note: Metal has no persistent PSO cache.
 4. Metal renderer selection — **selection verified**: `rendering/rendering_device/driver.macos` defaults to `metal` (`main.cpp:2395`); the Metal build option defaults to enabled but is **disabled for non-arm64 targets** (`platform/macos/detect.py:333-335`); the display server registers `metal` and branches on the driver name (`platform/macos/display_server_macos.mm:3629`, `:202`). Quality parity and runtime behavior were **not** verified.
 5. Runtime baselines: CPU/GPU frame times, memory, frame pacing — **not measured**.
 6. Mobile device capability profiles and thermal behavior — **not measured**.
 7. WebGL 2 feature limits as actually enforced by the Compatibility renderer at runtime — **not verified**.
 
-## 10. Recommended next actions
+## 11. Recommended next actions
 
 Complete R0 before starting R1:
 
 1. ~~Produce the resource-lifetime map required by R1.~~ **Done** — see [Rendering resource lifetime](rendering-resource-lifetime.md); remaining gaps are listed in its section 8.
-2. Trace the detailed editor viewport per-frame update path.
+2. ~~Trace the detailed editor viewport per-frame update path.~~ **Done** — see section 9; the remaining gap is the per-viewport scene-renderer internals, which belong to the R1 contract work.
 3. Establish repeatable benchmark scenes and capture CPU/GPU/memory baselines on the reference configurations documented in the build guide.
 4. Audit Metal runtime behavior (quality parity with Vulkan) and the Web export runtime.
-5. Update the rendering roadmap with any finding that changes its assumptions — particularly the reuse of `RenderingDeviceGraph`.
+5. Update the rendering roadmap with any finding that changes its assumptions — particularly the reuse of `RenderingDeviceGraph` and the linear variant lookup in `PipelineCacheRD`.
