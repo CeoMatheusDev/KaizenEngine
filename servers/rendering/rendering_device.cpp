@@ -921,8 +921,10 @@ RenderingDevice::Buffer *RenderingDevice::_get_buffer_from_owner(RID p_buffer) {
 	} else if (uniform_buffer_owner.owns(p_buffer)) {
 		buffer = uniform_buffer_owner.get_or_null(p_buffer);
 	} else if (texture_buffer_owner.owns(p_buffer)) {
-		DEV_ASSERT(false && "FIXME: Broken.");
-		//buffer = texture_buffer_owner.get_or_null(p_buffer)->buffer;
+		Buffer *texture_buffer = texture_buffer_owner.get_or_null(p_buffer);
+		if (texture_buffer != nullptr) {
+			buffer = texture_buffer;
+		}
 	} else if (storage_buffer_owner.owns(p_buffer)) {
 		buffer = storage_buffer_owner.get_or_null(p_buffer);
 	}
