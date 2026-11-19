@@ -519,11 +519,12 @@ Deliverables from this audit should be a source-backed call graph, a resource-li
 
 An initial source-level audit is available in [Rendering audit (R0)](rendering-audit.md). It covers renderer selection, initialization and ownership, the threading model, resource-lifetime entry points, the shader pipeline, and the existing `RenderingDeviceGraph`.
 
-Two follow-up documents complete the source-level part of R0:
+Follow-up documents complete the source-level part of R0:
 
 - [Rendering resource lifetime](rendering-resource-lifetime.md) — the resource-lifetime map required by R1: RID → renderer storage → `RenderingDevice` object → deferred disposal on frame-ring reuse, including the fence wait and disposal order.
 - [Pipeline cache and shader variants](rendering-pipeline-cache.md) — variant-table keys, device PSO cache persistence per backend, and the invalidation rules R1 must preserve.
 - [Web export runtime](rendering-web-runtime.md) — the Web path is pinned to the Compatibility renderer and cannot use `RenderingDevice`; it also lacks any shader or pipeline cache, which constrains how a future renderer can target the browser.
 - [Metal rendering driver](rendering-metal-driver.md) — the Metal backend already implements the RD contract (argument buffers, heaps, barriers, MetalFX) but has no cross-run PSO cache and bakes shader libraries only when exporting from an arm64 Mac.
+- [Benchmark scene specification](rendering-benchmark-scenes.md) — the implementable definition of scenes S1–S7: fixed content and parameters, frame-indexed camera contract, quality presets, cell matrix, sampling protocol, harness contract, and the validity gate that decides whether a measured cell may be published.
 
-Runtime baselines remain open. The measurement plan — instruments, scene set, reference configurations, procedure, and report template — is specified in [Rendering benchmark methodology](rendering-benchmarks.md); no measurements have been taken yet, and none of its numbers may be assumed.
+Runtime baselines remain open. The measurement plan — instruments, scene set, reference configurations, procedure, and report template — is specified in [Rendering benchmark methodology](rendering-benchmarks.md), and the scene set is defined in [Benchmark scene specification](rendering-benchmark-scenes.md); no measurements have been taken yet, and none of its numbers may be assumed.

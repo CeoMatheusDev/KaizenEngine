@@ -102,7 +102,7 @@ Configuration gaps that are already known from the source, not from measurement:
 
 ## 4. Benchmark scene set
 
-Scenes must be authored (none exist in the repository today). Each scene is a separate project or a separate main scene with fixed settings; changing a scene invalidates comparison with earlier results.
+Scenes must be authored (none exist in the repository today). Each scene is a separate project or a separate main scene with fixed settings; changing a scene invalidates comparison with earlier results. The implementable definitions — content counts, camera paths, quality presets, acceptance criteria, cell matrix and harness contract — are specified in [Benchmark scene specification](rendering-benchmark-scenes.md).
 
 | ID | Scene | Purpose | Fixed content |
 |---|---|---|---|
@@ -185,7 +185,7 @@ Notes / anomalies:
 
 ## 9. Open items
 
-- Scene authoring (S1–S7) — **not started**.
+- Scene authoring (S1–S7) — **not started**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md).
 - Harness implementation — **not started**.
 - Every measurement in section 1 — **not measured**; this environment has no build, GPU, or display.
 - Whether the GLES3 timestamp path behaves on each target driver — **not verified at runtime**.
