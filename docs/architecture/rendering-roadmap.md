@@ -516,3 +516,5 @@ Recommended audit order:
 7. Shader compilation, pipeline caching, RID/resource ownership, and render-thread synchronization — trace their actual call sites before defining new contracts.
 
 Deliverables from this audit should be a source-backed call graph, a resource-lifetime map, a backend capability matrix, and a benchmark baseline. Those artifacts become the implementation specification for R1.
+
+An initial source-level audit is available in [Rendering audit (R0)](rendering-audit.md). It covers renderer selection, initialization and ownership, the threading model, resource-lifetime entry points, the shader pipeline, and the existing `RenderingDeviceGraph`. Runtime baselines, the resource-lifetime map, and the editor viewport path remain open R0 items.
