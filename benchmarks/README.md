@@ -286,6 +286,30 @@ be written. A cell is invalid when:
 Frame-hash equality across runs is **not** checked by the harness; compare
 `frame_hash` fields when collecting results.
 
+## Checking reports
+
+`benchmarks/tools/check_report.py` implements the gate in code:
+
+```text
+python3 benchmarks/tools/check_report.py runs/*.json
+```
+
+It checks that a report came from a template build with a rendering surface, that
+VSync was disabled, that no pipeline compilation happened in the sampling window
+or within 120 frames before it, that the frame arrays match the declared window,
+and that the viewport and project settings agree. Reports with the same scene,
+scene parameters, preset, configuration, runtime and content hash are treated as
+repetitions: differing `frame_hash` values, draw-call medians, or (for S3b)
+`first_120` compilations fail the cell.
+
+Exit code is `0` when everything passes, `1` when a check fails, and `2` when an
+input cannot be read. The tests run with
+`python3 benchmarks/tools/test_check_report.py`.
+
+The script never runs the engine and cannot replace reading the report: it
+cannot detect a driver-forced swap interval from a flat histogram, thermal
+throttling, or a scene that is not the one the label claims.
+
 ## Limitations
 
 - `frame_us` comes from a script callback timer, not the engine's internal frame

@@ -181,7 +181,7 @@ Notes / anomalies:
 
 - A GDScript harness (`benchmarks/rd_3d/scripts/bench_harness.gd`) moves the camera by frame index, reads `Performance` monitors, and writes one JSON report per run. The camera is a function of the frame index rather than of elapsed time, so a run covers the same frames at any frame rate; `--fixed-fps` changes the simulation delta, not the rendered frame sequence, and is not required. The harness refuses to run in the editor unless explicitly allowed for scene development, and the report is then marked invalid.
 - The harness does not create or destroy resources during sampling, so results are not mixed with deferred disposal or PSO compilation.
-- Each run writes one JSON file. Collecting those files into a versioned data set and generating the published summaries from it is **not implemented**.
+- Each run writes one JSON file, and `benchmarks/tools/check_report.py` validates individual files and repeated runs against the gate. Collecting files into a versioned data set and generating the published summaries from it is **not implemented**.
 
 ## 9. Open items
 

@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""Validate Kaizen benchmark reports against the documented validity gate.
+
+Usage:
+    python3 benchmarks/tools/check_report.py REPORT.json [REPORT.json ...]
+
+Each report is checked on its own. Reports that describe the same cell (same
+scene, scene parameters, preset, configuration, engine content and runtime) are
+also compared with each other, because determinism is a property of a cell, not
+of a single run.
+
+Exit codes:
+    0  every checked report and cell passes
+    1  at least one check failed
+    2  a file could not be read or is not a benchmark report
+
+This tool never runs the engine and never produces measurements. It only reads
+the JSON written by benchmarks/rd_3d/scripts/bench_harness.gd. The rules it
+enforces are the ones in docs/architecture/rendering-benchmark-scenes.md,
+section 7.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+
+LOOP_FRAMES = 300
+STABLE_WINDOW = 120
+TOLERANCE = 0.01
+
+FAIL = "FAIL"
+WARN = "WARN"
+INFO = "INFO"
+
+
+def _median(values):
+    ordered = sorted(values)
+    count = len(ordered)
+    if count == 0:
+        return 0.0
+    middle = count // 2
+    if count % 2 == 1:
+        return float(ordered[middle])
+    return (float(ordered[middle - 1]) + float(ordered[middle])) / 2.0
+
+
+def _relative_spread(values):
+    if not values:
+        return 0.0
+    low = float(min(values))
+    high = float(max(values))
+    reference = abs(_median(values))
+    if reference == 0.0:
+        return 0.0
+    return (high - low) / reference
+
+
+def _check_report(report):
+    issues = []
+
+    def fail(message):
+        issues.append((FAIL, message))
+
+    def warn(message):
+        issues.append((WARN, message))
+
+    def info(message):
+        issues.append((INFO, message))
+
+    if report.get("schema") != 1:
+        fail("schema is %r, expected 1" % report.get("schema"))
+
+    build = report.get("build") or {}
+    if build.get("type") != "template":
+        fail("build type is %r; published cells must come from an export template" % build.get("type"))
+    arguments = list(build.get("flags") or []) + list(build.get("user_args") or [])
+    if "--headless" in arguments:
+        fail("run used --headless; presentation is bypassed")
+
+    runtime = report.get("runtime") or {}
+    if runtime.get("display_server") in (None, "", "headless"):
+        fail("display server is %r; no rendering surface was used" % runtime.get("display_server"))
+    if runtime.get("vsync_mode") != 0:
+        fail("display vsync mode is %r, expected 0" % runtime.get("vsync_mode"))
+
+    if report.get("valid") is not True:
+        fail("harness marked the run invalid: %s" % (report.get("invalid_reason") or "no reason given"))
+
+    timing = report.get("timing") or {}
+    sampled = timing.get("sampled_frames")
+    warmup = timing.get("warmup_frames")
+    first = timing.get("first_frame")
+    last = timing.get("last_frame")
+
+    if not isinstance(sampled, int) or sampled < LOOP_FRAMES:
+        fail("sampled_frames is %r, expected an integer >= %d" % (sampled, LOOP_FRAMES))
+    elif sampled % LOOP_FRAMES != 0:
+        fail("sampled_frames is %d, not a multiple of the %d-frame loop" % (sampled, LOOP_FRAMES))
+
+    if not isinstance(warmup, int) or warmup < LOOP_FRAMES:
+        fail("warmup_frames is %r, expected an integer >= %d" % (warmup, LOOP_FRAMES))
+    elif warmup % LOOP_FRAMES != 0:
+        fail("warmup_frames is %d, not a multiple of the %d-frame loop" % (warmup, LOOP_FRAMES))
+
+    if isinstance(first, int) and isinstance(last, int) and isinstance(sampled, int):
+        if last != first + sampled - 1:
+            fail("last_frame %d does not equal first_frame %d + sampled_frames %d - 1" % (last, first, sampled))
+
+    if isinstance(first, int) and warmup is not None and first != warmup:
+        fail("first_frame %d does not match warmup_frames %s" % (first, warmup))
+
+    last_compile = timing.get("last_compile_frame")
+    if isinstance(last_compile, int) and last_compile >= 0 and isinstance(first, int):
+        if first - 1 - last_compile < STABLE_WINDOW:
+            fail(
+                "last pipeline compilation at frame %d is within %d frames of sampling start %d"
+                % (last_compile, STABLE_WINDOW, first)
+            )
+
+    if timing.get("pso_in_sample") != 0:
+        fail("pso_in_sample is %r, expected 0" % timing.get("pso_in_sample"))
+
+    compilations = report.get("pipeline_compilations") or {}
+    if "first_120" not in compilations or "total" not in compilations:
+        fail("pipeline_compilations must contain first_120 and total")
+
+    frames = report.get("frames") or {}
+    frame_us = frames.get("frame_us")
+    if not isinstance(frame_us, list):
+        fail("frames.frame_us is missing")
+    elif isinstance(sampled, int) and len(frame_us) != sampled:
+        fail("frames.frame_us has %d entries, timing.sampled_frames is %d" % (len(frame_us), sampled))
+
+    pso_per_frame = frames.get("pso_compilations")
+    if not isinstance(pso_per_frame, list):
+        fail("frames.pso_compilations is missing")
+    else:
+        if isinstance(sampled, int) and len(pso_per_frame) != sampled:
+            fail(
+                "frames.pso_compilations has %d entries, timing.sampled_frames is %d"
+                % (len(pso_per_frame), sampled)
+            )
+        nonzero = sum(1 for value in pso_per_frame if int(value) != 0)
+        if nonzero:
+            fail("%d sampled frames report pipeline compilations" % nonzero)
+
+    summary = report.get("summary") or {}
+    if isinstance(sampled, int) and summary.get("frames") != sampled:
+        fail("summary.frames is %r, timing.sampled_frames is %d" % (summary.get("frames"), sampled))
+
+    gpu_ms = frames.get("viewport_gpu_ms")
+    if isinstance(gpu_ms, list):
+        if gpu_ms and isinstance(sampled, int) and len(gpu_ms) != sampled:
+            fail(
+                "frames.viewport_gpu_ms has %d entries, timing.sampled_frames is %d"
+                % (len(gpu_ms), sampled)
+            )
+        if not gpu_ms and summary.get("gpu_ms_median") is not None:
+            fail("summary.gpu_ms_median has a value but frames.viewport_gpu_ms is empty")
+        if gpu_ms and summary.get("gpu_ms_median") is None:
+            fail("frames.viewport_gpu_ms has values but summary.gpu_ms_median is null")
+
+    if not report.get("frame_hash"):
+        fail("frame_hash is empty; frame determinism cannot be checked (do not use --bench-no-hash for a published cell)")
+
+    settings = report.get("project_settings") or {}
+    _compare_setting(fail, settings, runtime, "rendering/anti_aliasing/quality/msaa_3d", "msaa_3d")
+    _compare_setting(fail, settings, runtime, "rendering/scaling_3d/mode", "scaling_3d_mode")
+    _compare_setting(fail, settings, runtime, "rendering/scaling_3d/scale", "scaling_3d_scale")
+
+    window_size = runtime.get("window_size")
+    expected_width = settings.get("display/window/size/viewport_width")
+    expected_height = settings.get("display/window/size/viewport_height")
+    if isinstance(window_size, list) and len(window_size) == 2:
+        if expected_width is not None and expected_height is not None:
+            if window_size[0] != expected_width or window_size[1] != expected_height:
+                warn(
+                    "window size %dx%d differs from the project viewport %sx%s"
+                    % (window_size[0], window_size[1], expected_width, expected_height)
+                )
+    else:
+        warn("runtime.window_size is missing or malformed")
+
+    scene = report.get("scene") or {}
+    scene_id = str(scene.get("id"))
+    parameters = scene.get("parameters") or {}
+
+    if scene_id == "S1":
+        _check_s1(fail, warn, frames, parameters)
+    elif scene_id == "S2":
+        _check_s2(fail, warn, frames)
+    elif scene_id == "S6":
+        _check_s6(fail, report, frames)
+    elif scene_id not in ("S3", "S4", "S7"):
+        info("unknown scene id %r; only the generic checks were applied" % scene_id)
+
+    return issues
+
+
+def _compare_setting(fail, settings, runtime, setting_key, runtime_key):
+    if setting_key not in settings or runtime_key not in runtime:
+        return
+    expected = settings[setting_key]
+    actual = runtime[runtime_key]
+    if isinstance(expected, float) or isinstance(actual, float):
+        if abs(float(expected) - float(actual)) > 1e-6:
+            fail("%s is %r but the project pins %r" % (runtime_key, actual, expected))
+    elif expected != actual:
+        fail("%s is %r but the project pins %r" % (runtime_key, actual, expected))
+
+
+def _check_s1(fail, warn, frames, parameters):
+    box_count = parameters.get("box_count")
+    primitives = frames.get("primitives")
+    if not isinstance(box_count, int) or box_count <= 0:
+        warn("S1 scene parameters do not contain box_count; the primitive check is skipped")
+        return
+    if not isinstance(primitives, list) or not primitives:
+        fail("S1 has no primitives array")
+        return
+    expected = 12 * box_count + 2
+    actual = _median(primitives)
+    if abs(actual - expected) > expected * TOLERANCE:
+        fail("S1 primitives median is %.1f, expected %.1f (12 * %d + 2)" % (actual, expected, box_count))
+
+
+def _check_s2(fail, warn, frames):
+    draw_calls = frames.get("draw_calls")
+    if not isinstance(draw_calls, list) or not draw_calls:
+        fail("S2 has no draw_calls array")
+        return
+    if max(draw_calls) - min(draw_calls) > 1:
+        fail("S2 draw calls vary within the run (%d..%d); one MultiMesh must not change count"
+             % (min(draw_calls), max(draw_calls)))
+    primitives = frames.get("primitives")
+    if isinstance(primitives, list) and primitives:
+        if _relative_spread(primitives) > TOLERANCE:
+            warn("S2 primitives vary by %.2f%% within the run" % (100.0 * _relative_spread(primitives)))
+
+
+def _check_s6(fail, report, frames):
+    diff = report.get("image_diff") or {}
+    if not diff:
+        return
+    mean = diff.get("mean_abs_diff")
+    if not isinstance(mean, (int, float)):
+        fail("image_diff is present but has no numeric mean_abs_diff")
+        return
+    preset = report.get("preset")
+    if preset != "P0" and float(mean) == 0.0:
+        fail("S6 preset %s produced an image identical to the reference; the effect did not run" % preset)
+    if isinstance(diff.get("width"), int) and isinstance(diff.get("height"), int):
+        if diff["width"] <= 0 or diff["height"] <= 0:
+            fail("image_diff reports an empty image")
+
+
+def _cell_key(report):
+    scene = report.get("scene") or {}
+    runtime = report.get("runtime") or {}
+    return (
+        str(scene.get("id")),
+        json.dumps(scene.get("parameters") or {}, sort_keys=True),
+        str(report.get("preset")),
+        str(report.get("configuration")),
+        str(runtime.get("rendering_method")),
+        str(runtime.get("rendering_driver")),
+        str(runtime.get("adapter_name")),
+        str(scene.get("content_hash")),
+    )
+
+
+def _check_cell(reports):
+    issues = []
+    scene = reports[0].get("scene") or {}
+    scene_id = str(scene.get("id"))
+    parameters = scene.get("parameters") or {}
+
+    hashes = {report.get("frame_hash") for report in reports}
+    if len(hashes) > 1:
+        issues.append((FAIL, "frame_hash differs between repeated runs of the same cell: %s" % sorted(hashes)))
+
+    draw_medians = []
+    for report in reports:
+        draw_calls = (report.get("frames") or {}).get("draw_calls")
+        if isinstance(draw_calls, list) and draw_calls:
+            draw_medians.append(_median(draw_calls))
+    if len(draw_medians) > 1 and max(draw_medians) - min(draw_medians) > 1:
+        issues.append((FAIL, "draw-call median differs between repeated runs: %s" % sorted(draw_medians)))
+
+    if scene_id == "S3" and parameters.get("feature_variety") is True:
+        counts = [
+            json.dumps(((report.get("pipeline_compilations") or {}).get("first_120") or {}), sort_keys=True)
+            for report in reports
+        ]
+        if len(set(counts)) > 1:
+            issues.append((FAIL, "S3b first_120 pipeline compilations differ between repeated runs: %s" % counts))
+        else:
+            issues.append((INFO, "S3b first_120 is stable: %s" % counts[0]))
+
+    gpu_values = []
+    for report in reports:
+        summary = report.get("summary") or {}
+        if isinstance(summary.get("gpu_ms_median"), (int, float)):
+            gpu_values.append(float(summary["gpu_ms_median"]))
+    if len(gpu_values) > 1:
+        issues.append((INFO, "GPU median spread across runs: %.2f%%" % (100.0 * _relative_spread(gpu_values))))
+
+    return issues
+
+
+def run(paths):
+    """Return (per_report, per_cell, failure_count)."""
+    loaded = []
+    for path in paths:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+        except OSError as error:
+            raise ValueError("%s: %s" % (path, error))
+        except json.JSONDecodeError as error:
+            raise ValueError("%s: not valid JSON (%s)" % (path, error))
+        if not isinstance(report, dict):
+            raise ValueError("%s: the top-level value is not an object" % path)
+        loaded.append((str(path), report))
+
+    per_report = []
+    failure_count = 0
+    for path, report in loaded:
+        issues = _check_report(report)
+        per_report.append((path, issues))
+        failure_count += sum(1 for level, _ in issues if level == FAIL)
+
+    grouped = {}
+    for path, report in loaded:
+        grouped.setdefault(_cell_key(report), []).append(report)
+
+    per_cell = []
+    for key, reports in grouped.items():
+        if len(reports) < 2:
+            continue
+        issues = _check_cell(reports)
+        per_cell.append((key, len(reports), issues))
+        failure_count += sum(1 for level, _ in issues if level == FAIL)
+
+    return per_report, per_cell, failure_count
+
+
+def _print_issues(issues, indent="    "):
+    for level, message in issues:
+        print("%s%-4s %s" % (indent, level, message))
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0 if argv else 2
+
+    try:
+        per_report, per_cell, failure_count = run(argv)
+    except ValueError as error:
+        print("error: %s" % error, file=sys.stderr)
+        return 2
+
+    for path, issues in per_report:
+        failed = any(level == FAIL for level, _ in issues)
+        print("%s  %s" % (path, FAIL if failed else "PASS"))
+        _print_issues(issues)
+
+    for key, count, issues in per_cell:
+        failed = any(level == FAIL for level, _ in issues)
+        scene_id = key[0]
+        preset = key[2]
+        configuration = key[3]
+        print("cell %s/%s/%s (%d runs)  %s" % (scene_id, preset, configuration, count, FAIL if failed else "PASS"))
+        _print_issues(issues)
+
+    total_failures = sum(1 for _, issues in per_report for level, _ in issues if level == FAIL)
+    total_failures += sum(1 for _, _, issues in per_cell for level, _ in issues if level == FAIL)
+    print(
+        "%d report(s), %d repeated cell(s), %d failure(s)"
+        % (len(per_report), len(per_cell), total_failures)
+    )
+    return 0 if total_failures == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
