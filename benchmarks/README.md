@@ -320,7 +320,8 @@ compares it when several reports of the same cell are passed together.
 
 ```text
 python3 benchmarks/tools/check_report.py runs/*.json
-python3 benchmarks/tools/check_report.py benchmarks/results/*/*.json.gz
+python3 benchmarks/tools/check_report.py benchmarks/results/2026-11-19_s1_d1_q0/*.json.gz
+python3 benchmarks/tools/check_report.py benchmarks/results/2026-11-19_d1/*/*.json.gz
 ```
 
 Reports may be gzip-compressed; the checker reads `.json` and `.json.gz` alike.
