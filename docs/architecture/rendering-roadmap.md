@@ -517,4 +517,11 @@ Recommended audit order:
 
 Deliverables from this audit should be a source-backed call graph, a resource-lifetime map, a backend capability matrix, and a benchmark baseline. Those artifacts become the implementation specification for R1.
 
-An initial source-level audit is available in [Rendering audit (R0)](rendering-audit.md). It covers renderer selection, initialization and ownership, the threading model, resource-lifetime entry points, the shader pipeline, and the existing `RenderingDeviceGraph`. Runtime baselines, the resource-lifetime map, and the editor viewport path remain open R0 items.
+An initial source-level audit is available in [Rendering audit (R0)](rendering-audit.md). It covers renderer selection, initialization and ownership, the threading model, resource-lifetime entry points, the shader pipeline, and the existing `RenderingDeviceGraph`.
+
+Two follow-up documents complete the source-level part of R0:
+
+- [Rendering resource lifetime](rendering-resource-lifetime.md) — the resource-lifetime map required by R1: RID → renderer storage → `RenderingDevice` object → deferred disposal on frame-ring reuse, including the fence wait and disposal order.
+- [Pipeline cache and shader variants](rendering-pipeline-cache.md) — variant-table keys, device PSO cache persistence per backend, and the invalidation rules R1 must preserve.
+
+Runtime baselines remain open. The measurement plan — instruments, scene set, reference configurations, procedure, and report template — is specified in [Rendering benchmark methodology](rendering-benchmarks.md); no measurements have been taken yet, and none of its numbers may be assumed.

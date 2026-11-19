@@ -124,6 +124,6 @@ Complete R0 before starting R1:
 
 1. ~~Produce the resource-lifetime map required by R1.~~ **Done** — see [Rendering resource lifetime](rendering-resource-lifetime.md); remaining gaps are listed in its section 8.
 2. ~~Trace the detailed editor viewport per-frame update path.~~ **Done** — see section 9; the remaining gap is the per-viewport scene-renderer internals, which belong to the R1 contract work.
-3. Establish repeatable benchmark scenes and capture CPU/GPU/memory baselines on the reference configurations documented in the build guide.
+3. ~~Establish a benchmark methodology.~~ **Done** — see [Rendering benchmark methodology](rendering-benchmarks.md): instruments, scene set, reference configurations, procedure, and report template. Scene authoring, the harness, and all measurements are still pending; no numbers have been produced.
 4. Audit Metal runtime behavior (quality parity with Vulkan) and the Web export runtime.
 5. Update the rendering roadmap with any finding that changes its assumptions — particularly the reuse of `RenderingDeviceGraph` and the linear variant lookup in `PipelineCacheRD`.
