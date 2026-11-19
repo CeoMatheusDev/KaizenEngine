@@ -116,7 +116,7 @@ The tree already contains `RenderingDeviceGraph` (`servers/rendering/rendering_d
 4. Metal renderer selection — **selection verified**: `rendering/rendering_device/driver.macos` defaults to `metal` (`main.cpp:2395`); the Metal build option defaults to enabled but is **disabled for non-arm64 targets** (`platform/macos/detect.py:333-335`); the display server registers `metal` and branches on the driver name (`platform/macos/display_server_macos.mm:3629`, `:202`). Quality parity and runtime behavior were **not** verified.
 5. Runtime baselines: CPU/GPU frame times, memory, frame pacing — **not measured**.
 6. Mobile device capability profiles and thermal behavior — **not measured**.
-7. WebGL 2 feature limits as actually enforced by the Compatibility renderer at runtime — **not verified**.
+7. WebGL 2 constraints — **source-level mapping done**: see [Web export runtime](rendering-web-runtime.md) (WebGL 2 is a hard requirement with no WebGL 1 fallback, threading is off by default, no shader/pipeline cache exists on Web, and several features are extension-gated). Actual browser behavior and performance remain **unverified**.
 
 ## 11. Recommended next actions
 
@@ -125,5 +125,5 @@ Complete R0 before starting R1:
 1. ~~Produce the resource-lifetime map required by R1.~~ **Done** — see [Rendering resource lifetime](rendering-resource-lifetime.md); remaining gaps are listed in its section 8.
 2. ~~Trace the detailed editor viewport per-frame update path.~~ **Done** — see section 9; the remaining gap is the per-viewport scene-renderer internals, which belong to the R1 contract work.
 3. ~~Establish a benchmark methodology.~~ **Done** — see [Rendering benchmark methodology](rendering-benchmarks.md): instruments, scene set, reference configurations, procedure, and report template. Scene authoring, the harness, and all measurements are still pending; no numbers have been produced.
-4. Audit Metal runtime behavior (quality parity with Vulkan) and the Web export runtime.
+4. Audit Metal runtime behavior (quality parity with Vulkan) — still pending — and the Web export runtime — **source-level audit done**; see [Web export runtime](rendering-web-runtime.md). Browser-level verification remains pending.
 5. Update the rendering roadmap with any finding that changes its assumptions — particularly the reuse of `RenderingDeviceGraph` and the linear variant lookup in `PipelineCacheRD`.

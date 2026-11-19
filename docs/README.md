@@ -9,6 +9,7 @@ This directory contains Kaizen-specific engineering documentation. It complement
 - [Rendering resource lifetime](architecture/rendering-resource-lifetime.md) — how RIDs reach the graphics API and when objects are actually destroyed (deferred disposal, frame ring, dependency order).
 - [Pipeline cache and shader variants](architecture/rendering-pipeline-cache.md) — variant table, device PSO cache persistence, backend support and invalidation rules.
 - [Rendering benchmark methodology](architecture/rendering-benchmarks.md) — what to measure, with which built-in instruments, on which reference configurations, and how results must be reported (no measurements taken yet).
+- [Web export runtime](architecture/rendering-web-runtime.md) — why Web is pinned to the Compatibility renderer, WebGL 2 requirements, threading and deployment headers, and the absence of shader/pipeline caches on Web.
 - [Rendering architecture and roadmap](architecture/rendering-roadmap.md) — the technical plan for evolving Kaizen's rendering stack toward a custom high-quality renderer across desktop, mobile, and Web.
 
 ## Documentation principles

@@ -523,5 +523,6 @@ Two follow-up documents complete the source-level part of R0:
 
 - [Rendering resource lifetime](rendering-resource-lifetime.md) — the resource-lifetime map required by R1: RID → renderer storage → `RenderingDevice` object → deferred disposal on frame-ring reuse, including the fence wait and disposal order.
 - [Pipeline cache and shader variants](rendering-pipeline-cache.md) — variant-table keys, device PSO cache persistence per backend, and the invalidation rules R1 must preserve.
+- [Web export runtime](rendering-web-runtime.md) — the Web path is pinned to the Compatibility renderer and cannot use `RenderingDevice`; it also lacks any shader or pipeline cache, which constrains how a future renderer can target the browser.
 
 Runtime baselines remain open. The measurement plan — instruments, scene set, reference configurations, procedure, and report template — is specified in [Rendering benchmark methodology](rendering-benchmarks.md); no measurements have been taken yet, and none of its numbers may be assumed.
