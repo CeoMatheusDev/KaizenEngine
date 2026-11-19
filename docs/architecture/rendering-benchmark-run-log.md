@@ -1,6 +1,6 @@
 # Benchmark Run Log
 
-> **Status:** Nine validated D1 cells (S1 at 400 boxes; S2, S3a, S3b and six S4 light cells) plus tools-build smoke runs
+> **Status:** Fifteen validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, S6 at four quads for P0–P5) plus tools-build smoke runs
 > **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
@@ -299,10 +299,51 @@ each. The reports are in
   unaffected.
 - Frame drift stays between -0.89% and +0.48% across all cells.
 
-## 8. Still missing
+## 8. The S6 session: post presets P0–P5 at four quads
 
-- S6 and the rest of the cell matrix: the other S1 and S2 counts, Q1 (which no
-  scene implements), and the D2/D3, M1, W1/W2, A1, and B1 configurations.
+Six cells on the same machine and template build, same 900/3600 sampling, one
+cold run and five warm runs each. Reports are in
+[`benchmarks/results/2026-11-19_s6_d1_q4/`](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md);
+`check_report.py` reports 36 reports, 6 repeated cells, 0 failures.
+
+The P0 cold run also wrote `p0/frame_299.png`; every other run passed it as
+`--bench-reference`, so each preset records its mean absolute difference from
+P0. The P0 reference was inspected: four nested translucent quads over the
+checker ground with the box field behind them.
+
+| Preset | Effects | GPU ms | Δ GPU ms | FPS | Image diff | `first_120` |
+|---|---|---|---|---|---|---|
+| P0 | none | 2.212–2.214 | reference | 338.9–340.4 | 0.0000 (self) | 7 |
+| P1 | glow | 4.856–4.857 | +2.643 | 177.6–178.7 | 3.0142 | 7 |
+| P2 | SSAO | 3.824–3.825 | +1.612 | 218.5–219.5 | 0.0057 | 8 |
+| P3 | SSAO + SSIL | 8.821–8.823 | +6.609 | 103.9–104.1 | 0.0095 | 8 |
+| P4 | glow + SSAO + SSIL | 11.463–11.466 | +9.251 | 81.3–81.5 | 3.0124 | 8 |
+| P5 | P4 + volumetric fog | 12.433–12.437 | +10.223 | 75.3–75.4 | 16.2981 | 8 |
+
+- Every cell reports the same 3 draws and 394 primitives, and every report has
+  one frame hash across its six runs. Post effects run after the geometry pass,
+  so they change neither counter.
+- **Glow is the expensive single effect here:** +2.643 ms over P0 at four
+  quads. It costs the same (+2.642 ms) when added on top of SSAO and SSIL in P4,
+  so on this scene its cost does not depend on what the other effects wrote.
+- **SSAO and SSIL scale with the effect stack:** SSAO alone costs +1.612 ms;
+  adding SSIL on top costs a further +4.997 ms. Volumetric fog adds +0.972 ms
+  over P4, the cheapest step in this matrix.
+- **The image diff separates visibility from cost.** SSAO changes the frame by
+  0.0057 on average while costing 1.6 ms; glow changes it by 3.0142 for 2.6 ms;
+  volumetric fog, the largest visible change at 16.2981, costs 0.97 ms. Cost
+  and visible difference are different axes, and both are recorded.
+- A diff of exactly zero would have failed the P1–P5 cells; none did.
+  `report.preset` equals `scene.parameters.post.preset` in all 36 reports.
+- No run reported a hitch. Frame drift stays between -0.42% and +0.54%.
+  `pso_in_sample` is 0 everywhere, and load to first sample grows from 3.5 s at
+  P0 to 12.75 s at P5.
+
+## 9. Still missing
+
+- The rest of the cell matrix: the other S6 overdraw levels (1 and 16 quads),
+  the other S1 and S2 counts, Q1 (which no scene implements), and the D2/D3,
+  M1, W1/W2, A1, and B1 configurations.
 - An exported `.pck` run. The validated runs use the template binary with
   `--path`, loading the project directory; that is a template build, but not the
   shipping package layout.

@@ -1,0 +1,49 @@
+benchmarks/results/2026-11-19_s6_d1_q4/p0/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p0/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p0/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p0/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p0/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p0/r5.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p1/r5.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p2/r5.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p3/r5.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p4/r5.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/cold.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/r1.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/r2.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/r3.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/r4.json.gz  PASS
+benchmarks/results/2026-11-19_s6_d1_q4/p5/r5.json.gz  PASS
+cell S6/P0/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.07%
+cell S6/P1/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.02%
+cell S6/P2/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.03%
+cell S6/P3/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.02%
+cell S6/P4/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.03%
+cell S6/P5/D1 (6 runs)  PASS
+    INFO GPU median spread across runs: 0.04%
+36 report(s), 6 repeated cell(s), 0 failure(s)

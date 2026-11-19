@@ -8,12 +8,14 @@ engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
 > **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
-> manual editor procedure without a harness scene**. Nine D1 cells have passed
-> the validity gate in a template build at 1920×1080: S1/Q0 with 400 boxes in
-> [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md), and
+> manual editor procedure without a harness scene**. Fifteen D1 cells have
+> passed the validity gate in a template build at 1920×1080: S1/Q0 with 400
+> boxes in [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md),
 > S2, S3a, S3b and six S4 light cells in
-> [`results/2026-11-19_d1/`](results/2026-11-19_d1/README.md). S6 and every other
-> cell have tools-build smoke runs only. See the
+> [`results/2026-11-19_d1/`](results/2026-11-19_d1/README.md), and S6 at four
+> quads for P0–P5 in
+> [`results/2026-11-19_s6_d1_q4/`](results/2026-11-19_s6_d1_q4/README.md).
+> Cell counts outside those sessions have tools-build smoke runs only. See the
 > [run log](../docs/architecture/rendering-benchmark-run-log.md) for what was
 > observed and which defects the runs exposed.
 
@@ -108,12 +110,18 @@ count. Capture a P0 reference, then diff each other preset against it:
     --bench-screenshot /absolute/path/S6_P0.png \
     --bench-out /absolute/path/S6_P0_D1.json
 
-# P2 must differ from P0 by at least 0.5/255 on average
+# P2 records its difference from P0 in image_diff.mean_abs_diff
 <kaizen-template> --path benchmarks/rd_3d -- \
     --bench-scene S6 --bench-count 4 --bench-preset P2 --bench-config D1 \
-    --bench-reference /absolute/path/S6_P0.png --bench-min-diff 0.5 \
+    --bench-reference /absolute/path/S6_P0.png \
     --bench-out /absolute/path/S6_P2_D1.json
 ```
+
+`--bench-min-diff <value>` is optional. The gate is not a fixed threshold: an
+`image_diff.mean_abs_diff` of exactly zero for a preset that enables an effect is
+invalid because the effect did not run, and a small non-zero value is recorded
+as measured. A per-preset threshold
+belongs to whoever collects a cell, not to the specification.
 
 The comparison runs once after sampling and reads every RGBA byte, so it can
 take several seconds on a 1920×1080 frame; that cost is outside the sampled

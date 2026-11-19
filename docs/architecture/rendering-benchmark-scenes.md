@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored; S1, S2, S3a, S3b and six S4 light cells validated and published on D1; S6 has tools-build smoke runs only; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
+> **Status:** Specification — **S1–S4 and S6 authored; S1, S2, S3a, S3b, six S4 light cells and six S6 post cells validated and published on D1; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -84,7 +84,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S1 — Static 3D
 
-> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it. The 400-box cell on D1 is validated and published; tools-build runs of other counts are in the [run log](rendering-benchmark-run-log.md).
+> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../../benchmarks/README.md) for how to run it. The 400-box cell on D1 is validated and published; tools-build runs of other counts are in the [run log](rendering-benchmark-run-log.md).
 
 **Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against. On Forward+ it is a throughput baseline, not a per-draw probe: identical surfaces are merged into instanced draws automatically (see the acceptance criteria).
 
@@ -386,7 +386,7 @@ sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
 **Content:** the S1 project at `benchmarks/rd_3d`, `box_count = 400`, opened in
 the editor with `scenes/s1_static.tscn` as the current scene. This is a manual
 procedure, not a harness scene: the steps are in
-[benchmark projects](../benchmarks/README.md).
+[benchmark projects](../../benchmarks/README.md).
 
 **Cells**
 
@@ -605,9 +605,9 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
-- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`). Nine D1 cells pass the gate in §7 with five warm runs and one cold run each ([published results](../../benchmarks/results/README.md)). S6 has tools-build smoke runs only, recorded in the [run log](rendering-benchmark-run-log.md).
-- Counts in this document — measured on D1: S1/400 boxes 7 draw calls and 4 802 primitives; S2/4096 instances 1 draw and 4 456 448 primitives; S3a 64 draws, S3b 16 draws, both 69 632 primitives; S4 11–15 draws and 1 870 primitives (median) per light cell. Every other count is **proposed**, not validated.
+- Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
+- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`). Fifteen D1 cells pass the gate in §7 with five warm runs and one cold run each ([published results](../../benchmarks/results/README.md)). Cell counts outside the published sessions have tools-build smoke runs only, recorded in the [run log](rendering-benchmark-run-log.md).
+- Counts in this document — measured on D1: S1/400 boxes 7 draw calls and 4 802 primitives; S2/4096 instances 1 draw and 4 456 448 primitives; S3a 64 draws, S3b 16 draws, both 69 632 primitives; S4 11–15 draws and 1 870 primitives (median) per light cell; S6 at four quads 3 draws and 394 primitives for every preset. Every other count is **proposed**, not validated.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.
 - Web cell specifics: canvas size, `devicePixelRatio`, and browser compositor behavior — **not verified** (see [Web export runtime](rendering-web-runtime.md)).
