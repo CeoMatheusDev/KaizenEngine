@@ -240,6 +240,29 @@ selects the sub-scene, `--bench-count` sets `material_count` for S3a.
 
 **Non-goals:** GI quality, volumetric lighting, decals, reflection probes.
 
+**Implemented** in `benchmarks/rd_3d/scripts/scene_s4.gd`;
+`--bench-spots` and `--bench-omnis` set the light counts and
+`--bench-variant shadows` enables shadows on four spots.
+
+- Geometry: `PlaneMesh` 400×400 for the ground and 64 `BoxMesh` nodes of
+  2×4×2 m in an 8×8 grid at 6 m spacing, all using the S1 checker material. The
+  spacing and box footprint are authored choices; the specification fixes only
+  the count, the 4 m height, and the material.
+- The directional light always has shadows on, with
+  `directional_shadow_max_distance = 200`.
+- Spot lights sit on a 20 m ring at 12 m height, aimed at the field centre;
+  range 30 m, energy 4.0, 50° cone. Omni lights sit on a 30 m ring at
+  alternating 6 m and 9 m heights; range 20 m, energy 2.0. Both rings are
+  placed by `index × TAU / count`, so the layout is identical on every run.
+- The shadow variant enables `shadow_enabled` on the first
+  `min(4, spot_count)` spots and records that number in `scene.parameters`.
+- Ambient energy is 0.1, background colour, no fog, no GI.
+
+The harness records `draw_calls` per frame. Collect the (0,0), (8,0), (0,32),
+(8,32), and (32,64) cells of one configuration and compare them: in a clustered
+renderer the count should not change with light count. A change is a finding to
+document, not something to hide.
+
 ---
 
 ### S5 — 2D / Canvas
@@ -388,7 +411,7 @@ kaizen --path benchmarks/rd_3d -- --bench-scene S1 --bench-count 400 --bench-pre
        --bench-out /abs/path/S1_D1_Q0.json
 ```
 
-`--bench-variant a|b` is forwarded to the scene and selects the S3 sub-scene.
+`--bench-variant a|b` selects the S3 sub-scene (`shadows` for S4); `--bench-spots` and `--bench-omnis` set the S4 light counts.
 
 User arguments after `--` are read with `OS.get_cmdline_user_args()`.
 
@@ -503,7 +526,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1, S2, and S3 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S4–S7 **not started**.
+- Scene authoring — **S1–S4 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5–S7 **not started**.
 - Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).

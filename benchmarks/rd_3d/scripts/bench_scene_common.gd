@@ -132,26 +132,27 @@ static func make_feature_material(p_feature: int, p_normal: Texture2D, p_orm: Te
 	return material
 
 ## Solid background plus flat ambient, so the sky pass cannot dominate a cell.
-static func make_environment() -> Environment:
+## S4 lowers the ambient energy so the added lights are the measured source.
+static func make_environment(p_ambient_energy: float = 0.3) -> Environment:
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
 	environment.background_color = Color(0.05, 0.05, 0.07)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(1.0, 1.0, 1.0)
-	environment.ambient_light_energy = 0.3
+	environment.ambient_light_energy = p_ambient_energy
 	return environment
 
-## One shadowless directional key light, as required by S1-S3.
-static func make_sun() -> DirectionalLight3D:
+## One directional key light. S1-S3 use it without shadows; S4 enables them.
+static func make_sun(p_shadows: bool = false) -> DirectionalLight3D:
 	var light := DirectionalLight3D.new()
 	light.name = "KeyLight"
 	light.light_energy = 1.0
-	light.shadow_enabled = false
+	light.shadow_enabled = p_shadows
 	light.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
 	return light
 
-static func add_world_environment(p_root: Node3D) -> void:
+static func add_world_environment(p_root: Node3D, p_ambient_energy: float = 0.3) -> void:
 	var node := WorldEnvironment.new()
 	node.name = "Environment"
-	node.environment = make_environment()
+	node.environment = make_environment(p_ambient_energy)
 	p_root.add_child(node)

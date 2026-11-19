@@ -12,9 +12,11 @@ extends Node
 ## invalid.
 ##
 ## CLI (after the engine's `--` separator):
-##   --bench-scene <S1|S2|S3>    Scene to load and report label (default S1)
+##   --bench-scene <S1|S2|S3|S4> Scene to load and report label (default S1)
 ##   --bench-count <n>           Forwarded to the scene as its content count
 ##   --bench-variant <a|b|...>   Forwarded to the scene as its variant label
+##   --bench-spots <n>           S4 spot-light count
+##   --bench-omnis <n>           S4 omni-light count
 ##   --bench-preset <Q0|Q1>      Label written to the report (default Q0)
 ##   --bench-config <label>      Configuration label written to the report (D1, M1, ...)
 ##   --bench-frames <n>          Sampled frames, multiple of 300 (default 3600)
@@ -54,12 +56,15 @@ const SCENES := {
 	"S1": "res://scenes/s1_static.tscn",
 	"S2": "res://scenes/s2_instancing.tscn",
 	"S3": "res://scenes/s3_materials.tscn",
+	"S4": "res://scenes/s4_lighting.tscn",
 }
 
 var config := {
 	"scene": "S1",
 	"count": -1,
 	"variant": "",
+	"spots": -1,
+	"omnis": -1,
 	"preset": "Q0",
 	"config": "",
 	"frames": DEFAULT_SAMPLE_FRAMES,
@@ -132,6 +137,14 @@ func _parse_args() -> void:
 				if i + 1 < args.size():
 					i += 1
 					config.variant = args[i]
+			"--bench-spots":
+				if i + 1 < args.size():
+					i += 1
+					config.spots = int(args[i])
+			"--bench-omnis":
+				if i + 1 < args.size():
+					i += 1
+					config.omnis = int(args[i])
 			"--bench-preset":
 				if i + 1 < args.size():
 					i += 1

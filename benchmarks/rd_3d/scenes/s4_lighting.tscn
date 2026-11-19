@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_s4.gd" id="1_s4"]
+
+[node name="S4Lighting" type="Node3D"]
+script = ExtResource("1_s4")
+spot_count = 8
+omni_count = 0
+spot_shadows = false
