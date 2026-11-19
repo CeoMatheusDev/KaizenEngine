@@ -1,6 +1,6 @@
 # Benchmark Run Log
 
-> **Status:** Twenty-eight validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, and S6 P0–P5 at 1, 4 and 16 quads) plus tools-build smoke runs
+> **Status:** Twenty-eight validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, and S6 P0–P5 at 1, 4 and 16 quads) plus D2 (Mobile) and D3 (Compatibility) template batches plus tools-build smoke runs
 > **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
@@ -365,7 +365,10 @@ Delta against P0 at the same overdraw level:
 ## 9. Still missing
 
 - The rest of the cell matrix: the other S1 and S2 counts, Q1 (which no scene
-  implements), and the D2/D3, M1, W1/W2, A1, and B1 configurations.
+  implements), and the M1, W1/W2, A1, and B1 configurations. D2 (Mobile) and
+  D3 (Compatibility) are now measured; their reports are in
+  `benchmarks/results/2026-11-19_1252_d2_mobile/` and
+  `benchmarks/results/2026-11-19_1329_d3_compat/`.
 - An exported `.pck` run. The validated runs use the template binary with
   `--path`, loading the project directory; that is a template build, but not the
   shipping package layout.

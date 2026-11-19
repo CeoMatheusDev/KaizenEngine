@@ -44,6 +44,8 @@ a run is written as not measured.
 |---|---|---|---|
 | [`2026-11-19_s1_d1_q0`](2026-11-19_s1_d1_q0/README.md) | S1/Q0, 400 boxes | 6 | D1 |
 | [`2026-11-19_d1`](2026-11-19_d1/README.md) | S2/4096, S3a/64, S3b/64, six S4 light cells, all Q0 | 54 | D1 |
+| [`2026-11-19_d2_mobile`](2026-11-19_1252_d2_mobile/README.md) | S2, S3a, S3b, S4 8/8, S6 P0 (1/4/16q); S6 P2/P5 not applicable on Mobile | 42 | D2 |
+| [`2026-11-19_d3_compat`](2026-11-19_1329_d3_compat/README.md) | S2, S3a, S3b, S4 8/8, S6 P0+P2 (1/4/16q); S6 P5 not applicable on Compatibility | 54 | D3 |
 | [`2026-11-19_s6_d1_q1`](2026-11-19_s6_d1_q1/README.md) | S6 at one quad, P0–P5 | 36 | D1 |
 | [`2026-11-19_s6_d1_q4`](2026-11-19_s6_d1_q4/README.md) | S6 at four quads, P0–P5 | 36 | D1 |
 | [`2026-11-19_s6_d1_q16`](2026-11-19_s6_d1_q16/README.md) | S6 at sixteen quads, P0–P5 | 36 | D1 |

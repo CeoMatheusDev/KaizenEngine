@@ -1,0 +1,8 @@
+WARNING: Keeping screen on not supported by this display server.
+     at: screen_set_keep_on (servers/display/display_server.cpp:598)
+ERROR: Could not load global script cache.
+   at: get_global_class_list (core/config/project_settings.cpp:1505)
+Kaizen Engine v4.8.beta.custom_build.43c45bf02 (2026-11-19 03:00:52 UTC) - https://github.com/CeoMatheusDev/KaizenEngine
+Vulkan 1.4.354 - Forward Mobile - Using Device #0: AMD - AMD Radeon RX 550 / 550 Series (RADV POLARIS12)
+
+bench: report written to /home/matheus/Documentos/Hardion-Labs/KaizenEngine/benchmarks/results/2026-11-19_1252_d2_mobile/S3a_D2_Q0/S3a_D2_Q0_r3.json
