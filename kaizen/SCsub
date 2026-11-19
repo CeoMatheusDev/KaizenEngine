@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+
+env.kaizen_sources = []
+
+env.add_source_files(env.kaizen_sources, "diagnostics/rendering/*.cpp")
+
+lib = env.add_library("kaizen", env.kaizen_sources)
+env.Prepend(LIBS=[lib])

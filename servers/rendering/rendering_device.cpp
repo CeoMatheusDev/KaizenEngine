@@ -49,6 +49,9 @@
 #include "core/os/os.h"
 #include "core/profiling/profiling.h"
 #include "core/templates/fixed_vector.h"
+
+#include "kaizen/diagnostics/rendering/resource_tracker.h"
+
 #include "servers/rendering/renderer_rd/uniform_set_cache_rd.h"
 #include "servers/rendering/rendering_device_binds.h"
 #include "servers/rendering/rendering_shader_container.h"
@@ -1572,6 +1575,7 @@ RID RenderingDevice::storage_buffer_create(uint32_t p_size_bytes, Span<uint8_t> 
 	buffer_memory.add(buffer.size);
 
 	RID id = storage_buffer_owner.make_rid(buffer);
+	KAIZEN_TRACK_GPU_RESOURCE(id, p_size_bytes, "StorageBuffer", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -1610,6 +1614,7 @@ RID RenderingDevice::texture_buffer_create(uint32_t p_size_elements, DataFormat 
 	buffer_memory.add(size_bytes);
 
 	RID id = texture_buffer_owner.make_rid(texture_buffer);
+	KAIZEN_TRACK_GPU_RESOURCE(id, size_bytes, "TextureBuffer", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -1824,6 +1829,7 @@ RID RenderingDevice::texture_create(const TextureFormat &p_format, const Texture
 	texture_memory.add(driver->texture_get_allocation_size(texture.driver_id));
 
 	RID id = texture_owner.make_rid(texture);
+	KAIZEN_TRACK_GPU_RESOURCE(id, driver->texture_get_allocation_size(texture.driver_id), "Texture", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -3972,6 +3978,7 @@ RID RenderingDevice::vertex_buffer_create(uint32_t p_size_bytes, Span<uint8_t> p
 	buffer_memory.add(buffer.size);
 
 	RID id = vertex_buffer_owner.make_rid(buffer);
+	KAIZEN_TRACK_GPU_RESOURCE(id, p_size_bytes, "VertexBuffer", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -4190,6 +4197,7 @@ RID RenderingDevice::index_buffer_create(uint32_t p_index_count, IndexBufferForm
 	buffer_memory.add(index_buffer.size);
 
 	RID id = index_buffer_owner.make_rid(index_buffer);
+	KAIZEN_TRACK_GPU_RESOURCE(id, size_bytes, "IndexBuffer", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -4456,6 +4464,7 @@ RID RenderingDevice::uniform_buffer_create(uint32_t p_size_bytes, Span<uint8_t> 
 	buffer_memory.add(buffer.size);
 
 	RID id = uniform_buffer_owner.make_rid(buffer);
+	KAIZEN_TRACK_GPU_RESOURCE(id, p_size_bytes, "UniformBuffer", frames_drawn);
 #ifdef DEV_ENABLED
 	set_resource_name(id, "RID:" + itos(id.get_id()));
 #endif
@@ -7761,6 +7770,11 @@ void RenderingDevice::free_rid(RID p_rid) {
 }
 
 void RenderingDevice::_free_internal(RID p_id) {
+	// Kaizen: track the logical release. The slot is only returned to the
+	// tracker's pool once the ring frame that owns the deferred destruction is
+	// processed (see _free_pending_resources / notify_frame_completed).
+	KaizenResourceTracker::get_singleton()->notify_logical_free(p_id, frames_drawn + frames.size());
+
 #ifdef DEV_ENABLED
 	String resource_name;
 	if (resource_names.has(p_id)) {
@@ -8344,6 +8358,7 @@ void RenderingDevice::_begin_frame(bool p_presented) {
 	// Erase pending resources.
 	KaizenProfileZoneGrouped(_profile_zone, "_free_pending_resources");
 	_free_pending_resources(frame);
+	KaizenResourceTracker::get_singleton()->notify_frame_completed(frames_drawn);
 
 	// Advance staging buffers if used.
 	if (upload_staging_buffers.used) {
@@ -9230,6 +9245,9 @@ void RenderingDevice::finalize() {
 			driver->semaphore_free(frames[i].transfer_worker_semaphores[j]);
 		}
 	}
+
+	// The GPU is idle at this point, so every deferred release is complete.
+	KaizenResourceTracker::get_singleton()->notify_device_teardown();
 
 	if (pipeline_cache_enabled) {
 		update_pipeline_cache(true);

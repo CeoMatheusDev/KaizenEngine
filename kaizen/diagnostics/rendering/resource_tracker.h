@@ -2,109 +2,86 @@
 /*  resource_tracker.h                                                     */
 /**************************************************************************/
 /*  Kaizen Engine — Resource Lifetime Diagnostics                          */
-/*  Low-overhead allocation tracking with atomic counters, generation IDs, */
-/*  and memory accounting. Safe for the render thread hot path when        */
-/*  diagnostics are disabled.                                             */
+/*                                                                        */
+/*  Engine-facing wrapper around Kaizen::ResourceRegistry. The tracker is */
+/*  disabled by default and is enabled with the KAIZEN_DIAGNOSTICS         */
+/*  environment variable (basic, detailed or validation). When disabled,  */
+/*  every notify_* call returns after a single mode check.                */
+/*                                                                        */
+/*  Integration model:                                                    */
+/*    RenderingDevice::create_*  -> notify_allocation()                   */
+/*    RenderingDevice::free_rid() -> notify_logical_free()                */
+/*    RenderingDevice::_begin_frame() -> notify_frame_completed()         */
+/*    RenderingDevice::finalize() -> notify_device_teardown()             */
 /**************************************************************************/
 
 #pragma once
 
-#include <atomic>
+#include "core/error/error_macros.h"
 #include "core/os/spin_lock.h"
+#include "core/string/ustring.h"
 #include "core/templates/hash_map.h"
-#include "core/templates/local_vector.h"
+#include "core/templates/rid.h"
 
-// Configurable diagnostics mode.
-enum class KaizenDiagnosticsMode : uint8_t {
-	Disabled,   // No instrumentation (zero overhead)
-	Basic,      // Counters and statistics only
-	Detailed,   // Allocation/deallocation events
-	Validation, // Lifetime validation + handle checking
-};
+#include "kaizen/diagnostics/rendering/resource_registry.h"
 
-// Handle with generation ID to detect stale references.
-struct KaizenResourceHandle {
-	uint32_t index = 0;
-	uint32_t generation = 0;
-
-	bool operator==(const KaizenResourceHandle &p_other) const {
-		return index == p_other.index && generation == p_other.generation;
-	}
-	bool is_null() const { return generation == 0; }
-};
-
-// Memory and allocation statistics.
-struct KaizenResourceStats {
-	std::atomic<uint64_t> allocations = 0;
-	std::atomic<uint64_t> deallocations = 0;
-	std::atomic<uint64_t> live_resources = 0;
-	std::atomic<uint64_t> allocated_bytes = 0;
-	std::atomic<uint64_t> peak_bytes = 0;
-	std::atomic<uint64_t> invalid_handles = 0;
-	std::atomic<uint64_t> generation_mismatches = 0;
-	std::atomic<uint64_t> double_frees = 0;
-};
-
-// Single resource record.
-struct KaizenResourceRecord {
-	uint32_t generation = 0;
-	uint64_t allocation_frame = 0;
-	uint64_t deallocation_frame = 0;
-	uint64_t size_bytes = 0;
-	const char *type_name = nullptr;
-	bool is_freed = false;
-	bool is_cpu = true; // CPU vs GPU resource
-};
-
-// Registry with reserved capacity and free-list (no dynamic allocation on hot path).
-class KaizenResourceRegistry {
-public:
-	KaizenResourceRegistry(uint32_t p_capacity = 4096);
-	~KaizenResourceRegistry();
-
-	KaizenResourceHandle allocate(const char *p_type, uint64_t p_size, bool p_is_cpu);
-	void deallocate(KaizenResourceHandle p_handle);
-	bool is_valid(KaizenResourceHandle p_handle) const;
-	uint64_t get_allocation_frame(KaizenResourceHandle p_handle) const;
-
-	uint32_t get_capacity() const { return capacity; }
-	uint32_t get_count() const { return count; }
-
-private:
-	uint32_t capacity = 0;
-	uint32_t count = 0;
-	LocalVector<KaizenResourceRecord> records;
-	LocalVector<uint32_t> free_list;
-	uint32_t next_index = 0;
-	SpinLock lock;
-};
-
-// Main resource tracker.
 class KaizenResourceTracker {
 public:
 	static KaizenResourceTracker *get_singleton();
-	static void set_diagnostics_mode(KaizenDiagnosticsMode p_mode);
-	static KaizenDiagnosticsMode get_diagnostics_mode();
 
-	void record_allocation(uint64_t p_rid, const char *p_type, uint64_t p_size, bool p_is_cpu = true);
-	void record_deallocation(uint64_t p_rid);
-	bool validate_handle(KaizenResourceHandle p_handle);
+	void set_mode(Kaizen::DiagnosticsMode p_mode);
+	Kaizen::DiagnosticsMode get_mode() const { return mode; }
+	bool is_enabled() const { return mode != Kaizen::DiagnosticsMode::Disabled; }
 
-	// Statistics
-	const KaizenResourceStats &get_stats() const { return stats; }
-	uint64_t get_leak_count() const;
-	void reset_stats();
+	// Registers a newly created resource. `p_frame` is the renderer frame
+	// counter at creation time, kept for lifetime diagnostics.
+	void notify_allocation(RID p_rid, const char *p_type, uint64_t p_requested_bytes, Kaizen::ResourceKind p_kind, uint64_t p_frame);
+
+	// Refines the backend byte count once the driver reports the real
+	// allocation size (e.g. driver->texture_get_allocation_size()).
+	void notify_backend_bytes(RID p_rid, uint64_t p_backend_bytes);
+
+	// Marks the resource as logically freed. It remains accounted for as
+	// PendingRelease until the ring frame that owns the deferred destruction
+	// is processed. Untracked RIDs (uniform sets, framebuffers, ...) are
+	// ignored on purpose: the tracker only follows buffers and textures.
+	void notify_logical_free(RID p_rid, uint64_t p_release_epoch);
+
+	// Confirms every pending release scheduled for an epoch <= p_epoch.
+	uint32_t notify_frame_completed(uint64_t p_epoch);
+
+	// Forces all pending releases to complete (device teardown, GPU idle) and
+	// prints the session summary when diagnostics are enabled.
+	void notify_device_teardown();
+
+	bool is_tracked(RID p_rid) const;
+	Kaizen::ResourceStats get_stats(Kaizen::ResourceKind p_kind) const;
+	String get_summary() const;
 
 private:
 	KaizenResourceTracker();
-	static KaizenResourceTracker *singleton;
-	static KaizenDiagnosticsMode diagnostics_mode;
+	~KaizenResourceTracker();
 
-	KaizenResourceStats stats;
-	KaizenResourceRegistry cpu_registry;
-	KaizenResourceRegistry gpu_registry;
+	// Registries are allocated only when diagnostics are enabled, so a
+	// disabled build keeps no tracking storage at all.
+	void _ensure_registries();
 
-	// RID -> handle mapping
-	HashMap<uint64_t, KaizenResourceHandle> rid_to_handle;
-	SpinLock rid_lock;
+	Kaizen::ResourceRegistry *cpu_registry = nullptr;
+	Kaizen::ResourceRegistry *gpu_registry = nullptr;
+
+	HashMap<uint64_t, Kaizen::ResourceHandle> rid_handles;
+	mutable SpinLock rid_lock;
+
+	Kaizen::DiagnosticsMode mode = Kaizen::DiagnosticsMode::Disabled;
+
+	// Release path accounting: how many releases completed while frames were
+	// running versus forced at device teardown. A healthy session confirms the
+	// churn at runtime and only flushes the shutdown resources at teardown.
+	uint64_t runtime_confirmed_releases = 0;
+	uint64_t teardown_confirmed_releases = 0;
 };
+
+// Convenience macro for creation sites in upstream code. Expands to nothing
+// when diagnostics never run, keeping call sites readable.
+#define KAIZEN_TRACK_GPU_RESOURCE(m_rid, m_bytes, m_type, m_frame) \
+	KaizenResourceTracker::get_singleton()->notify_allocation((m_rid), (m_type), (m_bytes), Kaizen::ResourceKind::GPU, (m_frame))

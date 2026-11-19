@@ -86,9 +86,17 @@ The comment in the source describes this as "dependency usage order, so nothing 
 5. Record and destroy resources on the rendering thread (RD guard macro enforces this).
 6. Any new resource type added to the renderer must declare its owner table, its dependency edges, and its disposal slot.
 
-## 8. Open items
+## 8. Kaizen instrumentation
+
+Kaizen implements opt-in tracking of this lifecycle in
+[resource-diagnostics.md](resource-diagnostics.md): generation-tagged handles,
+`Alive → PendingRelease → Released` accounting, and per-frame confirmation of
+deferred releases. It is disabled by default and does not change any behaviour
+described above.
+
+## 9. Open items
 
 - Recursive details of `_free_dependencies()` for framebuffers and uniform sets (it frees dependents automatically; the full graph was not enumerated).
 - Interaction with the transfer worker threads and staging buffers.
 - Multi-window/swapchain lifetime (not audited).
-- Runtime validation: allocation/free stress under frame churn — **not performed**.
+- Runtime validation: allocation/free stress under frame churn is now covered by `tests/kaizen/churn_project` for buffers and textures; pipelines and uniform sets remain unmeasured.

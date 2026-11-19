@@ -7,6 +7,7 @@ This directory contains Kaizen-specific engineering documentation. It complement
 - [Architecture overview](architecture/overview.md) — current architectural baseline, inherited subsystems, extension boundaries, and engineering constraints.
 - [Rendering audit (R0)](architecture/rendering-audit.md) — source-verified baseline of renderer selection, threading, resource lifetime entry points, and the shader pipeline.
 - [Rendering resource lifetime](architecture/rendering-resource-lifetime.md) — how RIDs reach the graphics API and when objects are actually destroyed (deferred disposal, frame ring, dependency order).
+- [Resource lifetime diagnostics](architecture/resource-diagnostics.md) — Kaizen's own tracker: generation handles, pending-release accounting, diagnostics modes, integration hooks, measured overhead and churn results.
 - [Pipeline cache and shader variants](architecture/rendering-pipeline-cache.md) — variant table, device PSO cache persistence, backend support and invalidation rules.
 - [Rendering benchmark methodology](architecture/rendering-benchmarks.md) — what to measure, with which built-in instruments, on which reference configurations, and how results must be reported (five D1 sessions published, the rest unmeasured).
 - [Benchmark scene specification](architecture/rendering-benchmark-scenes.md) — implementable definitions for scenes S1–S7: fixed content and parameters, camera contract, quality presets, cell matrix, sampling protocol, harness contract, and validity gate.

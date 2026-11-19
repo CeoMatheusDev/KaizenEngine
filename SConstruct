@@ -1247,6 +1247,9 @@ if "cpp_compiler_launcher" in env:
 Export("env")
 
 SConscript("core/SCsub")
+# Kaizen-owned subsystems. Built after core and before servers so the static
+# library order keeps server code able to link against it.
+SConscript("kaizen/SCsub")
 SConscript("servers/SCsub")
 SConscript("scene/SCsub")
 if env.editor_build:
