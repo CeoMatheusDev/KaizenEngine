@@ -9,6 +9,7 @@ import contextlib
 import copy
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -143,6 +144,20 @@ class CheckReportTests(unittest.TestCase):
         report = make_report()
         report["timing"]["pso_in_sample"] = 3
         self.assertGreater(self.check(report), 0)
+
+    def test_gzipped_report_loads(self):
+        import gzip
+        report = make_report()
+        handle, path = tempfile.mkstemp(suffix=".json.gz")
+        os.close(handle)
+        try:
+            with gzip.open(path, "wt", encoding="utf-8") as stream:
+                json.dump(report, stream)
+            per_report, _per_cell, failures = check_report.run([path])
+            self.assertEqual(failures, 0)
+            self.assertEqual(len(per_report), 1)
+        finally:
+            os.unlink(path)
 
     def test_missing_load_to_sample_fails(self):
         report = make_report()

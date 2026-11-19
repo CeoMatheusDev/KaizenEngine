@@ -8,10 +8,12 @@ engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
 > **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
-> manual editor procedure without a harness scene**. One cell — S1/D1/Q0 with
-> 400 boxes — has passed the validity gate in a template build at 1920×1080 and
-> is published in [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md).
-> Every other cell has a tools-build smoke run only. See the
+> manual editor procedure without a harness scene**. Nine D1 cells have passed
+> the validity gate in a template build at 1920×1080: S1/Q0 with 400 boxes in
+> [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md), and
+> S2, S3a, S3b and six S4 light cells in
+> [`results/2026-11-19_d1/`](results/2026-11-19_d1/README.md). S6 and every other
+> cell have tools-build smoke runs only. See the
 > [run log](../docs/architecture/rendering-benchmark-run-log.md) for what was
 > observed and which defects the runs exposed.
 
@@ -23,7 +25,8 @@ loads.
 
 ```text
 benchmarks/
-  results/2026-11-19_s1_d1_q0/   published cell: reports, screenshot, environment
+  results/                       published cells, one directory per cell or batch
+  tools/                         check_report.py and its tests
   rd_3d/
     project.kaizen
     scenes/bootstrap.tscn          empty main scene; the harness loads the real one
@@ -303,10 +306,13 @@ be written. A cell is invalid when:
   before it;
 - the frame hash is missing because capture failed;
 - the report shows a GPU time that the backend never produced (the harness
-  reports an empty GPU array and `null` summary instead of zero).
+  reports an empty GPU array and `null` summary instead of zero);
+- `--bench-preset Q1` is passed to a scene that does not apply Q1 settings. The
+  S1–S4 scenes pin Q0, so the report is refused instead of being published as a
+  Q1 frame that is actually Q0.
 
-Frame-hash equality across runs is **not** checked by the harness; compare
-`frame_hash` fields when collecting results.
+Frame-hash equality across runs is **not** checked by the harness; the checker
+compares it when several reports of the same cell are passed together.
 
 ## Checking reports
 
@@ -314,7 +320,12 @@ Frame-hash equality across runs is **not** checked by the harness; compare
 
 ```text
 python3 benchmarks/tools/check_report.py runs/*.json
+python3 benchmarks/tools/check_report.py benchmarks/results/*/*.json.gz
 ```
+
+Reports may be gzip-compressed; the checker reads `.json` and `.json.gz` alike.
+Published cells are committed gzipped because one full report is about 540 KB
+uncompressed and about 23 KB compressed.
 
 It checks that a report came from a template build with a rendering surface, that
 VSync was disabled, that no pipeline compilation happened in the sampling window

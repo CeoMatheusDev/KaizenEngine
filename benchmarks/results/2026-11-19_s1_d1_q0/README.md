@@ -75,7 +75,7 @@ Each run samples 3600 frames after 900 warm-up frames.
 
 ## Cold run
 
-`S1_D1_Q0_cold.json` was produced after deleting
+`S1_D1_Q0_cold.json.gz` was produced after deleting
 `user://vulkan/pipelines.forward_plus.*.cache` (1,256,676 bytes); the run
 recreated it at 716,464 bytes.
 
@@ -103,10 +103,20 @@ Three checks stay manual:
 - **Content on screen:** `frame_299.png` was inspected: checkerboard ground and
   the 20×20 box grid, no UI, no overlay, 1920×1080.
 
+## Files
+
+The six reports are committed gzipped (`S1_D1_Q0_*.json.gz`) so one cell costs
+about 130 KB instead of 3.2 MB. `check_report.py` reads gzip transparently:
+
+```text
+python3 benchmarks/tools/check_report.py benchmarks/results/2026-11-19_s1_d1_q0/*.json.gz
+```
+
+`checker.txt` is that command's output, and `frame_299.png` is the frame the
+screenshot check looked at.
+
 ## Scope
 
 One cell on one machine. It is a reference for this GPU and this commit, not a
 portable performance claim, and it says nothing about S2–S6, Mobile,
-Compatibility, Metal, Web, or another CPU. The per-frame arrays make each report
-about 540 KB; future cells may publish raw data as release artifacts if the
-repository should not keep growing by that much per cell.
+Compatibility, Metal, Web, or another CPU.

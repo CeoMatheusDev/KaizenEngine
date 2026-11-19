@@ -1,9 +1,9 @@
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_cold.json  PASS
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r1.json  PASS
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r2.json  PASS
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r3.json  PASS
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r4.json  PASS
-benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r5.json  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_cold.json.gz  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r1.json.gz  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r2.json.gz  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r3.json.gz  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r4.json.gz  PASS
+benchmarks/results/2026-11-19_s1_d1_q0/S1_D1_Q0_r5.json.gz  PASS
 cell S1/Q0/D1 (6 runs)  PASS
     INFO GPU median spread across runs: 0.05%
 6 report(s), 1 repeated cell(s), 0 failure(s)

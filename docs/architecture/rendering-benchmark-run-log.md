@@ -1,15 +1,15 @@
 # Benchmark Run Log
 
-> **Status:** One validated cell (S1/D1/Q0, 400 boxes) plus tools-build smoke runs
+> **Status:** Nine validated D1 cells (S1 at 400 boxes; S2, S3a, S3b and six S4 light cells) plus tools-build smoke runs
 > **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
 This document records executions of the benchmark project. It exists so that a
 run is never described from memory: what was run, on what, and what the report
 said. It has two parts. Sections 1–5 are tools-build smoke runs that deliberately
-break the validity gate and publish nothing. Section 6 is the first cell that
-passes the gate end to end; its reports are committed in
-[`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md).
+break the validity gate and publish nothing. Sections 6 and 7 are the templates
+that pass the gate end to end; their reports are committed in
+[`benchmarks/results/`](../../benchmarks/results/README.md).
 
 The contract is in [Benchmark scene specification](rendering-benchmark-scenes.md)
 and [Benchmark methodology](rendering-benchmarks.md). The code is in
@@ -211,6 +211,13 @@ on this backend.
    comparison was impossible. The harness now records
    `timing.load_to_sample_ms`, measured from the scene-load call to the first
    sampled frame, and the checker requires a positive value.
+9. **`--bench-preset Q1` was a mislabeling trap.** In S1–S4 the flag only sets a
+   label: the scenes pin Q0, and Q1 is a project-setting plus per-environment
+   change that no scene applies. A `--bench-preset Q1` run would have produced a
+   Q0 frame under a Q1 label, and the checker had no way to see it. The harness
+   now marks such a run invalid unless the scene reports
+   `quality_preset = "Q1"` in `scene_parameters()`. The guard was added after the
+   runs in section 7, which are all Q0 and therefore unaffected.
 
 ## 6. The first validated cell
 
@@ -251,11 +258,52 @@ five warm runs and one cold run.
 - This is one machine and one cell. It is a reference for that GPU, driver, and
   commit; it is not a portable claim.
 
-## 7. Still missing
+## 7. The D1 session: S2, S3a, S3b, S4
 
-- Every other cell of the matrix: S2, S3, S4, S6, and the Mobile, Compatibility,
-  Metal, and Web configurations.
-- An exported `.pck` run. The validated run uses the template binary with
+Nine more cells, same machine and template build as section 6, fullscreen
+1920×1080, 900 warm-up and 3600 sampled frames, one cold run and five warm runs
+each. The reports are in
+[`benchmarks/results/2026-11-19_d1/`](../../benchmarks/results/2026-11-19_d1/README.md);
+`check_report.py` reports 54 reports, 9 repeated cells, 0 failures.
+
+| Cell | FPS median | GPU ms | Draw calls | Primitives | `first_120` | Load ms |
+|---|---|---|---|---|---|---|
+| S2, 4096 instances | 138.6–138.7 | 6.437–6.438 | 1 | 4 456 448 | 5 | 6622–6640 |
+| S3a, 64 materials | 638.6–641.4 | 0.835–0.836 | 64 | 69 632 | 5 | 1571–1587 |
+| S3b, 8 features | 622.7–624.2 | 0.875–0.876 | 16 | 69 632 | 19 | 1667–1673 |
+| S4, 0 spots / 0 omnis | 293.6–294.4 | 2.656–2.657 | 13 | 1 870 | 6 | 3210–3228 |
+| S4, 8 spots / 0 omnis | 245.8–246.1 | 3.315 | 13 | 1 870 | 6 | 3801–3817 |
+| S4, 0 spots / 32 omnis | 192.1–192.8 | 4.442–4.444 | 13 | 1 870 | 7 | 4821–4885 |
+| S4, 8 spots / 32 omnis | 178.5–178.9 | 4.832–4.834 | 13 | 1 870 | 7 | 5163–5175 |
+| S4, 32 spots / 64 omnis | 119.6–120.0 | 7.551–7.560 | 13 | 1 870 | 7 | 7643–7656 |
+| S4, 8 spots, 4 shadowed | 241.3–242.8 | 3.377–3.378 | 13 | 1 870 | 6 | 3861–3870 |
+
+- Every cell has one frame hash across its six runs; `pso_in_sample` is 0 and
+  `pso_at_start` equals `first_120` in all 54 reports.
+- **S2 draws once for 4096 instances.** The instance count never reaches the
+  draw-call counter; the cost shows up as 4.46 M primitives and 6.44 ms of GPU
+  time. Load to first sample is 6.6 s, the longest of the session.
+- **S3b turns pipelines into draws.** Same 64 spheres and the same primitive
+  count as S3a, but 16 draws instead of 64 and 19 pipelines during load instead
+  of 5. Variety in shader features costs pipeline creation, not draw calls.
+- **S4 costs GPU time, not draws.** All six cells report 11–15 draws and 133–200
+  objects (the camera orbits, so culling changes inside a run), while the GPU
+  median rises from 2.656 ms with no extra lights to 7.555 ms with 32 spots and
+  64 omnis. Thirty-two omnis cost more than eight spots (+1.786 ms against
+  +0.658 ms).
+- **Four shadowed spots cost 0.062 ms** over the same cell without spot shadows
+  (3.377 against 3.315 ms). The number is recorded as measured; it does not say
+  what a larger shadow atlas or a different light mixture would cost.
+- One hitch in one S3b run (0/1/0/0/0/0); every other run reported none. The
+  gate does not require zero hitches, and the frame hash and GPU medians are
+  unaffected.
+- Frame drift stays between -0.89% and +0.48% across all cells.
+
+## 8. Still missing
+
+- S6 and the rest of the cell matrix: the other S1 and S2 counts, Q1 (which no
+  scene implements), and the D2/D3, M1, W1/W2, A1, and B1 configurations.
+- An exported `.pck` run. The validated runs use the template binary with
   `--path`, loading the project directory; that is a template build, but not the
   shipping package layout.
 - Driver-level VSync proof and a GPU temperature reading; both remain manual.

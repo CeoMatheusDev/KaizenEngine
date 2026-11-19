@@ -2,7 +2,7 @@
 """Validate Kaizen benchmark reports against the documented validity gate.
 
 Usage:
-    python3 benchmarks/tools/check_report.py REPORT.json [REPORT.json ...]
+    python3 benchmarks/tools/check_report.py REPORT.json[.gz] [REPORT.json[.gz] ...]
 
 Each report is checked on its own. Reports that describe the same cell (same
 scene, scene parameters, preset, configuration, engine content and runtime) are
@@ -22,6 +22,7 @@ section 7.
 
 from __future__ import annotations
 
+import gzip
 import json
 import sys
 
@@ -339,10 +340,16 @@ def run(paths):
     loaded = []
     for path in paths:
         try:
-            with open(path, "r", encoding="utf-8") as handle:
-                report = json.load(handle)
+            if str(path).endswith(".gz"):
+                with gzip.open(path, "rt", encoding="utf-8") as handle:
+                    report = json.load(handle)
+            else:
+                with open(path, "r", encoding="utf-8") as handle:
+                    report = json.load(handle)
         except OSError as error:
             raise ValueError("%s: %s" % (path, error))
+        except EOFError as error:
+            raise ValueError("%s: truncated gzip stream (%s)" % (path, error))
         except json.JSONDecodeError as error:
             raise ValueError("%s: not valid JSON (%s)" % (path, error))
         if not isinstance(report, dict):

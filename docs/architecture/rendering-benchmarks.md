@@ -1,6 +1,6 @@
 # Rendering Benchmark Methodology (R0 follow-up)
 
-> **Status:** Methodology specification — **one cell measured** (S1/D1/Q0), the rest unmeasured
+> **Status:** Methodology specification — **nine cells measured** (two D1 sessions), the rest unmeasured
 > **Verified against revision:** `27a28c1` (2026-11-18)
 > **Related:** [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Pipeline cache](rendering-pipeline-cache.md)
 
@@ -187,6 +187,6 @@ Notes / anomalies:
 
 - Scene authoring — **S1–S4 and S6 authored**, S5 **not written**, S7 a **manual editor procedure**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md) and the code in [benchmark projects](../benchmarks/README.md).
 - Harness implementation — **authored and executed**; one cell passes the validity gate with five warm runs and one cold run. The observations are in the [run log](rendering-benchmark-run-log.md).
-- Section 1 — **one cell measured** (S1/D1/Q0, template build, 1920×1080) and published in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md); every other row is **not measured**. Tools-build smoke runs are recorded in the [run log](rendering-benchmark-run-log.md), not here.
+- Section 1 — **nine cells measured** on D1 (template build, 1920×1080), published in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md) and [`benchmarks/results/2026-11-19_d1/`](../../benchmarks/results/2026-11-19_d1/README.md); every other row is **not measured**. Tools-build smoke runs are recorded in the [run log](rendering-benchmark-run-log.md), not here.
 - Whether the GLES3 timestamp path behaves on each target driver — **not verified at runtime**.
 - Thermal and battery behavior on mobile — **not measured**.

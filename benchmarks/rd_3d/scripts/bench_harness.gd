@@ -247,6 +247,16 @@ func _start() -> void:
 		for reason in Array(_scene.call("unmet_requirements")):
 			_add_invalid(String(reason))
 
+	# S1-S4 pin Q0: the Q1 settings are project settings plus per-environment
+	# effects, and no scene applies them yet. A Q1 label would then describe a Q0
+	# frame, so refuse it instead of publishing a mislabeled report.
+	if String(config.preset) == "Q1":
+		var applied := {}
+		if _scene.has_method("scene_parameters"):
+			applied = _scene.call("scene_parameters")
+		if String(applied.get("quality_preset", "")) != "Q1":
+			_add_invalid("preset Q1 was requested but scene %s did not apply Q1 settings" % String(config.scene))
+
 	_frames = maxi(int(config.frames), LOOP_FRAMES)
 	_frames = int(ceil(float(_frames) / LOOP_FRAMES)) * LOOP_FRAMES
 	_sample_start = maxi(int(config.warmup), LOOP_FRAMES)

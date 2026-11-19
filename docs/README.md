@@ -8,10 +8,10 @@ This directory contains Kaizen-specific engineering documentation. It complement
 - [Rendering audit (R0)](architecture/rendering-audit.md) — source-verified baseline of renderer selection, threading, resource lifetime entry points, and the shader pipeline.
 - [Rendering resource lifetime](architecture/rendering-resource-lifetime.md) — how RIDs reach the graphics API and when objects are actually destroyed (deferred disposal, frame ring, dependency order).
 - [Pipeline cache and shader variants](architecture/rendering-pipeline-cache.md) — variant table, device PSO cache persistence, backend support and invalidation rules.
-- [Rendering benchmark methodology](architecture/rendering-benchmarks.md) — what to measure, with which built-in instruments, on which reference configurations, and how results must be reported (one cell measured, the rest unmeasured).
+- [Rendering benchmark methodology](architecture/rendering-benchmarks.md) — what to measure, with which built-in instruments, on which reference configurations, and how results must be reported (two D1 sessions published, the rest unmeasured).
 - [Benchmark scene specification](architecture/rendering-benchmark-scenes.md) — implementable definitions for scenes S1–S7: fixed content and parameters, camera contract, quality presets, cell matrix, sampling protocol, harness contract, and validity gate.
 - [Benchmark implementation report](architecture/rendering-benchmark-implementation.md) — delivered benchmark scenes and harness, implementation decisions, verification status, and the first validated execution.
-- [Benchmark projects](../benchmarks/README.md) — executable S1–S4 and S6 scenes, the S7 manual editor procedure, the sampling harness, and one published cell (S5 not written).
+- [Benchmark projects](../benchmarks/README.md) — executable S1–S4 and S6 scenes, the S7 manual editor procedure, the sampling harness, and published D1 cells for S1, S2, S3a, S3b and S4 (S5 not written).
 - [Benchmark run log](architecture/rendering-benchmark-run-log.md) — what was actually executed, on which machine, and which defects only a real run exposed.
 - [Web export runtime](architecture/rendering-web-runtime.md) — why Web is pinned to the Compatibility renderer, WebGL 2 requirements, threading and deployment headers, and the absence of shader/pipeline caches on Web.
 - [Metal rendering driver](architecture/rendering-metal-driver.md) — build gating, SPIR-V→MSL→metallib shader pipeline, disabled PSO cache, heap allocator and barrier model, reported features, and known stubs.

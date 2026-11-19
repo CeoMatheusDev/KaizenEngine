@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored; S1/D1/Q0 validated and published; the other scenes have tools-build smoke runs only; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md))
+> **Status:** Specification — **S1–S4 and S6 authored; S1, S2, S3a, S3b and six S4 light cells validated and published on D1; S6 has tools-build smoke runs only; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -69,6 +69,8 @@ Two presets are measured for every 3D scene, plus scene-specific post effects in
 | Depth prepass | `true` (engine may disable it per vendor) | `true` (same) |
 
 Q0 answers "what does the renderer cost with the least work"; Q1 answers "what does a typical high-quality frame cost". Both are required; a report with only one preset is incomplete.
+
+For S1–S4, `--bench-preset` is only a label: the settings above are project settings plus per-environment effects, and the scenes pin Q0 and apply neither. The harness therefore refuses a `Q1` run unless the scene reports `quality_preset = "Q1"` from `scene_parameters()`, so a mislabeled run cannot be published as Q1. No scene implements Q1 yet, and every published cell is Q0.
 
 When the Mobile renderer is active, its `.mobile` project-setting overrides take precedence over the shared value (`rendering/lights_and_shadows/directional_shadow/size.mobile`, `.../soft_shadow_filter_quality.mobile`, shown in `servers/rendering/rendering_server.cpp:3706-3708`). The report records the **effective** value, not the requested one.
 
@@ -478,6 +480,11 @@ carries the content that actually ran. A scene may also expose
 `unmet_requirements()`, a list of reasons why the active renderer cannot provide
 what was requested; the harness records each one as an invalid reason.
 
+`--bench-preset` is a label for S1–S4: those scenes pin Q0 and do not apply the
+Q1 settings. The harness marks a `Q1` run invalid unless `scene_parameters()`
+reports `quality_preset = "Q1"`, so a Q0 frame cannot be published under a Q1
+label; no scene implements Q1 yet.
+
 Constraints on the harness itself:
 
 - Preallocate the sample buffers; do not allocate, create nodes, or load resources during sampling.
@@ -599,8 +606,8 @@ A cell is **invalid** and must be re-run if any of these is true:
 ## 8. Open items
 
 - Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
-- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`). S1/D1/Q0 passes the gate in §7 with five warm runs and one cold run ([reports](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md)). The remaining cells have tools-build smoke runs only, recorded in the [run log](rendering-benchmark-run-log.md).
-- Counts in this document — the S1 400-box cell is measured (7 draw calls, 4802 primitives); every other count is **proposed**, not validated.
+- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`). Nine D1 cells pass the gate in §7 with five warm runs and one cold run each ([published results](../../benchmarks/results/README.md)). S6 has tools-build smoke runs only, recorded in the [run log](rendering-benchmark-run-log.md).
+- Counts in this document — measured on D1: S1/400 boxes 7 draw calls and 4 802 primitives; S2/4096 instances 1 draw and 4 456 448 primitives; S3a 64 draws, S3b 16 draws, both 69 632 primitives; S4 11–15 draws and 1 870 primitives (median) per light cell. Every other count is **proposed**, not validated.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.
 - Web cell specifics: canvas size, `devicePixelRatio`, and browser compositor behavior — **not verified** (see [Web export runtime](rendering-web-runtime.md)).

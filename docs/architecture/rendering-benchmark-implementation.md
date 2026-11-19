@@ -4,7 +4,7 @@
 >
 > - **Implementation range:** `d8e1623` → `7c129d3` (7 commits), then the fixes recorded in the [run log](rendering-benchmark-run-log.md)
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** one validated cell, S1/D1/Q0 at 1920×1080, five warm runs and one cold run ([results](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md))
+> - **Runtime measurements:** nine validated cells in two D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
@@ -24,7 +24,7 @@ The implementation report describes authored code and recorded engineering decis
 | S7 — editor viewport | Manual procedure documented | No automated harness scene |
 | Report checker (`benchmarks/tools/check_report.py`) | Implemented | 33 tests; run against real reports |
 | Harness runtime validation | Performed | Template build, five warm runs and one cold run |
-| Performance measurements | One validated cell | S1/D1/Q0; the rest remain unmeasured |
+| Performance measurements | Nine validated cells | S1, S2, S3a, S3b and six S4 light cells on D1; the rest remain unmeasured |
 
 “Implemented” means the scene and harness source were authored; the S1 path has since been executed end to end in a template build.
 
@@ -200,7 +200,7 @@ These are implementation notes, not substitutes for the upstream API contract. I
 
 - GDScript behaviour on Metal, WebGL, Android, and iOS.
 - Metal quality parity, browser performance, and mobile thermal behaviour.
-- Any cell other than S1/D1/Q0 with 400 boxes.
+- Any cell outside the two D1 sessions, and every Q1 cell: no scene implements Q1, and the harness now refuses the label.
 - Driver-level VSync enforcement and GPU temperature, which the report cannot read.
 
 ## 8. First execution
@@ -212,7 +212,7 @@ The first cell was **S1/Q0** on D1 (Vulkan, Forward+, RADV on an RX 550). It ran
 3. `check_report.py` reports zero failures and `timing.pso_in_sample` is 0.
 4. Five warm runs and one cold run produced the same frame hash.
 5. Draw calls (7) and primitives (4802) are constant across all 3600 sampled frames of every run.
-6. S2, S3, S4, and S6 have run in a tools build only; they still need template cells.
+6. S2, S3a, S3b and the six S4 light cells have since produced template cells in the second D1 session; S6 still has tools-build runs only.
 7. S7 remains manual and S5 is still deferred.
 
 The cell and its reports are in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md). No other cell has passed the gate, and no number outside that directory is a baseline.
