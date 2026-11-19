@@ -1,6 +1,6 @@
 # Benchmark Run Log
 
-> **Status:** Twenty-eight validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, and S6 P0–P5 at 1, 4 and 16 quads) plus D2 (Mobile) and D3 (Compatibility) template batches plus tools-build smoke runs
+> **Status:** Twenty-eight validated D1 cells (S1 at 400 boxes; S2, S3a, S3b, six S4 light cells, and S6 P0–P5 at 1, 4 and 16 quads) plus D2 (Mobile) and D3 (Compatibility) template batches plus S5 (2D/Canvas) template batch plus tools-build smoke runs
 > **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
@@ -375,6 +375,6 @@ Delta against P0 at the same overdraw level:
 - Driver-level VSync proof and a GPU temperature reading; both remain manual.
 - A second machine and a second GPU, to separate engine behaviour from this
   hardware.
-- S5 (2D) and S7 (manual editor procedure) are still as described in the
-  specification. S5 is now authored in `benchmarks/rd_2d/` and smoke-tested;
-  its matrix is not yet measured.
+- S5 (2D) is now authored and measured: 12 cells in
+  `benchmarks/results/2026-11-19_1414_s5_2d/`. S7 (manual editor procedure)
+  remains as described in the specification.
