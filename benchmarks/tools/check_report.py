@@ -191,7 +191,7 @@ def _check_report(report):
     elif scene_id == "S2":
         _check_s2(fail, warn, frames)
     elif scene_id == "S6":
-        _check_s6(fail, report, frames)
+        _check_s6(fail, warn, report, frames, parameters)
     elif scene_id not in ("S3", "S4", "S7"):
         info("unknown scene id %r; only the generic checks were applied" % scene_id)
 
@@ -239,7 +239,7 @@ def _check_s2(fail, warn, frames):
             warn("S2 primitives vary by %.2f%% within the run" % (100.0 * _relative_spread(primitives)))
 
 
-def _check_s6(fail, report, frames):
+def _check_s6(fail, warn, report, frames, parameters):
     diff = report.get("image_diff") or {}
     if not diff:
         return
@@ -247,7 +247,14 @@ def _check_s6(fail, report, frames):
     if not isinstance(mean, (int, float)):
         fail("image_diff is present but has no numeric mean_abs_diff")
         return
-    preset = report.get("preset")
+    # The applied preset comes from the scene, not from the report label: on S6
+    # --bench-preset selects it, but a run that forgot the flag still reports
+    # its label and applies P0.
+    post = parameters.get("post") or {}
+    preset = post.get("preset") or report.get("preset")
+    label = report.get("preset")
+    if post.get("preset") and label != post["preset"]:
+        warn("report label %r but the scene applied post preset %r" % (label, post["preset"]))
     if preset != "P0" and float(mean) == 0.0:
         fail("S6 preset %s produced an image identical to the reference; the effect did not run" % preset)
     if isinstance(diff.get("width"), int) and isinstance(diff.get("height"), int):

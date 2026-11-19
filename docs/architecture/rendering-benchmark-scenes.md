@@ -552,8 +552,9 @@ The frame-hash capture holds the camera for one extra render of frame 299, then 
 ## 7. Validity gate
 
 `benchmarks/tools/check_report.py` implements the mechanical part of this gate
-over the JSON reports. The remaining checks — vsync forced by the driver,
-thermal throttling, wrong content on screen — stay manual.
+over the JSON reports, including the S6 image-difference rule and equality of
+`frame_hash` across repeated runs of one cell. The remaining checks — vsync
+forced by the driver, thermal throttling, wrong content on screen — stay manual.
 
 A cell is **invalid** and must be re-run if any of these is true:
 

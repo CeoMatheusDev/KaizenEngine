@@ -300,7 +300,11 @@ or within 120 frames before it, that the frame arrays match the declared window,
 and that the viewport and project settings agree. Reports with the same scene,
 scene parameters, preset, configuration, runtime and content hash are treated as
 repetitions: differing `frame_hash` values, draw-call medians, or (for S3b)
-`first_120` compilations fail the cell.
+`first_120` compilations fail the cell. On S6, a P1–P5 cell whose
+`image_diff.mean_abs_diff` is exactly zero fails, because the effect demonstrably
+did not run; the preset is read from `scene.parameters.post.preset`, not from the
+label, and a label that disagrees with the applied preset is reported as a
+warning.
 
 Exit code is `0` when everything passes, `1` when a check fails, and `2` when an
 input cannot be read. The tests run with

@@ -190,6 +190,28 @@ class CheckReportTests(unittest.TestCase):
         )
         self.assertEqual(self.check(report), 0)
 
+    def test_s6_zero_diff_fails_even_with_a_non_post_label(self):
+        report = make_report(
+            scene={"id": "S6", "parameters": {"quad_count": 4, "post": {"preset": "P4"}}, "content_hash": "s6"},
+            preset="Q0",
+            image_diff={"reference": "/tmp/p0.png", "width": 1920, "height": 1080, "mean_abs_diff": 0.0, "max_abs_diff": 0},
+        )
+        self.assertGreater(self.check(report), 0)
+
+    def test_s6_label_mismatch_warns_but_passes(self):
+        report = make_report(
+            scene={"id": "S6", "parameters": {"quad_count": 4, "post": {"preset": "P0"}}, "content_hash": "s6"},
+            preset="Q0",
+            image_diff={"reference": "/tmp/p0.png", "width": 1920, "height": 1080, "mean_abs_diff": 0.0, "max_abs_diff": 0},
+        )
+        self.assertEqual(self.check(report), 0)
+        paths = [self.write("s6.json", report)]
+        _, _, failures = check_report.run(paths)
+        self.assertEqual(failures, 0)
+        issues = check_report._check_report(report)
+        self.assertTrue(any(level == check_report.WARN for level, _ in issues))
+        self.assertFalse(any(level == check_report.FAIL for level, _ in issues))
+
     def test_gpu_unavailable_is_allowed(self):
         self.assertEqual(self.check(make_report()), 0)
 
