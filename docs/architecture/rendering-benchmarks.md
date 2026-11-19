@@ -55,7 +55,7 @@ This is the correct instrument for a multi-viewport scene (split-screen, editor 
 - `video/texture_mem`, `video/buffer_mem`, `video/video_mem`
 - `pipeline/compilations_canvas`, `compilations_mesh`, `compilations_surface`, `compilations_draw`, `compilations_specialization`
 
-`pipeline/compilations_*` is the direct indicator of the on-demand compilation described in [pipeline cache](rendering-pipeline-cache.md): a nonzero value during steady state means the run is still creating PSOs and must not be used as a steady-state sample.
+`pipeline/compilations_*` is the direct indicator of the on-demand compilation described in [pipeline cache](rendering-pipeline-cache.md): the counters are cumulative since startup, so an **increase** during steady state means the run is still creating PSOs and must not be used as a steady-state sample.
 
 ### 2.5 Startup benchmark
 

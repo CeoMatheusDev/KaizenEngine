@@ -82,6 +82,8 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S1 — Static 3D
 
+> Implemented in `benchmarks/s1_static/`. See [benchmark projects](../benchmarks/README.md) for how to run it; the implementation has not been validated on hardware yet.
+
 **Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against.
 
 **Content**
@@ -104,7 +106,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 - `raster/total_draw_calls` ≈ `box_count + 1` (±5%). If it is much lower, instancing was introduced accidentally; if much higher, the material or mesh is being duplicated.
 - `raster/total_primitives_drawn` ≈ `12 × box_count + 2`.
-- `pipeline/compilations_*` is 0 after warm-up for the whole sampling window.
+- No increase in `pipeline/compilations_*` during the sampling window. These counters are cumulative since startup, so the check is on the per-frame delta, never on the absolute value.
 - The frame at index 299 is bit-identical across runs of the same configuration (screenshot hash), proving determinism.
 
 **Non-goals:** shadows, transparency, post-processing, instancing, culling stress.
@@ -135,7 +137,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 - Draw calls stay **constant within ±1** across the whole `instance_count` sweep. A scene whose draw calls grow with instance count is a MultiMesh configuration bug and must be rejected.
 - `raster/total_primitives_drawn` scales linearly with `instance_count` (±1%).
-- `pipeline/compilations_*` = 0 after warm-up.
+- No increase in `pipeline/compilations_*` during the sampling window.
 
 **Optional variant S2b:** per-instance color enabled (adds color data to the instance buffer, no new PSO). Measured only if instanced color cost is a question.
 
@@ -176,7 +178,7 @@ Eight feature combinations, cycled across the 64 nodes:
 
 **Acceptance criteria**
 
-- S3a: `pipeline/compilations_*` = 0 after warm-up, even at `material_count = 64`.
+- S3a: no increase in `pipeline/compilations_*` during sampling, even at `material_count = 64`.
 - S3b: the number of PSO compilations in the **first 120 frames** is recorded exactly, and is stable across repeated runs of the same configuration. The report states which `pipeline/compilations_*` counter moved (`canvas`, `mesh`, `surface`, `draw`, `specialization`).
 - Do **not** assume which feature maps to which PSO. Read the monitors; SPIR-V is generated per variant and the pipeline key is derived per pass.
 
@@ -340,8 +342,8 @@ This matrix is deliberately larger than a first pass can execute. The recommende
 ## 5. Sampling protocol
 
 1. **Generation:** build scene content once, before frame 0. First-frame generation time is recorded but excluded from steady-state statistics.
-2. **Warm-up:** at least 600 frames, and until `pipeline/compilations_*` has been zero for 120 consecutive frames, capped at 1800 frames. If compilations are still occurring at the cap, the cell is invalid (§7) rather than sampled with churn.
-3. **Sampling:** exactly 3600 frames (12 loops of the 300-frame camera path). If the machine cannot sustain 60 FPS, still sample 3600 frames and report the longer wall time.
+2. **Warm-up:** a fixed 900 frames (3 camera loops), rounded up to a multiple of 300. The start is fixed rather than adaptive so that every run samples the same frame indices; an adaptive start would make runs incomparable. Compilations are expected to stop before frame 900; if any occur within the last 120 warm-up frames, the cell is invalid.
+3. **Sampling:** exactly 3600 frames (12 loops of the 300-frame camera path), starting at frame 900. If the machine cannot sustain 60 FPS, still sample 3600 frames and report the longer wall time.
 4. **Per-frame record:** frame index, frame time (µs, monotonic clock), `Performance` snapshot, and viewport CPU/GPU render time when available.
 5. **Repetitions:** 5 runs per cell; report median, p95, p99, min, max, and the between-run spread. Raw per-run values are published alongside the summary.
 6. **Cold run:** one additional run per cell with the pipeline cache deleted (`user://vulkan/pipelines.*.cache`), reporting time-to-first-steady-frame and the number of PSO compilations. On Metal this always behaves like a cold run because no cache is written.
@@ -351,7 +353,7 @@ Hitches are defined as frames whose time exceeds twice the run median. The count
 
 ## 6. Harness contract (not implemented)
 
-The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor.
+The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor. A tools build can be used for scene development with `--bench-allow-editor`, which marks the report invalid.
 
 Proposed invocation:
 
@@ -378,7 +380,7 @@ Constraints on the harness itself:
 - Write the JSON once, after sampling.
 - Read the monitor array as a whole; per-frame `get_monitor` calls have a measurable cost that must be identical across configurations. The harness cost is part of every cell and is disclosed, not subtracted.
 
-Proposed output (one JSON document per run):
+Proposed output (one JSON document per run). The implementation in `benchmarks/s1_static/scripts/bench_harness.gd` is authoritative where it differs from this example; its field list and argument names are documented in [benchmark projects](../benchmarks/README.md).
 
 ```json
 {
@@ -419,7 +421,7 @@ Proposed output (one JSON document per run):
 A cell is **invalid** and must be re-run if any of these is true:
 
 - Content hash or frame hash differs from the cell's reference.
-- `pipeline/compilations_*` was nonzero during the sampling window.
+- `pipeline/compilations_*` increased during the sampling window (the counters are cumulative, so compare deltas, not absolute values).
 - The run used `--headless`, an editor build in a template cell, or a resolution other than the recorded one.
 - Driver-level vsync was active (FPS pinned at a refresh-rate divisor with a flat frame-time histogram).
 - A post-effect cell that is supposed to run produces no image difference from P0 (backends where the effect is unavailable are "not applicable", not invalid).
@@ -428,8 +430,8 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring (S1–S7) — **not started**.
-- Harness implementation — **not started**.
+- Scene authoring — **S1 authored** in `benchmarks/s1_static/` (see [benchmark projects](../benchmarks/README.md)); S2–S7 **not started**.
+- Harness implementation — **authored** (`benchmarks/s1_static/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.

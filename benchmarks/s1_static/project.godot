@@ -1,0 +1,34 @@
+; Kaizen benchmark project: S1 "Static 3D".
+; Every setting here is pinned deliberately; changing one invalidates comparison
+; with earlier results. See docs/architecture/rendering-benchmark-scenes.md.
+
+config_version=5
+
+[application]
+
+config/name="Kaizen Benchmark S1"
+config/description="Deterministic static-geometry benchmark scene for the Kaizen rendering baseline."
+run/main_scene="res://scenes/s1_static.tscn"
+config/features=PackedStringArray("4.8", "Forward Plus")
+
+[autoload]
+
+BenchHarness="*res://scripts/bench_harness.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/vsync/vsync_mode=0
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+anti_aliasing/quality/msaa_3d=0
+anti_aliasing/quality/msaa_2d=0
+scaling_3d/mode=0
+scaling_3d/scale=1.0
+textures/default_filters/anisotropic_filtering_level=0
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2
+driver/depth_prepass/enable=true
