@@ -331,10 +331,11 @@ Fixed values: glow intensity 0.8, bloom 0.1, HDR threshold 1.0; SSAO radius 1.0,
 **Acceptance criteria**
 
 - Each post cell is verified to actually change the image: one reference screenshot per (preset, configuration) is diffed against P0 and the mean absolute difference is recorded. A difference of **exactly zero** is invalid: it means the effect did not run. A small non-zero difference is recorded as measured, not judged: on the reference run SSAO changed 0.35% of the pixels by one level while still costing about 1 ms, because it modulates only the ambient term.
-- Volumetric fog, SSAO, and SSIL are Forward+ features. The Mobile backend stubs
-  the SSAO/SSIL quality setters and reports no volumetric support, so a preset
-  that asks for them there is published as **"not applicable"**, never as "0 ms".
-  A screenshot is still archived.
+- SSIL and volumetric fog exist only on Forward+. SSAO exists on Forward+ and
+  on Compatibility, where GLES3 has its own implementation and its own look. The
+  Mobile backend stubs the SSAO/SSIL quality setters and has no volumetric fog,
+  so a preset that asks for an effect the backend cannot provide is published as
+  **"not applicable"**, never as "0 ms". A screenshot is still archived.
 - The harness turns an unsupported request into `valid = false` with a reason
   naming the effect, so such a run cannot be published by accident. That is a
   classification of the cell, not a verdict that the effect failed: "invalid" in
@@ -360,7 +361,9 @@ sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
   records those project settings.
 - `scene.parameters.post` states the preset, which toggles were applied, and a
   `support` map for glow, SSAO, SSIL, and volumetric fog derived from
-  `RenderingServer.get_current_rendering_method()`. The scene exposes
+  `RenderingServer.get_current_rendering_method()`: glow on all three backends,
+  SSAO on `forward_plus` and `gl_compatibility`, SSIL and volumetric fog on
+  `forward_plus` only. The scene exposes
   `unmet_requirements()`, and the harness records any unsupported request as an
   invalid reason, so the cell is reported as **not applicable**, not "0 ms".
 - `--bench-screenshot <path>` writes the frame-299 image as PNG.

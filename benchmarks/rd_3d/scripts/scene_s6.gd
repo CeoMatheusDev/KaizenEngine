@@ -191,17 +191,26 @@ func _enable_ssao(p_environment: Environment) -> void:
 	p_environment.ssao_detail = SSAO_DETAIL
 	_post.ssao = true
 
-## SSAO, SSIL, and volumetric fog are clustered-renderer features. The Mobile
-## backend stubs environment_set_ssao_quality and environment_set_ssil_quality
-## and returns false from is_volumetric_supported(), so asking for them there
-## would record a cell in which the effect does nothing. Glow exists in both.
+## Which effects the active renderer can actually produce, read from the engine
+## source rather than assumed:
+## - glow: all three renderers.
+## - ssao: forward_plus and gl_compatibility. GLES3 has its own SSAO (see the
+##   ssao_enabled path in drivers/gles3/rasterizer_scene_gles3.cpp); the Mobile
+##   backend stubs environment_set_ssao_quality and S6/P2 there is byte-identical
+##   to P0.
+## - ssil and volumetric_fog: forward_plus only. The GLES3
+##   environment_set_ssil_quality body is empty and there is no volumetric fog
+##   implementation; Mobile stubs both quality setters and returns false from
+##   is_volumetric_supported().
+## Claiming less than the backend can do is not harmless: it turns a measurable
+## cell into a "not applicable" one.
 func _post_support() -> Dictionary:
-	var forward_plus := RenderingServer.get_current_rendering_method() == "forward_plus"
+	var method := RenderingServer.get_current_rendering_method()
 	return {
 		"glow": true,
-		"ssao": forward_plus,
-		"ssil": forward_plus,
-		"volumetric_fog": forward_plus,
+		"ssao": method == "forward_plus" or method == "gl_compatibility",
+		"ssil": method == "forward_plus",
+		"volumetric_fog": method == "forward_plus",
 	}
 
 ## Read by the harness after the scene loads: a preset that asks for an effect

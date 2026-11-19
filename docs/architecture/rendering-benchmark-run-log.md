@@ -102,6 +102,18 @@ S1 with the same content on the same machine, one renderer per run:
 S6 on the Mobile renderer: 37 draw calls (32 unbatched boxes, ground, four
 quads). `P5` there was refused with `post effect 'ssao' is not supported by the
 mobile renderer`, and `P1` (glow, which Mobile does provide) was accepted.
+`P2` on Mobile produced an image byte-identical to `P0`, which is the evidence
+that the refusal is correct there.
+
+S6 on Compatibility (OpenGL), `--bench-count 0`:
+
+| Preset | GPU ms | Image vs P0 |
+|---|---|---|
+| P0 | 0.50 | — |
+| P2 | 1.37 | mean 1.021, 49.0% of pixels changed |
+
+`P2` costs 0.87 ms more than `P0` and changes half the frame, so SSAO really runs
+on this backend.
 
 ## 4. What the runs established
 
@@ -118,10 +130,10 @@ mobile renderer`, and `P1` (glow, which Mobile does provide) was accepted.
   a controlled presentation setup and why these runs are not published.
 - **Every scene builds its content from code and runs.** No binary asset is
   needed, and no scene failed to expose `apply_frame` or `scene_parameters`.
-- **The S6 support map matches the renderer.** Forward+ reports support for all
-  four effects. On Mobile, the same run reports support only for glow, `P1` is
-  accepted, and `P5` is marked invalid with the unsupported effect named. The
-  refusal is a real path, not a paper rule.
+- **The S6 refusal path is real.** Forward+ reports support for all four
+  effects. On Mobile, `P1` (glow) is accepted and `P5` is marked invalid with the
+  unsupported effect named. On Compatibility, `P5` is refused for SSIL and
+  volumetric fog, and `P2` (SSAO) is accepted. The refusal is not a paper rule.
 - **`--bench-min-diff` works as a gate.** S6 P2 against P0 at 0.5 marked the run
   invalid with the measured value in the reason, which is the intended behaviour.
 
@@ -153,7 +165,15 @@ mobile renderer`, and `P1` (glow, which Mobile does provide) was accepted.
    specification's across-cell comparison (same camera path, different light
    counts) was **not** run, so this does not say whether light count changes the
    count; it says only that a within-run constant is not a property of S4.
-6. **SSAO barely changes this image.** It modulates the ambient term, and the S6
+6. **SSAO exists on Compatibility, and the support map said it did not.** The
+   first version of `_post_support()` treated SSAO as Forward+ only. GLES3 has
+   its own SSAO (`drivers/gles3/rasterizer_scene_gles3.cpp`, the `ssao_enabled`
+   post-shader path), and the run proves it: S6 `P2` changed 49% of the pixels
+   and cost 0.87 ms more than `P0`. The map now claims SSAO on `forward_plus` and
+   `gl_compatibility`, and SSIL and volumetric fog on `forward_plus` only.
+   Claiming less than a backend can do is a measurement bug: "not applicable"
+   silently removes a cell that could have been measured.
+7. **SSAO barely changes this image.** It modulates the ambient term, and the S6
    base scene lights everything from a sun with no shadows, so P2's mean
    difference is 0.0011 even though SSAO costs about 1 ms. "Exactly zero means the
    effect did not run" is the correct gate; a fixed 0.5 threshold would be
