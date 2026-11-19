@@ -10,7 +10,7 @@ This directory contains Kaizen-specific engineering documentation. It complement
 - [Pipeline cache and shader variants](architecture/rendering-pipeline-cache.md) — variant table, device PSO cache persistence, backend support and invalidation rules.
 - [Rendering benchmark methodology](architecture/rendering-benchmarks.md) — what to measure, with which built-in instruments, on which reference configurations, and how results must be reported (no measurements taken yet).
 - [Benchmark scene specification](architecture/rendering-benchmark-scenes.md) — implementable definitions for scenes S1–S7: fixed content and parameters, camera contract, quality presets, cell matrix, sampling protocol, harness contract, and validity gate.
-- [Benchmark projects](../benchmarks/README.md) — executable S1–S4 and S6 scenes plus the sampling harness (S5 and S7 not authored; no run validated yet).
+- [Benchmark projects](../benchmarks/README.md) — executable S1–S4 and S6 scenes, the S7 manual editor procedure, and the sampling harness (S5 not written; no run validated yet).
 - [Web export runtime](architecture/rendering-web-runtime.md) — why Web is pinned to the Compatibility renderer, WebGL 2 requirements, threading and deployment headers, and the absence of shader/pipeline caches on Web.
 - [Metal rendering driver](architecture/rendering-metal-driver.md) — build gating, SPIR-V→MSL→metallib shader pipeline, disabled PSO cache, heap allocator and barrier model, reported features, and known stubs.
 - [Rendering architecture and roadmap](architecture/rendering-roadmap.md) — the technical plan for evolving Kaizen's rendering stack toward a custom high-quality renderer across desktop, mobile, and Web.

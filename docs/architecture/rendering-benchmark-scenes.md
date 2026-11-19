@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored, never executed; S5 and S7 not started; nothing measured**
+> **Status:** Specification — **S1–S4 and S6 authored, never executed; S5 not written; S7 is a manual procedure; nothing measured**
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -370,7 +370,10 @@ sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
 
 **Purpose:** the editor's own rendering path, which differs from a game by thread model, viewport composition, and overlays.
 
-**Content:** the S1 project at `box_count = 400`, opened in the editor with the 3D scene as the current scene.
+**Content:** the S1 project at `benchmarks/rd_3d`, `box_count = 400`, opened in
+the editor with `scenes/s1_static.tscn` as the current scene. This is a manual
+procedure, not a harness scene: the steps are in
+[benchmark projects](../benchmarks/README.md).
 
 **Cells**
 
@@ -560,7 +563,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 and S7 **not started**.
+- Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
 - Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).

@@ -5,7 +5,8 @@ contract is defined in [Benchmark scene specification](../docs/architecture/rend
 the instrument list and reference configurations are in
 [Benchmark methodology](../docs/architecture/rendering-benchmarks.md).
 
-> **Status:** scenes **S1–S4 and S6 are authored; S5 and S7 are not**. The harness
+> **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
+> manual editor procedure without a harness scene**. The harness
 > has never been executed in this environment (no build, GPU, or display). Treat
 > every number it produces as unvalidated until it has been run on real hardware
 > and checked against the validity rules below.
@@ -109,6 +110,27 @@ count. Capture a P0 reference, then diff each other preset against it:
 The comparison runs once after sampling and reads every RGBA byte, so it can
 take several seconds on a 1920×1080 frame; that cost is outside the sampled
 window.
+
+### S7 — editor viewport (manual)
+
+S7 measures the editor's own viewport, so the runtime harness cannot drive it.
+Use the editor binary and the S1 scene:
+
+```text
+<kaizen-editor> --editor --print-fps --path benchmarks/rd_3d
+```
+
+Open `scenes/s1_static.tscn`, keep `box_count = 400`, and measure two layouts:
+S7a is one maximized 3D viewport, S7b is a 2×2 layout of the same scene.
+
+Record `Editor FPS:` lines, the editor frame profiler, and a screenshot.
+The screenshot must state the viewport pixel size and whether the Scene dock
+preview, the inspector, and the 3D grid are visible; the grid and gizmos are
+part of the measured frame.
+
+Editor runs are reported as **editor**, never as engine performance. The editor
+forces `separate_thread_render = 0`, so S7 numbers are not comparable with any
+template cell, even on the same commit.
 
 Without `--bench-out` the report goes to `user://bench/<scene>_<preset>.json`,
 and its absolute path is printed on exit.
