@@ -91,6 +91,18 @@ Image difference against the P0 screenshot of the same run, over every RGBA byte
 | P4 | 3.051 | 37 | 99.99% |
 | P5 | 17.24 | 87 | 94.36% |
 
+S1 with the same content on the same machine, one renderer per run:
+
+| Renderer | Draw calls | Primitives |
+|---|---|---|
+| Forward+ (Vulkan) | 7 | 4802 |
+| Mobile (Vulkan) | 401 | 4802 |
+| Compatibility (OpenGL) | 401 | 4802 |
+
+S6 on the Mobile renderer: 37 draw calls (32 unbatched boxes, ground, four
+quads). `P5` there was refused with `post effect 'ssao' is not supported by the
+mobile renderer`, and `P1` (glow, which Mobile does provide) was accepted.
+
 ## 4. What the runs established
 
 - **S1 is deterministic.** Two independent runs of S1/400/D1/Q0 produced the
@@ -107,7 +119,9 @@ Image difference against the P0 screenshot of the same run, over every RGBA byte
 - **Every scene builds its content from code and runs.** No binary asset is
   needed, and no scene failed to expose `apply_frame` or `scene_parameters`.
 - **The S6 support map matches the renderer.** Forward+ reports support for all
-  four effects; the Mobile refusal path was not exercised (no Mobile run here).
+  four effects. On Mobile, the same run reports support only for glow, `P1` is
+  accepted, and `P5` is marked invalid with the unsupported effect named. The
+  refusal is a real path, not a paper rule.
 - **`--bench-min-diff` works as a gate.** S6 P2 against P0 at 0.5 marked the run
   invalid with the measured value in the reason, which is the intended behaviour.
 
@@ -126,11 +140,13 @@ Image difference against the P0 screenshot of the same run, over every RGBA byte
    silently changes the rendered resolution, and `--resolution` does not override
    it. The report records the real size, and the checker now fails a mismatch
    instead of warning.
-4. **Forward+ auto-batching is not "one draw for all identical surfaces".**
-   S1 at 1/64/65/128/256/400 boxes produced 2/5/4/5/6/7 draw calls. The count is
-   non-monotonic because batching only merges *adjacent* render-list elements and
-   the sort order changes with the camera. No fixed expected count is valid; only
-   stability across runs is.
+4. **Batching is a Forward+ property, and it is partial.** The same S1 cell
+   reported 7 draw calls on Forward+ and 401 on both Mobile and Compatibility,
+   where each instance is its own draw. On Forward+, batching merges only
+   adjacent render-list elements, and the sort order changes with the camera:
+   1/64/65/128/256/400 boxes produced 2/5/4/5/6/7 draw calls. The count is
+   non-monotonic, so no fixed expected count is valid; only stability across
+   runs is.
 5. **S4 draw calls change within one run (11–15).** The cell was 8 spots + 8
    omnis with 64 boxes and a moving camera, and the count varies because the
    batching of shadowed and lit surfaces changes as the view moves. The
