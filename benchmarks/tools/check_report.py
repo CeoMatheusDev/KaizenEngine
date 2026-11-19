@@ -260,6 +260,13 @@ def _check_s6(fail, warn, report, frames, parameters):
     if isinstance(diff.get("width"), int) and isinstance(diff.get("height"), int):
         if diff["width"] <= 0 or diff["height"] <= 0:
             fail("image_diff reports an empty image")
+    support = post.get("support") or {}
+    for effect in ("glow", "ssao", "ssil", "volumetric_fog"):
+        if post.get(effect) is True and support.get(effect) is False:
+            fail(
+                "S6 requested %s but the renderer does not provide it; the cell is not applicable"
+                % effect
+            )
 
 
 def _cell_key(report):

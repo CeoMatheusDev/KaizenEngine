@@ -260,9 +260,11 @@ specification:
 - **S6** — each preset must change the image. Save P0 with `--bench-screenshot`,
   then run P1–P5 with `--bench-reference` and check
   `image_diff.mean_abs_diff`. A preset whose diff is ~0 did not run; a diff of
-  exactly 0 with `--bench-min-diff` set makes the report invalid. P5 on Mobile
-  or Compatibility is recorded as not applicable (`scene.parameters.post`) and
-  never as 0 ms.
+  exactly 0 with `--bench-min-diff` set makes the report invalid. A preset that
+  asks for an effect the active renderer does not provide (SSAO, SSIL, and
+  volumetric fog on Mobile) is marked invalid with the effect named, and the cell
+  is published as not applicable — never as 0 ms. `scene.parameters.post.support`
+  records what the renderer reported.
 
 All four scenes must show no increase in the PSO counters during sampling and
 the same `frame_hash` for repeated runs of one configuration.

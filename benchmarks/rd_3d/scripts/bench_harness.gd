@@ -238,6 +238,12 @@ func _start() -> void:
 		_fail("scene %s must expose apply_frame(frame_index)" % path)
 		return
 
+	# A scene may declare that the active renderer cannot provide what it was
+	# asked for (S6 presets on Mobile, for example). That is not a measurement.
+	if _scene.has_method("unmet_requirements"):
+		for reason in Array(_scene.call("unmet_requirements")):
+			_add_invalid(String(reason))
+
 	_frames = maxi(int(config.frames), LOOP_FRAMES)
 	_frames = int(ceil(float(_frames) / LOOP_FRAMES)) * LOOP_FRAMES
 	_sample_start = maxi(int(config.warmup), LOOP_FRAMES)

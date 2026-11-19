@@ -212,6 +212,50 @@ class CheckReportTests(unittest.TestCase):
         self.assertTrue(any(level == check_report.WARN for level, _ in issues))
         self.assertFalse(any(level == check_report.FAIL for level, _ in issues))
 
+    def test_s6_unsupported_effect_fails(self):
+        report = make_report(
+            scene={
+                "id": "S6",
+                "parameters": {
+                    "quad_count": 4,
+                    "post": {
+                        "preset": "P5",
+                        "glow": True,
+                        "ssao": True,
+                        "ssil": True,
+                        "volumetric_fog": True,
+                        "support": {"glow": True, "ssao": False, "ssil": False, "volumetric_fog": False},
+                    },
+                },
+                "content_hash": "s6",
+            },
+            preset="P5",
+            image_diff={"reference": "/tmp/p0.png", "width": 1920, "height": 1080, "mean_abs_diff": 2.0, "max_abs_diff": 40},
+        )
+        self.assertGreater(self.check(report), 0)
+
+    def test_s6_supported_effects_pass(self):
+        report = make_report(
+            scene={
+                "id": "S6",
+                "parameters": {
+                    "quad_count": 4,
+                    "post": {
+                        "preset": "P5",
+                        "glow": True,
+                        "ssao": True,
+                        "ssil": True,
+                        "volumetric_fog": True,
+                        "support": {"glow": True, "ssao": True, "ssil": True, "volumetric_fog": True},
+                    },
+                },
+                "content_hash": "s6",
+            },
+            preset="P5",
+            image_diff={"reference": "/tmp/p0.png", "width": 1920, "height": 1080, "mean_abs_diff": 2.0, "max_abs_diff": 40},
+        )
+        self.assertEqual(self.check(report), 0)
+
     def test_gpu_unavailable_is_allowed(self):
         self.assertEqual(self.check(make_report()), 0)
 

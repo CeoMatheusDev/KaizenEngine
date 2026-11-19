@@ -143,7 +143,7 @@ func _add_environment() -> void:
 		"ssao": false,
 		"ssil": false,
 		"volumetric_fog": false,
-		"volumetric_fog_supported": RenderingServer.get_current_rendering_method() == "forward_plus",
+		"support": _post_support(),
 	}
 
 	match post_preset:
@@ -190,6 +190,31 @@ func _enable_ssao(p_environment: Environment) -> void:
 	p_environment.ssao_power = SSAO_POWER
 	p_environment.ssao_detail = SSAO_DETAIL
 	_post.ssao = true
+
+## SSAO, SSIL, and volumetric fog are clustered-renderer features. The Mobile
+## backend stubs environment_set_ssao_quality and environment_set_ssil_quality
+## and returns false from is_volumetric_supported(), so asking for them there
+## would record a cell in which the effect does nothing. Glow exists in both.
+func _post_support() -> Dictionary:
+	var forward_plus := RenderingServer.get_current_rendering_method() == "forward_plus"
+	return {
+		"glow": true,
+		"ssao": forward_plus,
+		"ssil": forward_plus,
+		"volumetric_fog": forward_plus,
+	}
+
+## Read by the harness after the scene loads: a preset that asks for an effect
+## the active renderer cannot provide is reported as invalid instead of as a
+## measurement of nothing.
+func unmet_requirements() -> Array:
+	var unmet := []
+	var support: Dictionary = _post.get("support", {})
+	for effect in ["glow", "ssao", "ssil", "volumetric_fog"]:
+		if bool(_post.get(effect, false)) and not bool(support.get(effect, true)):
+			unmet.append("post effect '%s' is not supported by the %s renderer" % [
+					effect, RenderingServer.get_current_rendering_method()])
+	return unmet
 
 func _add_camera() -> void:
 	_camera = Camera3D.new()

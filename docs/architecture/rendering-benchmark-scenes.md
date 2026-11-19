@@ -331,8 +331,15 @@ Fixed values: glow intensity 0.8, bloom 0.1, HDR threshold 1.0; SSAO radius 1.0,
 **Acceptance criteria**
 
 - Each post cell is verified to actually change the image: one reference screenshot per (preset, configuration) is diffed against P0 and the mean absolute difference is recorded. A cell whose diff is ~0 is invalid (the effect silently did not run).
-- Volumetric fog is a Forward+ feature. On Mobile and Compatibility, P5 is reported as **"not applicable"** and never as "0 ms"; a screenshot is still archived.
-- If a backend does not implement a given post effect, record "not applicable" with a screenshot. "Invalid" is reserved for an effect that should run and does not.
+- Volumetric fog, SSAO, and SSIL are Forward+ features. The Mobile backend stubs
+  the SSAO/SSIL quality setters and reports no volumetric support, so a preset
+  that asks for them there is published as **"not applicable"**, never as "0 ms".
+  A screenshot is still archived.
+- The harness turns an unsupported request into `valid = false` with a reason
+  naming the effect, so such a run cannot be published by accident. That is a
+  classification of the cell, not a verdict that the effect failed: "invalid" in
+  the report means "do not publish this number", and the collector records the
+  cell as not applicable.
 - Transparent quads must be sorted stably; if the order changes between runs, the frame hash check will fail and the scene must be fixed.
 
 **Non-goals:** TAA, upscaling, depth of field, motion blur. Those are separate image-quality experiments with their own criteria.
@@ -351,10 +358,11 @@ sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
 - Environment: the shared solid background and ambient energy 0.3. SSAO and
   SSIL quality are pinned in `project.godot` to `2` (Medium), and the report
   records those project settings.
-- `scene.parameters.post` states the preset and which toggles were applied. P5
-  sets `volumetric_fog = true` and `volumetric_fog_supported` from
-  `RenderingServer.get_current_rendering_method()`; on Mobile and Compatibility
-  the cell is **not applicable**, not "0 ms".
+- `scene.parameters.post` states the preset, which toggles were applied, and a
+  `support` map for glow, SSAO, SSIL, and volumetric fog derived from
+  `RenderingServer.get_current_rendering_method()`. The scene exposes
+  `unmet_requirements()`, and the harness records any unsupported request as an
+  invalid reason, so the cell is reported as **not applicable**, not "0 ms".
 - `--bench-screenshot <path>` writes the frame-299 image as PNG.
   `--bench-reference <png>` compares the captured frame against that image and
   writes `image_diff.mean_abs_diff` over every RGBA byte (0–255), plus the
@@ -453,6 +461,12 @@ Per-frame data comes from:
 - `Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)`, `RENDER_BUFFER_MEM_USED`, `RENDER_VIDEO_MEM_USED`.
 - `Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_*)` for all five counters.
 - `RenderingServer.viewport_set_measure_render_time(viewport_rid, true)` followed by `viewport_get_measured_render_time_cpu/gpu` (`servers/rendering/rendering_server.cpp:2932-2935`).
+
+Scene contract: a scene loaded by the harness must expose
+`apply_frame(frame_index)`, and should expose `scene_parameters()` so the report
+carries the content that actually ran. A scene may also expose
+`unmet_requirements()`, a list of reasons why the active renderer cannot provide
+what was requested; the harness records each one as an invalid reason.
 
 Constraints on the harness itself:
 
@@ -562,7 +576,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 - `pipeline/compilations_*` increased during the sampling window (the counters are cumulative, so compare deltas, not absolute values).
 - The run used `--headless`, an editor build in a template cell, or a resolution other than the recorded one.
 - Driver-level vsync was active (FPS pinned at a refresh-rate divisor with a flat frame-time histogram).
-- A post-effect cell that is supposed to run produces no image difference from P0 (backends where the effect is unavailable are "not applicable", not invalid).
+- A post-effect cell that is supposed to run produces no image difference from P0. Backends that cannot provide the effect are classified as "not applicable" through the harness's unsupported-request reason, not by accepting a zero difference.
 - The device thermally throttled during the run (visible as a monotonic frame-time rise; mobile runs must report cold/warm state).
 - The backend reported "GPU time not available" and the report instead shows a CPU-derived GPU estimate.
 
