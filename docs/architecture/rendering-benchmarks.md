@@ -1,10 +1,10 @@
 # Rendering Benchmark Methodology (R0 follow-up)
 
-> **Status:** Methodology specification — **no measurements taken**
+> **Status:** Methodology specification — **one cell measured** (S1/D1/Q0), the rest unmeasured
 > **Verified against revision:** `27a28c1` (2026-11-18)
 > **Related:** [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Pipeline cache](rendering-pipeline-cache.md)
 
-This document defines **how** Kaizen rendering performance will be measured, so that R1 and later milestones can be evaluated against a repeatable baseline. It intentionally contains **no numbers**: every measurement field is empty until a build and reference hardware are available.
+This document defines **how** Kaizen rendering performance will be measured, so that R1 and later milestones can be evaluated against a repeatable baseline. It intentionally contains **no numbers** of its own: the one measured cell lives in the [run log](rendering-benchmark-run-log.md) and its [reports](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), and every field without a run stays empty.
 
 Nothing here changes engine code. It records which instrumentation already exists in the source and what must be authored (scenes, harness, report data).
 
@@ -13,7 +13,7 @@ Nothing here changes engine code. It records which instrumentation already exist
 | Question | Metric | Primary instrument |
 |---|---|---|
 | Frame rate / frame time | FPS, mspf | `--print-fps` |
-| CPU frame cost | process time, physics time | `Performance` monitors |
+| CPU frame cost | frame interval, renderer viewport CPU time | `frame_us`, `viewport_get_measured_render_time_cpu` |
 | GPU frame cost | GPU milliseconds per pass | `--gpu-profile` / frame profiler |
 | Scene complexity | draw calls, objects, primitives | `Performance` monitors |
 | Memory | static memory, texture/buffer memory | `Performance` monitors |
@@ -177,7 +177,7 @@ Steady state (N runs):
 Notes / anomalies:
 ```
 
-## 8. Automation (implemented, executed once in a tools build)
+## 8. Automation (implemented and validated for one cell)
 
 - A GDScript harness (`benchmarks/rd_3d/scripts/bench_harness.gd`) moves the camera by frame index, reads `Performance` monitors, and writes one JSON report per run. The camera is a function of the frame index rather than of elapsed time, so a run covers the same frames at any frame rate; `--fixed-fps` changes the simulation delta, not the rendered frame sequence, and is not required. The harness refuses to run in the editor unless explicitly allowed for scene development, and the report is then marked invalid.
 - The harness does not create or destroy resources during sampling, so results are not mixed with deferred disposal or PSO compilation.
@@ -186,7 +186,7 @@ Notes / anomalies:
 ## 9. Open items
 
 - Scene authoring — **S1–S4 and S6 authored**, S5 **not written**, S7 a **manual editor procedure**; the implementable definitions are in [Benchmark scene specification](rendering-benchmark-scenes.md) and the code in [benchmark projects](../benchmarks/README.md).
-- Harness implementation — **authored and executed once in a tools build**; no report has passed the validity gate. The observations are in the [run log](rendering-benchmark-run-log.md).
-- Every measurement in section 1 — **not measured**. One smoke run exists on a RADV/Forward+ machine; it is invalid by design and is recorded in the [run log](rendering-benchmark-run-log.md), not in this document.
+- Harness implementation — **authored and executed**; one cell passes the validity gate with five warm runs and one cold run. The observations are in the [run log](rendering-benchmark-run-log.md).
+- Section 1 — **one cell measured** (S1/D1/Q0, template build, 1920×1080) and published in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md); every other row is **not measured**. Tools-build smoke runs are recorded in the [run log](rendering-benchmark-run-log.md), not here.
 - Whether the GLES3 timestamp path behaves on each target driver — **not verified at runtime**.
 - Thermal and battery behavior on mobile — **not measured**.

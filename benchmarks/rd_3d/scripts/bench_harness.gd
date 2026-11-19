@@ -109,6 +109,8 @@ var _pso_prev := 0
 var _pso_at_start := 0
 var _pso_in_sample := 0
 var _pso_before_scene := {}
+var _load_start_us := 0
+var _first_sample_us := 0
 var _pso_sources_start := {}
 var _pso_first_window := {}
 var _first_window_taken := false
@@ -213,7 +215,10 @@ func _start() -> void:
 
 	# Baseline for the first-window pipeline count: everything the scene causes,
 	# including compiles during its first rendered frames, must be counted.
+	# The same instant starts the load-to-sample clock, so a cold run can report
+	# how long the scene needed to reach its first steady-state frame.
 	_pso_before_scene = _pso_sources()
+	_load_start_us = Time.get_ticks_usec()
 
 	var current := get_tree().current_scene
 	if current == null or current.scene_file_path != path:
@@ -302,6 +307,8 @@ func _process(_delta: float) -> void:
 			if delta > 0:
 				_last_compile_frame = frame_done
 		elif _sampled < _frames:
+			if _sampled == 0:
+				_first_sample_us = now
 			_store(_sampled, us, delta)
 			_sampled += 1
 			if delta > 0:
@@ -516,6 +523,7 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 			"pso_at_start": _pso_at_start,
 			"pso_in_sample": _pso_in_sample,
 			"last_compile_frame": _last_compile_frame,
+			"load_to_sample_ms": float(_first_sample_us - _load_start_us) / 1000.0 if _first_sample_us > 0 else 0.0,
 		},
 		"pipeline_compilations": {
 			"first_120": _pso_first_window,

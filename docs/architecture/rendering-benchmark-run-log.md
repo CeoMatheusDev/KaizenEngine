@@ -1,21 +1,23 @@
 # Benchmark Run Log
 
-> **Status:** Smoke validation only — **not a baseline**, no publishable number
-> **Engine:** Kaizen `4.8.beta.custom_build.92482158f`, `target=editor`
+> **Status:** One validated cell (S1/D1/Q0, 400 boxes) plus tools-build smoke runs
+> **Engines:** tools `4.8.beta.custom_build.92482158f` (`target=editor`) and template `4.8.beta.custom_build.43c45bf02` (`target=template_release`)
 > **Date:** 2026-11-19
 
 This document records executions of the benchmark project. It exists so that a
 run is never described from memory: what was run, on what, and what the report
-said. Every number here is a smoke-run observation on one machine. None of it is
-a published cell, because the runs break the validity gate on purpose: they come
-from a tools build and from a window the compositor clamped below the pinned
-resolution.
+said. It has two parts. Sections 1–5 are tools-build smoke runs that deliberately
+break the validity gate and publish nothing. Section 6 is the first cell that
+passes the gate end to end; its reports are committed in
+[`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md).
 
 The contract is in [Benchmark scene specification](rendering-benchmark-scenes.md)
 and [Benchmark methodology](rendering-benchmarks.md). The code is in
 [benchmark projects](../../benchmarks/README.md).
 
 ## 1. What was executed
+
+### 1.1 Tools-build smoke runs
 
 ```text
 <kaizen-editor> --path benchmarks/rd_3d -- \
@@ -25,30 +27,52 @@ and [Benchmark methodology](rendering-benchmarks.md). The code is in
 ```
 
 - Warm-up 300 and sampling 300 frames: the shortest legal window, chosen to keep
-  the smoke run short. The protocol's 900/3600 was not used.
-- `--bench-allow-editor` because no export template exists in this environment.
-  The harness marks every report `valid = false` with that reason.
+  the smoke run short.
+- `--bench-allow-editor` because no export template existed at that point. The
+  harness marks every such report `valid = false` with that reason.
 - S6 was run at `--bench-count 0` and `--bench-count 4`, with `--bench-preset`
   from `P0` to `P5`.
+- S1 was also run once with the full 900/3600 window, while a 24-job engine build
+  was running on the same machine (see finding in section 4).
+
+### 1.2 Template runs
+
+```text
+<kaizen-template> --path benchmarks/rd_3d --screen 1 --fullscreen -- \
+    --bench-scene S1 --bench-count 400 --bench-config D1 --bench-preset Q0 \
+    --bench-warmup 900 --bench-frames 3600 \
+    --bench-out <abs>/S1_D1_Q0_r<n>.json
+```
+
+- Five warm runs plus one cold run (pipeline cache deleted before it).
+- Fullscreen on the 1920×1080 output: a windowed run loses client height to the
+  window manager (section 5, finding 3).
+- The template binary was built with
+  `scons platform=linuxbsd target=template_release -j24 wayland=no alsa=no
+  pulseaudio=no speechd=no udev=no dbus=no disable_path_overrides=no`, which is
+  also why `--path` works in a template build.
 
 ## 2. Environment
 
 | Item | Value |
 |---|---|
-| CPU threads | 24 |
+| CPU | Intel Xeon E5-2680 v3 @ 2.50 GHz, 24 threads |
 | GPU | AMD Radeon RX 550 / 550 Series (RADV POLARIS12) |
 | Vulkan | 1.4.354, Forward+ |
 | Mesa | 26.2.5 |
+| Kernel | 7.2.15-200.fc44.x86_64 |
 | Display server | X11 on a Wayland session (XWayland) |
 | Requested window | 1920×1080 (project setting) |
-| Actual window | **1600×834** — the compositor clamped it, and `--resolution 1920x1080` did not win |
+| Tools-build window | **1600×834** — clamped on the 1600×900 primary display |
+| Template window | **1920×1080** — fullscreen on the 1920×1080 output |
 | VSync | 0 (project setting, reported by the harness) |
 
-The clamped window is why these runs cannot be published: the frame was rendered
-at another resolution than the one the baseline pins. `benchmarks/tools/check_report.py`
-fails a window-size mismatch for exactly this reason.
+The tools-build runs render at another resolution than the one the baseline pins,
+so `benchmarks/tools/check_report.py` fails them on the window size. Fullscreen
+on the larger output fixed that for the template runs without changing any
+project setting.
 
-## 3. Observed values
+## 3. Tools-build values (invalid by design)
 
 300 sampled frames, one run each, RADV/Forward+, 1600×834. `gpu` and `cpu` are
 `summary.gpu_ms_median` and `summary.render_cpu_ms_median`; the FPS column is the
@@ -115,7 +139,7 @@ S6 on Compatibility (OpenGL), `--bench-count 0`:
 `P2` costs 0.87 ms more than `P0` and changes half the frame, so SSAO really runs
 on this backend.
 
-## 4. What the runs established
+## 4. What the smoke runs established
 
 - **S1 is deterministic.** Two independent runs of S1/400/D1/Q0 produced the
   same `frame_hash` (`c150718e…`) and the same draw-call median; the GPU median
@@ -123,11 +147,12 @@ on this backend.
   (900 warm-up, 3600 sampled) reproduced the same frame hash, the same 7 draw
   calls and the same 4802 primitives. The camera-by-frame-index contract holds
   when the engine actually renders.
-- **A live desktop is not a measurement environment.** The full-protocol S1 run
-  had a 1.4 ms median frame but 737 of 3600 frames above twice the median, a
-  11.8 ms p99 and an 18.6 ms worst frame. Nothing in the scene changed; the
-  presentation path on a composited desktop does. This is why the gate requires
-  a controlled presentation setup and why these runs are not published.
+- **A run is only as quiet as the machine.** The first full-protocol S1 run
+  shared the machine with a 24-job engine build: 737 of 3600 frames were above
+  twice the median, with an 11.8 ms p99 and an 18.6 ms worst frame. Repeating
+  the same cell on an idle machine gave 0 hitches in each of five runs. CPU
+  contention, not the scene, explained the tail; a benchmark run has to own the
+  machine.
 - **Every scene builds its content from code and runs.** No binary asset is
   needed, and no scene failed to expose `apply_frame` or `scene_parameters`.
 - **The S6 refusal path is real.** Forward+ reports support for all four
@@ -148,10 +173,12 @@ on this backend.
    1,000,000-frame window, so in a 600-frame run they hold the startup frame:
    every sample read 104.281 ms. They were removed; the renderer's own
    `viewport_cpu_ms` is published instead.
-3. **The window can be smaller than the pinned viewport.** A compositor clamp
-   silently changes the rendered resolution, and `--resolution` does not override
-   it. The report records the real size, and the checker now fails a mismatch
-   instead of warning.
+3. **The window can be smaller than the pinned viewport.** A window manager can
+   silently shrink the client area: the same 1920×1080 request measured 1600×834
+   on the 1600×900 primary display and 1920×1052 when moved to the 1080p output,
+   because decorations ate 28 px. `--resolution` does not win in either case; a
+   fullscreen window on the 1080p output gives exactly 1920×1080. The report
+   records the real size, and the checker fails a mismatch instead of warning.
 4. **Batching is a Forward+ property, and it is partial.** The same S1 cell
    reported 7 draw calls on Forward+ and 401 on both Mobile and Compatibility,
    where each instance is its own draw. On Forward+, batching merges only
@@ -179,12 +206,60 @@ on this backend.
    effect did not run" is the correct gate; a fixed 0.5 threshold would be
    satisfied only by glow and fog, and per-preset thresholds belong to the
    collector, not to the specification.
+8. **The harness could not describe a cold run.** The protocol asks for
+   time-to-first-steady-frame, but the report had no such field, so the cold/warm
+   comparison was impossible. The harness now records
+   `timing.load_to_sample_ms`, measured from the scene-load call to the first
+   sampled frame, and the checker requires a positive value.
 
-## 6. Still missing before any number is published
+## 6. The first validated cell
 
-- An export template. The tools build is not representative: the editor forces
-  `separate_thread_render = 0` and carries editor-only work.
-- The pinned 1920×1080 surface, or a documented decision to pin another size.
-- The full 900/3600 window and five repetitions per cell.
-- Driver-forced VSync, thermal state, and content-on-screen verification, which
-  remain manual.
+S1 / D1 / Q0, 400 boxes, template build `4.8.beta.custom_build.43c45bf02`
+(commit `43c45bf`), fullscreen 1920×1080, 900 warm-up and 3600 sampled frames,
+five warm runs and one cold run.
+
+| Metric | Five warm runs | Cold run |
+|---|---|---|
+| FPS median | 379.0–380.5 | 380.8 |
+| Frame ms median | 2.628–2.639 | 2.626 |
+| p99 frame ms | 2.893–2.982 | 2.965 |
+| GPU ms median | 1.894–1.895 | 1.894 |
+| CPU render ms median | 0.115–0.116 | 0.117 |
+| Load to first sample | 2511–2605 ms | 2509 ms |
+| `first_120` compiles | 5 | 5 |
+| Hitches | 0 | 0 |
+
+- `frame_hash` = `afeb8045b4b4c5d09c10cee5f35343e78235a6c76d68088ad63bdc36c4094fd6`
+  in all six runs. `content_hash` = `32288e115d97…`.
+- `draw_calls` = 7, `objects` = 401, `primitives` = 4802 in every sampled frame.
+- Deleting the pipeline cache changed neither the compile count nor the load
+  time: the scene requests five pipelines and pays for them regardless, and the
+  900-frame warm-up dominates the 2.5 s. The cache file was recreated at a
+  different size (1,256,676 → 716,464 bytes), so the deletion did take effect.
+- A frame hash only compares frames rendered at the same size: the earlier
+  tools build at 1600×834 produced a different hash. The SSAO fix, which was
+  GDScript-only and does not touch S1, did not change the 1920×1080 hash — the
+  same cell produced `afeb8045…` with both the `acde0c3` and the `43c45bf`
+  binary.
+- The reports, the frame-299 screenshot, the environment and the manual checks
+  are archived in
+  [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md).
+- Manual checks recorded there: VSync inferred from 380 FPS and a p99 of at most
+  2.98 ms (no swapchain counter), no monotonic thermal drift (-0.11% to +0.21%
+  within a run, no temperature sensor), and the screenshot inspected for correct
+  content.
+- This is one machine and one cell. It is a reference for that GPU, driver, and
+  commit; it is not a portable claim.
+
+## 7. Still missing
+
+- Every other cell of the matrix: S2, S3, S4, S6, and the Mobile, Compatibility,
+  Metal, and Web configurations.
+- An exported `.pck` run. The validated run uses the template binary with
+  `--path`, loading the project directory; that is a template build, but not the
+  shipping package layout.
+- Driver-level VSync proof and a GPU temperature reading; both remain manual.
+- A second machine and a second GPU, to separate engine behaviour from this
+  hardware.
+- S5 (2D) and S7 (manual editor procedure) are still as described in the
+  specification.

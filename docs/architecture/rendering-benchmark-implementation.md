@@ -1,15 +1,14 @@
 # Rendering Benchmark Implementation Report
 
-> **Status:** Implemented; smoke-run in a tools build only, never validated for publication
+> **Status:** Implemented; one cell validated in a template build and published
 >
-> - **Implementation range:** `d8e1623` → `7c129d3` (7 commits)
-> - **Reported branch state:** `main` synchronized; working tree clean at `7c129d3`
+> - **Implementation range:** `d8e1623` → `7c129d3` (7 commits), then the fixes recorded in the [run log](rendering-benchmark-run-log.md)
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** one smoke run on RADV/Forward+, invalid by design ([run log](rendering-benchmark-run-log.md))
+> - **Runtime measurements:** one validated cell, S1/D1/Q0 at 1920×1080, five warm runs and one cold run ([results](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
-The implementation report describes authored code and recorded engineering decisions. It does **not** claim that the GDScript has passed the engine parser, that a template has been built, or that any performance result has been measured.
+The implementation report describes authored code and recorded engineering decisions. The GDScript now parses in the engine, a template build exists, and one cell has been measured and published. Everything outside that cell remains unmeasured, and the report says so where it matters.
 
 ## 1. Implementation status
 
@@ -23,11 +22,11 @@ The implementation report describes authored code and recorded engineering decis
 | S5 — 2D/Canvas | Not authored | Separate project and harness intentionally deferred |
 | S6 — transparency and post-processing | Implemented | Transparent quads and P0–P5 presets |
 | S7 — editor viewport | Manual procedure documented | No automated harness scene |
-| Report checker (`benchmarks/tools/check_report.py`) | Implemented | 24 tests executed; no engine run |
-| Harness runtime validation | Not performed | No template build, GPU, or display was available |
-| Performance measurements | Not available | All runtime values remain unmeasured |
+| Report checker (`benchmarks/tools/check_report.py`) | Implemented | 33 tests; run against real reports |
+| Harness runtime validation | Performed | Template build, five warm runs and one cold run |
+| Performance measurements | One validated cell | S1/D1/Q0; the rest remain unmeasured |
 
-“Implemented” means the scene and harness source were authored. It does not mean the implementation has been parsed or executed by the engine.
+“Implemented” means the scene and harness source were authored; the S1 path has since been executed end to end in a template build.
 
 ## 2. Change history
 
@@ -96,6 +95,7 @@ Per-frame samples include:
 
 - `frame_us`;
 - `Performance.TIME_PROCESS` and `TIME_PHYSICS_PROCESS` are deliberately not sampled: they are published as a maximum over 1,000,000 frames (`main/main.cpp:5186`), so inside a run they hold the startup frame;
+- `timing.load_to_sample_ms`, from the scene-load call to the first sampled frame, so a cold run can be compared with a warm one;
 - draw calls, objects, and primitives;
 - texture, buffer, and video memory monitors;
 - viewport CPU/GPU render time where the backend provides it;
@@ -132,10 +132,10 @@ The harness does not itself establish cross-run frame-hash equality. The mechani
 
 ### 5.1 S1 — static geometry and draw-call expectations
 
-Forward+ can merge adjacent identical surfaces into an instanced draw through the renderer's repeat path (`RenderElementInfo::repeat`, bounded by `MAX_REPEATS = 2²⁰−1`). Consequently, the original expectation of approximately `box_count + 1` draw calls is not portable:
+Forward+ can merge adjacent identical surfaces into an instanced draw through the renderer's repeat path (`RenderElementInfo::repeat`, bounded by `MAX_REPEATS = 2²⁰−1`). Batching is real but partial, so the original expectation of approximately `box_count + 1` draw calls is not portable:
 
-- Forward+ may produce approximately two draws for the scene, largely independent of box count.
-- Mobile may report approximately one draw per instance.
+- Forward+ produced 2, 5, 4, 5, 6, and 7 draws for 1, 64, 65, 128, 256, and 400 boxes on RADV. Only adjacent sorted elements merge, so the count is not monotonic.
+- Mobile and Compatibility produced one draw per instance: 401 for 400 boxes.
 
 The acceptance criterion is therefore repeatability and stability across equivalent runs, not a single fixed draw-call count. Primitive-count checks remain separate.
 
@@ -186,34 +186,36 @@ These are implementation notes, not substitutes for the upstream API contract. I
 - Script structure, indentation, and whitespace were reviewed.
 - `git diff --check` passed.
 - Documentation consistency was reviewed for status labels, JSON fields, command-line arguments, and acceptance criteria.
-- The report checker's 24 unit tests were executed in this environment and passed.
-- The final reported repository state at `7c129d3` was `main` synchronized with a clean working tree.
+- The report checker's 33 unit tests were executed in this environment and passed.
+- The repository state at `7c129d3` was `main` synchronized with a clean working tree.
 
-### Runtime validation not performed
+### Runtime validation performed
 
-No engine build or benchmark execution was performed. In particular:
+- All seven GDScript files parse in the built engine (`--check-only --script` under the project).
+- A `target=template_release` binary was built and ran the project without `--bench-allow-editor`.
+- S1/D1/Q0 at 1920×1080 produced five warm runs and one cold run that all pass `check_report.py`; the reports are committed.
+- Every other scene has run at least once in a tools build; those reports are invalid by design.
 
-- GDScript has not been parsed by a built Kaizen executable.
-- No template binary has been built for this benchmark.
-- No GPU/display-backed run has taken place.
-- No CPU, GPU, memory, or frame-time result exists.
-- Metal parity, WebGL behavior, and browser performance remain unverified.
+### Still unverified at runtime
 
-Accordingly, all runtime results remain **not measured**. Source inspection and structural checks do not establish runtime correctness.
+- GDScript behaviour on Metal, WebGL, Android, and iOS.
+- Metal quality parity, browser performance, and mobile thermal behaviour.
+- Any cell other than S1/D1/Q0 with 400 boxes.
+- Driver-level VSync enforcement and GPU temperature, which the report cannot read.
 
-## 8. First execution plan
+## 8. First execution
 
-The first real cell must be **S1/Q0** on one known configuration, preferably D1 or M1, before running the rest of the suite.
+The first cell was **S1/Q0** on D1 (Vulkan, Forward+, RADV on an RX 550). It ran on 2026-11-19; the steps below are what it consisted of and what each produced.
 
-1. Build an exported template for the target platform and renderer.
-2. Run S1/Q0 with the documented warm-up and sample window.
-3. Confirm the report is valid, inspect `timing.pso_in_sample == 0`, and run it through `benchmarks/tools/check_report.py`.
-4. Compare frame hashes across repeated S1 runs.
-5. Check draw-call stability and primitive-count sanity.
-6. Only after S1 validates the harness, proceed to S2, S3a/S3b, S4, and S6.
-7. Keep S7 manual and decide the shared-harness design before implementing S5.
+1. A `target=template_release` binary was built. It is not an exported `.pck`: the runs load the project directory with `--path`, which is a template build but not the shipping package layout.
+2. S1/Q0 ran with 900 warm-up frames and 3600 sampled frames, fullscreen at 1920×1080.
+3. `check_report.py` reports zero failures and `timing.pso_in_sample` is 0.
+4. Five warm runs and one cold run produced the same frame hash.
+5. Draw calls (7) and primitives (4802) are constant across all 3600 sampled frames of every run.
+6. S2, S3, S4, and S6 have run in a tools build only; they still need template cells.
+7. S7 remains manual and S5 is still deferred.
 
-Do not publish performance claims until the reports come from real hardware, pass the validity gate, and include the full runtime configuration.
+The cell and its reports are in [`benchmarks/results/2026-11-19_s1_d1_q0/`](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md). No other cell has passed the gate, and no number outside that directory is a baseline.
 
 ## 9. Related documents
 

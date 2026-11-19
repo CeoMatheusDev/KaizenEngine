@@ -69,6 +69,7 @@ def make_report(**overrides):
             "pso_at_start": 12,
             "pso_in_sample": 0,
             "last_compile_frame": -1,
+            "load_to_sample_ms": 4200.0,
         },
         "pipeline_compilations": {
             "first_120": {"canvas": 0, "mesh": 0, "surface": 0, "draw": 0, "specialization": 0},
@@ -141,6 +142,16 @@ class CheckReportTests(unittest.TestCase):
     def test_pso_in_sample_fails(self):
         report = make_report()
         report["timing"]["pso_in_sample"] = 3
+        self.assertGreater(self.check(report), 0)
+
+    def test_missing_load_to_sample_fails(self):
+        report = make_report()
+        del report["timing"]["load_to_sample_ms"]
+        self.assertGreater(self.check(report), 0)
+
+    def test_zero_load_to_sample_fails(self):
+        report = make_report()
+        report["timing"]["load_to_sample_ms"] = 0.0
         self.assertGreater(self.check(report), 0)
 
     def test_frame_compilation_fails(self):

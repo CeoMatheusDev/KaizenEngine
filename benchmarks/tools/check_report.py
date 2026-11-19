@@ -121,6 +121,12 @@ def _check_report(report):
     if timing.get("pso_in_sample") != 0:
         fail("pso_in_sample is %r, expected 0" % timing.get("pso_in_sample"))
 
+    load_to_sample = timing.get("load_to_sample_ms")
+    if not isinstance(load_to_sample, (int, float)) or isinstance(load_to_sample, bool):
+        fail("timing.load_to_sample_ms is missing")
+    elif load_to_sample <= 0:
+        fail("timing.load_to_sample_ms is %r, expected a positive number" % load_to_sample)
+
     compilations = report.get("pipeline_compilations") or {}
     if "first_120" not in compilations or "total" not in compilations:
         fail("pipeline_compilations must contain first_120 and total")

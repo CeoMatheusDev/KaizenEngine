@@ -7,13 +7,13 @@ the instrument list and reference configurations are in
 engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
-> **Status:** scenes **S1–S4 and S6 are authored and have been executed once in
-> a tools build; S5 is not written; S7 is a manual editor procedure without a
-> harness scene**. No cell has passed the validity gate: that run used a tools
-> build and a window the compositor clamped below the pinned resolution. Treat
-> every number as unvalidated until a cell passes. See the
+> **Status:** scenes **S1–S4 and S6 are authored; S5 is not written; S7 is a
+> manual editor procedure without a harness scene**. One cell — S1/D1/Q0 with
+> 400 boxes — has passed the validity gate in a template build at 1920×1080 and
+> is published in [`results/2026-11-19_s1_d1_q0/`](results/2026-11-19_s1_d1_q0/README.md).
+> Every other cell has a tools-build smoke run only. See the
 > [run log](../docs/architecture/rendering-benchmark-run-log.md) for what was
-> observed and which defects the run exposed.
+> observed and which defects the runs exposed.
 
 ## Layout
 
@@ -23,6 +23,7 @@ loads.
 
 ```text
 benchmarks/
+  results/2026-11-19_s1_d1_q0/   published cell: reports, screenshot, environment
   rd_3d/
     project.kaizen
     scenes/bootstrap.tscn          empty main scene; the harness loads the real one
@@ -173,6 +174,15 @@ With the defaults, sampling starts at frame 900 and covers exactly 3600 frames,
 so every run covers the same camera frames. Both windows are rounded up to a
 multiple of the 300-frame loop.
 
+The project pins a 1920×1080 window, and the report records the size the engine
+actually got. A window manager can shrink the client area: the same request
+measured 1600×834 on a 1600×900 primary display and 1920×1052 when moved to a
+1080p output, because decorations took 28 px. `--resolution` does not win in
+either case. Run fullscreen on an output that can show the pinned size — that is
+how the published cell got exactly 1920×1080 — or record the decision to pin a
+different size. The checker fails a mismatch because the frame would have been
+rendered at another resolution.
+
 ### Renderer selection
 
 The project pins Forward+, but the CLI overrides it per run:
@@ -209,10 +219,15 @@ One row per sampled frame:
 - `viewport_cpu_ms`, `viewport_gpu_ms`: from
   `RenderingServer.viewport_set_measure_render_time`.
 
+One value per run:
+
+- `timing.load_to_sample_ms`: wall time from the scene-load call to the first
+  sampled frame. It is the cold-run measure the protocol asks for; on a warm run
+  it is dominated by the 900-frame warm-up.
+
 Monitor values are read once per frame, at the start of frame *n*. Draw-call and
-memory monitors describe the frame that was just rendered (*n − 1*); the process
-and physics timers describe the most recent main-loop step. The camera for frame
-*n* is applied before that frame is rendered.
+memory monitors describe the frame that was just rendered (*n − 1*). The camera
+for frame *n* is applied before that frame is rendered.
 
 At the end the harness writes a single JSON document with the frame arrays, a
 summary (median / p95 / p99 / worst / hitches), the engine version and hash, the

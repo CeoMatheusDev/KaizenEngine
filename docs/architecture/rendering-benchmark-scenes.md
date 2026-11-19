@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S4 and S6 authored and executed once in a tools build; S5 not written; S7 is a manual procedure; no cell has passed the validity gate** (see the [run log](rendering-benchmark-run-log.md))
+> **Status:** Specification — **S1–S4 and S6 authored; S1/D1/Q0 validated and published; the other scenes have tools-build smoke runs only; S5 not written; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -82,7 +82,7 @@ Every scene below lists: purpose, content, parameters and default, camera, light
 
 ### S1 — Static 3D
 
-> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it. Executed once in a tools build on RADV/Forward+; that run is invalid by design, and the observations are in the [run log](rendering-benchmark-run-log.md).
+> Implemented in `benchmarks/rd_3d/` (`scenes/s1_static.tscn`). See [benchmark projects](../benchmarks/README.md) for how to run it. The 400-box cell on D1 is validated and published; tools-build runs of other counts are in the [run log](rendering-benchmark-run-log.md).
 
 **Purpose:** baseline geometry and material throughput with the least possible per-frame variety. This is the reference point every other scene is normalized against. On Forward+ it is a throughput baseline, not a per-draw probe: identical surfaces are merged into instanced draws automatically (see the acceptance criteria).
 
@@ -439,14 +439,14 @@ This matrix is deliberately larger than a first pass can execute. The recommende
 1. **Generation:** build scene content once, before frame 0. First-frame generation time is recorded but excluded from steady-state statistics.
 2. **Warm-up:** a fixed 900 frames (3 camera loops), rounded up to a multiple of 300. The start is fixed rather than adaptive so that every run samples the same frame indices; an adaptive start would make runs incomparable. Compilations are expected to stop before frame 900; if any occur within the last 120 warm-up frames, the cell is invalid.
 3. **Sampling:** exactly 3600 frames (12 loops of the 300-frame camera path), starting at frame 900. If the machine cannot sustain 60 FPS, still sample 3600 frames and report the longer wall time.
-4. **Per-frame record:** frame index, frame time (µs, monotonic clock), `Performance` snapshot, and viewport CPU/GPU render time when available.
+4. **Per-frame record:** frame time (µs, monotonic clock), draw calls/objects/primitives, texture/buffer/video memory, pipeline-compilation deltas, and viewport CPU/GPU render time when available.
 5. **Repetitions:** 5 runs per cell; report median, p95, p99, min, max, and the between-run spread. Raw per-run values are published alongside the summary.
 6. **Cold run:** one additional run per cell with the pipeline cache deleted (`user://vulkan/pipelines.*.cache`), reporting time-to-first-steady-frame and the number of PSO compilations. On Metal this always behaves like a cold run because no cache is written.
 7. **Frame-hash check:** the screenshot at frame 299 is hashed; all repetitions of a cell must produce the same hash.
 
 Hitches are defined as frames whose time exceeds twice the run median. The count and the worst frame are reported; a run with hitches inside the sampling window is still valid but is flagged.
 
-## 6. Harness contract (implemented, executed once in a tools build)
+## 6. Harness contract (implemented and validated for S1)
 
 The harness is a GDScript autoload that runs only in template builds (`OS.has_feature("template")`), so it cannot accidentally be measured from the editor. A tools build can be used for scene development with `--bench-allow-editor`, which marks the report invalid. The project starts on an empty bootstrap scene; the harness loads the scene named by `--bench-scene` from its internal registry.
 
@@ -465,7 +465,8 @@ User arguments after `--` are read with `OS.get_cmdline_user_args()`.
 Per-frame data comes from:
 
 - `Time.get_ticks_usec()` for wall-clock frame time.
-- `Performance.get_monitor(Performance.TIME_PROCESS)` and `TIME_PHYSICS_PROCESS`.
+- `Time.get_ticks_usec()` at scene load and at the first sampled frame for `timing.load_to_sample_ms`, the cold-run startup measure.
+- `Performance.TIME_PROCESS` and `TIME_PHYSICS_PROCESS` are **not** used: `main/main.cpp:5186` publishes them as the maximum over a 1,000,000-frame window, so inside a run they repeat the startup frame.
 - `Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)`, `RENDER_TOTAL_OBJECTS_IN_FRAME`, `RENDER_TOTAL_PRIMITIVES_IN_FRAME`.
 - `Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)`, `RENDER_BUFFER_MEM_USED`, `RENDER_VIDEO_MEM_USED`.
 - `Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_*)` for all five counters.
@@ -522,7 +523,8 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
     "sampled_frames": 3600,
     "pso_at_start": 0,
     "pso_in_sample": 0,
-    "last_compile_frame": -1
+    "last_compile_frame": -1,
+    "load_to_sample_ms": 3000.0
   },
   "pipeline_compilations": {
     "first_120": { "canvas": 0, "mesh": 0, "surface": 0, "draw": 0, "specialization": 0 },
@@ -579,6 +581,11 @@ over the JSON reports, including the S6 image-difference rule and equality of
 `frame_hash` across repeated runs of one cell. The remaining checks — vsync
 forced by the driver, thermal throttling, wrong content on screen — stay manual.
 
+A windowed run on a desktop smaller than the pinned size loses client height to
+the window manager (measured 1920×1052 at 1080p with decorations). Run
+fullscreen on an output that can show the pinned size, or record the decision to
+pin a smaller one.
+
 A cell is **invalid** and must be re-run if any of these is true:
 
 - Content hash or frame hash differs from the cell's reference.
@@ -592,8 +599,8 @@ A cell is **invalid** and must be re-run if any of these is true:
 ## 8. Open items
 
 - Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 **not written**; S7 is a **documented manual procedure** with no harness scene.
-- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`); every run so far fails the gate in §7 (tools build, clamped window), and the [run log](rendering-benchmark-run-log.md) records what was observed. No cell has been validated for publication.
-- All counts in this document — **proposed**, not validated against real hardware.
+- Harness implementation — **authored and executed** (`benchmarks/rd_3d/scripts/bench_harness.gd`). S1/D1/Q0 passes the gate in §7 with five warm runs and one cold run ([reports](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md)). The remaining cells have tools-build smoke runs only, recorded in the [run log](rendering-benchmark-run-log.md).
+- Counts in this document — the S1 400-box cell is measured (7 draw calls, 4802 primitives); every other count is **proposed**, not validated.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
 - S3b feature-to-PSO mapping — **not verified**; must be read from monitors.
 - Web cell specifics: canvas size, `devicePixelRatio`, and browser compositor behavior — **not verified** (see [Web export runtime](rendering-web-runtime.md)).
