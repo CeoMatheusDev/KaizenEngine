@@ -43,7 +43,7 @@ Verified in `servers/rendering/rendering_device.cpp:8860-8940`:
 | Metal | **No** | `pipeline_cache_create()` returns `false`; serialization returns an empty buffer; the Metal binary archive implementation is commented out with a TODO to re-enable it (`drivers/metal/rendering_device_driver_metal.cpp:1640-1675`). |
 | OpenGL / WebGL 2 (Compatibility) | Not applicable | Does not use `RenderingDevice`; no PSO cache layer. |
 
-**Implication:** on macOS with Metal, every run pays cold shader/pipeline compilation cost. On Vulkan, caches are invalidated automatically on GPU or driver version changes, which is the correct behavior but causes first-run stutter after driver updates.
+**Implication:** on Vulkan and D3D12 the cache is reused across runs; on Metal the `MTLBinaryArchive` path is disabled, so pipeline state objects are recreated every run. This is narrower than "everything is compiled at startup": an arm64 macOS export can embed precompiled `.metallib` shader libraries via the shader baker (`editor/shader/shader_baker/shader_baker_export_plugin_platform_metal.cpp`), so MSL compilation may be skipped, but PSO creation is not cached. The editor and exports produced from a non-Mac host compile MSL on the device. See [Metal rendering driver](rendering-metal-driver.md) §3-4.
 
 ## 5. Shader variant growth
 

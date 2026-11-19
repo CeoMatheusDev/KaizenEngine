@@ -34,6 +34,7 @@ Nothing here changes engine code. It records which instrumentation already exist
 - CLI `--gpu-profile` sets `profile_gpu` (`main.cpp:1957-1958`); for non-editor runs the project setting `debug/settings/stdout/print_gpu_profile` does the same (`main.cpp:2264`, `:3616-3617`).
 - It calls `RenderingServerDefault::set_print_gpu_profile()`, which enables timestamp capture (`servers/rendering/rendering_server_default.cpp:374-377`) and prints average GPU milliseconds per named task once per second (`rendering_server_default.cpp:177-215`).
 - Timestamps come from `Utilities::capture_timestamp()`; the RD backend uses `RenderingDevice` timestamp queries, the GLES3 backend uses `GL_TIMESTAMP` queries **only when running desktop OpenGL** (`drivers/gles3/storage/utilities.cpp:351-355`). On real GLES/WebGL targets these queries are skipped, so GPU timings are unavailable there and must be reported as such.
+- On Metal, timestamp queries are only available in barrier synchronization mode and only when the device supports counter sampling at stage boundaries (`drivers/metal/rendering_device_driver_metal3.cpp:90-101`, `:284-320`). A Metal run may therefore have no GPU profile at all; record that instead of substituting an estimate.
 - The editor's remote frame profiler drives the same capture through `set_frame_profiling_enabled()` and reads `get_frame_profile()` (`servers/debugger/servers_debugger.cpp:374-393`), so its per-pass data is the same data `--gpu-profile` prints.
 
 ### 2.3 Per-viewport render time
