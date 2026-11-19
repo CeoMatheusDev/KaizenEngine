@@ -4,7 +4,7 @@
 >
 > - **Implementation range:** `d8e1623` → `7c129d3` (7 commits), then the fixes recorded in the [run log](rendering-benchmark-run-log.md)
 > - **Scope:** `benchmarks/` and benchmark documentation
-> - **Runtime measurements:** twenty-eight validated cells in five D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 sessions](../../benchmarks/results/2026-11-19_s6_d1_q4/README.md))
+> - **Runtime measurements:** twenty-eight validated cells in five D1 sessions, each with five warm runs and one cold run ([S1 cell](../../benchmarks/results/2026-11-19_s1_d1_q0/README.md), [S2–S4 session](../../benchmarks/results/2026-11-19_d1/README.md), [S6 sessions](../../benchmarks/results/README.md))
 
 This report records the implementation state of the rendering benchmark project. It complements, but does not replace, the [benchmark scene specification](rendering-benchmark-scenes.md), [benchmark methodology](rendering-benchmarks.md), and executable-project instructions in [`benchmarks/README.md`](../../benchmarks/README.md).
 
