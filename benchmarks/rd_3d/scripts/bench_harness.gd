@@ -12,7 +12,7 @@ extends Node
 ## invalid.
 ##
 ## CLI (after the engine's `--` separator):
-##   --bench-scene <S1|S2|S3|S4> Scene to load and report label (default S1)
+##   --bench-scene <S1-S4|S6>    Scene to load and report label (default S1)
 ##   --bench-count <n>           Forwarded to the scene as its content count
 ##   --bench-variant <a|b|...>   Forwarded to the scene as its variant label
 ##   --bench-spots <n>           S4 spot-light count
@@ -23,6 +23,9 @@ extends Node
 ##   --bench-warmup <n>          Warm-up frames, multiple of 300 (default 900)
 ##   --bench-out <abs path>      Report path (default user://bench/<scene>_<preset>.json)
 ##   --bench-no-hash             Skip the frame-hash capture
+##   --bench-screenshot <path>   Save the frame-299 image as PNG
+##   --bench-reference <png>     Diff the captured frame against this image
+##   --bench-min-diff <f>        Mark invalid when the mean diff is below f (off by default)
 ##   --bench-allow-editor        Allow a tools build (report marked invalid)
 
 const LOOP_FRAMES := 300
@@ -48,6 +51,8 @@ const PINNED_SETTINGS := [
 	"rendering/lights_and_shadows/directional_shadow/size",
 	"rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality",
 	"rendering/driver/depth_prepass/enable",
+	"rendering/environment/ssao/quality",
+	"rendering/environment/ssil/quality",
 ]
 
 ## Scene registry: the project is shared by all 3D scenes, and --bench-scene
@@ -57,6 +62,7 @@ const SCENES := {
 	"S2": "res://scenes/s2_instancing.tscn",
 	"S3": "res://scenes/s3_materials.tscn",
 	"S4": "res://scenes/s4_lighting.tscn",
+	"S6": "res://scenes/s6_post.tscn",
 }
 
 var config := {
@@ -70,6 +76,9 @@ var config := {
 	"frames": DEFAULT_SAMPLE_FRAMES,
 	"warmup": DEFAULT_WARMUP_FRAMES,
 	"out": "",
+	"screenshot": "",
+	"reference": "",
+	"min_diff": -1.0,
 	"capture_hash": true,
 	"allow_editor": false,
 }
@@ -107,6 +116,8 @@ var _pso_first_window := {}
 var _first_window_taken := false
 var _last_compile_frame := -1
 var _frame_hash := ""
+var _screenshot_path := ""
+var _image_diff := {}
 var _hash_started := false
 var _hash_pause := false
 var _invalid_reason := ""
@@ -165,6 +176,18 @@ func _parse_args() -> void:
 				if i + 1 < args.size():
 					i += 1
 					config.out = args[i]
+			"--bench-screenshot":
+				if i + 1 < args.size():
+					i += 1
+					config.screenshot = args[i]
+			"--bench-reference":
+				if i + 1 < args.size():
+					i += 1
+					config.reference = args[i]
+			"--bench-min-diff":
+				if i + 1 < args.size():
+					i += 1
+					config.min_diff = float(args[i])
 			"--bench-no-hash":
 				config.capture_hash = false
 			"--bench-allow-editor":
@@ -285,10 +308,11 @@ func _process(_delta: float) -> void:
 				_finish()
 				return
 
-	if bool(config.capture_hash) and not _hash_started and frame_done == _hash_frame:
+	var wants_capture := bool(config.capture_hash) or not String(config.screenshot).is_empty() or not String(config.reference).is_empty()
+	if wants_capture and not _hash_started and frame_done == _hash_frame:
 		_hash_started = true
 		_hash_pause = true
-		_capture_hash()
+		_capture_frame()
 		return
 
 	_last_us = now
@@ -330,17 +354,76 @@ func _delta_sources(p_before: Dictionary, p_after: Dictionary) -> Dictionary:
 		delta[key] = int(p_after[key]) - int(p_before.get(key, 0))
 	return delta
 
-func _capture_hash() -> void:
+func _capture_frame() -> void:
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	if image == null:
-		_add_invalid("frame hash capture returned no image")
+		_add_invalid("frame capture returned no image")
 		return
+
+	if bool(config.capture_hash):
+		_frame_hash = _hash_image(image)
+	if not String(config.screenshot).is_empty():
+		_save_screenshot(image)
+	if not String(config.reference).is_empty():
+		_compare_reference(image)
+
+func _hash_image(p_image: Image) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
-	ctx.update(("%dx%d:%d:" % [image.get_width(), image.get_height(), image.get_format()]).to_utf8_buffer())
-	ctx.update(image.get_data())
-	_frame_hash = ctx.finish().hex_encode()
+	ctx.update(("%dx%d:%d:" % [p_image.get_width(), p_image.get_height(), p_image.get_format()]).to_utf8_buffer())
+	ctx.update(p_image.get_data())
+	return ctx.finish().hex_encode()
+
+func _save_screenshot(p_image: Image) -> void:
+	var path := _absolute_path(String(config.screenshot))
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var error := p_image.save_png(path)
+	if error != OK:
+		_add_invalid("screenshot could not be written to %s (error %d)" % [path, error])
+		return
+	_screenshot_path = path
+
+## Mean absolute difference over all RGBA bytes of the captured frame and a
+## reference PNG. This runs once, after sampling, so its cost is never measured.
+func _compare_reference(p_image: Image) -> void:
+	var path := _absolute_path(String(config.reference))
+	if not FileAccess.file_exists(path):
+		_add_invalid("reference image %s does not exist" % path)
+		return
+	var reference := Image.load_from_file(path)
+	if reference == null:
+		_add_invalid("reference image %s could not be loaded" % path)
+		return
+
+	p_image.convert(Image.FORMAT_RGBA8)
+	reference.convert(Image.FORMAT_RGBA8)
+	if p_image.get_width() != reference.get_width() or p_image.get_height() != reference.get_height():
+		_add_invalid("reference image is %dx%d but the frame is %dx%d" % [
+				reference.get_width(), reference.get_height(), p_image.get_width(), p_image.get_height()])
+		return
+
+	var actual_bytes := p_image.get_data()
+	var reference_bytes := reference.get_data()
+	var total := 0
+	var worst := 0
+	for index in actual_bytes.size():
+		var difference := absi(int(actual_bytes[index]) - int(reference_bytes[index]))
+		total += difference
+		if difference > worst:
+			worst = difference
+	var mean := float(total) / float(actual_bytes.size())
+
+	_image_diff = {
+		"reference": path,
+		"width": p_image.get_width(),
+		"height": p_image.get_height(),
+		"mean_abs_diff": mean,
+		"max_abs_diff": worst,
+	}
+
+	if float(config.min_diff) >= 0.0 and mean < float(config.min_diff):
+		_add_invalid("image difference %.4f is below the required %.4f; the effect did not run" % [mean, float(config.min_diff)])
 
 func _finish() -> void:
 	_running = false
@@ -359,14 +442,18 @@ func _finish() -> void:
 		return
 	get_tree().quit(0 if _invalid_reason.is_empty() else 3)
 
+func _absolute_path(p_path: String) -> String:
+	if p_path.begins_with("user://") or p_path.begins_with("res://"):
+		return ProjectSettings.globalize_path(p_path)
+	if p_path.is_absolute_path():
+		return p_path
+	return ProjectSettings.globalize_path("user://%s" % p_path)
+
 func _write_report(p_pso_total_delta: Dictionary) -> bool:
 	var report_path := String(config.out)
 	if report_path.is_empty():
 		report_path = "user://bench/%s_%s.json" % [String(config.scene).validate_filename(), String(config.preset)]
-	if report_path.begins_with("user://") or report_path.begins_with("res://"):
-		report_path = ProjectSettings.globalize_path(report_path)
-	elif not report_path.is_absolute_path():
-		report_path = ProjectSettings.globalize_path("user://%s" % report_path)
+	report_path = _absolute_path(report_path)
 	DirAccess.make_dir_recursive_absolute(report_path.get_base_dir())
 
 	var frame_us := Array(_frame_us.slice(0, _sampled))
@@ -448,6 +535,8 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 		},
 		"summary": _summarize(frame_us, gpu if gpu_available else []),
 		"frame_hash": _frame_hash,
+		"screenshot": _screenshot_path,
+		"image_diff": _image_diff,
 		"notes": [
 			"frame_us is the wall-clock interval between consecutive process callbacks; it includes presentation blocking.",
 			"pso_compilations is a per-frame delta of the cumulative pipeline compilation counters.",

@@ -5,7 +5,7 @@ contract is defined in [Benchmark scene specification](../docs/architecture/rend
 the instrument list and reference configurations are in
 [Benchmark methodology](../docs/architecture/rendering-benchmarks.md).
 
-> **Status:** scenes **S1–S4 are authored; S5–S7 are not**. The harness
+> **Status:** scenes **S1–S4 and S6 are authored; S5 and S7 are not**. The harness
 > has never been executed in this environment (no build, GPU, or display). Treat
 > every number it produces as unvalidated until it has been run on real hardware
 > and checked against the validity rules below.
@@ -25,12 +25,14 @@ benchmarks/
     scenes/s2_instancing.tscn      S2: one MultiMesh
     scenes/s3_materials.tscn       S3: 64 meshes with separate materials
     scenes/s4_lighting.tscn        S4: boxes, a shadowed sun, spot/omni lights
+    scenes/s6_post.tscn            S6: transparent quads and post presets P0-P5
     scripts/bench_harness.gd       autoload: scene registry, sampling, JSON report
     scripts/bench_scene_common.gd  shared deterministic material/light/environment
     scripts/scene_s1.gd            S1 content and frame-indexed camera
     scripts/scene_s2.gd            S2 content and frame-indexed camera
     scripts/scene_s3.gd            S3 content, variants, and camera
     scripts/scene_s4.gd            S4 content, light rings, shadow variant, camera
+    scripts/scene_s6.gd            S6 content, post presets, screenshot camera
 ```
 
 Adding a scene means adding its `.tscn`, its script, and one entry in the
@@ -87,6 +89,27 @@ S4 takes the light counts directly; the specification's sweep is
 
 Add `--bench-variant shadows` to enable shadows on four spots.
 
+S6 uses `--bench-preset` for the post preset and `--bench-count` for the quad
+count. Capture a P0 reference, then diff each other preset against it:
+
+```text
+# P0 reference image
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S6 --bench-count 4 --bench-preset P0 --bench-config D1 \
+    --bench-screenshot /absolute/path/S6_P0.png \
+    --bench-out /absolute/path/S6_P0_D1.json
+
+# P2 must differ from P0 by at least 0.5/255 on average
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S6 --bench-count 4 --bench-preset P2 --bench-config D1 \
+    --bench-reference /absolute/path/S6_P0.png --bench-min-diff 0.5 \
+    --bench-out /absolute/path/S6_P2_D1.json
+```
+
+The comparison runs once after sampling and reads every RGBA byte, so it can
+take several seconds on a 1920×1080 frame; that cost is outside the sampled
+window.
+
 Without `--bench-out` the report goes to `user://bench/<scene>_<preset>.json`,
 and its absolute path is printed on exit.
 
@@ -104,17 +127,20 @@ a run labelled Q1 matches the Q1 definition.
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `--bench-scene` | `S1` | Scene to load and report label: `S1`–`S4` |
+| `--bench-scene` | `S1` | Scene to load and report label: `S1`–`S4` or `S6` |
 | `--bench-count` | scene default (400 for S1, 4096 for S2, 64 for S3) | Forwarded to the scene as its content count |
 | `--bench-variant` | scene default (`a` for S3) | Forwarded to the scene as its variant label |
 | `--bench-spots` | scene default (8 for S4) | S4 spot-light count |
 | `--bench-omnis` | scene default (0 for S4) | S4 omni-light count |
-| `--bench-preset` | `Q0` | Report label only; presets are project settings |
+| `--bench-preset` | `Q0` | `Q0`/`Q1` are report labels only (presets are project settings); on S6 it selects the post preset `P0`–`P5` |
 | `--bench-config` | empty | Configuration label recorded in the report (`D1`, `M1`, ...) |
 | `--bench-frames` | `3600` | Sampled frames, rounded up to a multiple of 300 |
 | `--bench-warmup` | `900` | Frames before sampling, rounded up to a multiple of 300 |
 | `--bench-out` | `user://bench/...` | Absolute report path |
 | `--bench-no-hash` | off | Skip the frame-hash capture |
+| `--bench-screenshot` | off | Save the frame-299 image as PNG |
+| `--bench-reference` | off | Diff the captured frame against this PNG |
+| `--bench-min-diff` | off | Mark invalid when `image_diff.mean_abs_diff` is below this value |
 | `--bench-allow-editor` | off | Allow a tools build (report marked invalid) |
 
 With the defaults, sampling starts at frame 900 and covers exactly 3600 frames,
@@ -164,6 +190,10 @@ summary (median / p95 / p99 / worst / hitches), the engine version and hash, the
 pinned project settings, the scene parameters, a content hash, and a frame hash
 of rendered frame 299.
 
+`screenshot` is the absolute path of the saved PNG (empty when none was
+requested). `image_diff` is `{}` unless `--bench-reference` was used; otherwise
+it holds `reference`, `width`, `height`, `mean_abs_diff` and `max_abs_diff`.
+
 It also writes `pipeline_compilations.first_120` and
 `pipeline_compilations.total`, both broken down by counter (`canvas`, `mesh`,
 `surface`, `draw`, `specialization`). `first_120` starts **before the scene is
@@ -203,6 +233,12 @@ specification:
   The directional shadow atlas size and soft-shadow quality are in
   `project_settings`, and `scene.parameters.shadowed_spots` states how many
   spots cast shadows.
+- **S6** — each preset must change the image. Save P0 with `--bench-screenshot`,
+  then run P1–P5 with `--bench-reference` and check
+  `image_diff.mean_abs_diff`. A preset whose diff is ~0 did not run; a diff of
+  exactly 0 with `--bench-min-diff` set makes the report invalid. P5 on Mobile
+  or Compatibility is recorded as not applicable (`scene.parameters.post`) and
+  never as 0 ms.
 
 All four scenes must show no increase in the PSO counters during sampling and
 the same `frame_hash` for repeated runs of one configuration.
@@ -236,10 +272,14 @@ Frame-hash equality across runs is **not** checked by the harness; compare
 - S3b builds its normal and ORM textures on the CPU at startup (512², smooth
   analytic patterns). That is content setup, not sampling work, and it is
   identical in every configuration.
+- The S6 image diff is a GDScript byte loop over a full frame. It runs once,
+  after sampling, and is not part of any timing number; on 1920×1080 it may take
+  several seconds.
 - GPU timestamps are unavailable on some backends (WebGL 2, and Metal without
   barrier mode and stage-boundary counter sampling). Empty means unavailable.
-- Nothing here validates image quality. S1–S4 have no post-processing; parity and
-  quality comparisons need the scenes that are not authored yet.
+- Nothing here validates image quality. S1–S4 have no post-processing; S6 proves
+  that an effect changed the frame, not that it looks right. Parity and quality
+  comparisons need the scenes that are not authored yet.
 
 ## Related documents
 

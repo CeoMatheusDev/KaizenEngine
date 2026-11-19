@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_s6.gd" id="1_s6"]
+
+[node name="S6Post" type="Node3D"]
+script = ExtResource("1_s6")
+quad_count = 4
+post_preset = "P0"

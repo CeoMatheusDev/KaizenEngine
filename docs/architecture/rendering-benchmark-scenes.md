@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **scenes are not authored, nothing measured**
+> **Status:** Specification — **S1–S4 and S6 authored, never executed; S5 and S7 not started; nothing measured**
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -337,6 +337,33 @@ Fixed values: glow intensity 0.8, bloom 0.1, HDR threshold 1.0; SSAO radius 1.0,
 
 **Non-goals:** TAA, upscaling, depth of field, motion blur. Those are separate image-quality experiments with their own criteria.
 
+**Implemented** in `benchmarks/rd_3d/scripts/scene_s6.gd`; `--bench-count`
+sets `quad_count` and `--bench-preset P0..P5` applies the post preset.
+
+- Base geometry: the 400×400 ground and 32 `BoxMesh` nodes of 2×2×2 m in an 8×4
+  grid at 6 m spacing, using the S1 checker material. Count and material are
+  fixed by the specification; the grid layout is an authored choice.
+- Quads: one shared `QuadMesh` of 40×40 m, `Transparency = Alpha`, albedo 0.35,
+  unshaded, culling disabled. Each quad is centred on the camera's view axis and
+  oriented so its +Z face points at the camera, stacked at `z = 10 + index` m.
+  They share one mesh and one material, so the only thing that changes with
+  `quad_count` is overdraw.
+- Environment: the shared solid background and ambient energy 0.3. SSAO and
+  SSIL quality are pinned in `project.godot` to `2` (Medium), and the report
+  records those project settings.
+- `scene.parameters.post` states the preset and which toggles were applied. P5
+  sets `volumetric_fog = true` and `volumetric_fog_supported` from
+  `RenderingServer.get_current_rendering_method()`; on Mobile and Compatibility
+  the cell is **not applicable**, not "0 ms".
+- `--bench-screenshot <path>` writes the frame-299 image as PNG.
+  `--bench-reference <png>` compares the captured frame against that image and
+  writes `image_diff.mean_abs_diff` over every RGBA byte (0–255), plus the
+  maximum byte difference and the image size. The comparison runs once, after
+  sampling. `--bench-min-diff <f>` marks the run invalid when the mean falls
+  below `f`, which is how "the effect silently did not run" is caught.
+- The diff covers the whole frame, including the opaque base, so it answers
+  "did this preset change the image", not "is the effect good".
+
 ---
 
 ### S7 — Editor viewport
@@ -494,11 +521,18 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
     "gpu_ms_median": null
   },
   "frame_hash": "...",
+  "screenshot": "",
+  "image_diff": {},
   "notes": ["..."]
 }
 ```
 
 `null` for GPU time means "not available on this backend", never zero and never an estimate.
+
+`screenshot` is the absolute path of the PNG written by `--bench-screenshot`
+(empty when not requested). `image_diff` is `{}` unless `--bench-reference` was
+used, in which case it contains `reference`, `width`, `height`,
+`mean_abs_diff`, and `max_abs_diff`.
 
 `pipeline_compilations.first_120` is measured from **before the scene is loaded**
 to the end of the first 120 frames the harness renders, so it contains the
@@ -526,7 +560,7 @@ A cell is **invalid** and must be re-run if any of these is true:
 
 ## 8. Open items
 
-- Scene authoring — **S1–S4 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5–S7 **not started**.
+- Scene authoring — **S1–S4 and S6 authored** in `benchmarks/rd_3d/` (see [benchmark projects](../benchmarks/README.md)); S5 and S7 **not started**.
 - Harness implementation — **authored** (`benchmarks/rd_3d/scripts/bench_harness.gd`), **never executed**; no run has been validated against the gate in §7.
 - All counts in this document — **proposed**, not validated against real hardware.
 - Whether procedural content generation produces identical meshes on all backends — **not verified** (floating-point differences in normal/tangent generation are possible; the frame-hash check will expose them).
