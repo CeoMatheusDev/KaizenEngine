@@ -282,10 +282,11 @@ confirmed by a later frame and not by the teardown flush.
    tested in `kaizen/rendering/pipeline_cache/`; see
    [Pipeline object lifetime and eviction](pipeline-lifetime.md). It keeps
    `VkPipeline` objects separate from the persistent `VkPipelineCache` blob and
-   retires an object only when host/recording references and a backend
-   completion serial agree. It is **not wired into the driver yet**, because a
-   serial that covers every queue that used a pipeline requires timeline
-   semaphores and a device-level test.
+   retires an object only when host/recording references and every using
+   queue's completion serial agree. The Vulkan driver now defers
+   `vkDestroyPipeline` through it when `KAIZEN_PIPELINE_LIFETIME=on`, driven by
+   per-queue submission fences; the device-level test covers graphics and
+   compute queues. Creation-side eviction and hit/miss data remain open.
 2. **P3 — GLES3 initialization.** Guarantee a destructible state after a failed
    constructor path.
 3. **GPU profiling.** Timestamp queries and frame pacing on top of the same

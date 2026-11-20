@@ -1,0 +1,13 @@
+; Minimal compute shader used by the pipeline lifetime harness.
+; It has no descriptors and writes nothing; the harness only needs real GPU
+; work on two queues so completion values have meaning.
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %main "main"
+OpExecutionMode %main LocalSize 1 1 1
+%void = OpTypeVoid
+%void_fn = OpTypeFunction %void
+%main = OpFunction %void None %void_fn
+%entry = OpLabel
+OpReturn
+OpFunctionEnd

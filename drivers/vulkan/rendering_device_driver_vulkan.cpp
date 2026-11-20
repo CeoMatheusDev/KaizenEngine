@@ -3150,6 +3150,12 @@ Error RenderingDeviceDriverVulkan::fence_wait(FenceID p_fence) {
 		fence->queue_signaled_from = nullptr;
 	}
 
+	if (_kaizen_pipeline_lifetime_enabled() && fence->kaizen_serial != 0) {
+		_kaizen_pipeline_confirm(fence->kaizen_queue, fence->kaizen_serial);
+		fence->kaizen_queue = UINT32_MAX;
+		fence->kaizen_serial = 0;
+	}
+
 	return OK;
 }
 
@@ -3247,6 +3253,9 @@ RDD::CommandQueueID RenderingDeviceDriverVulkan::command_queue_create(CommandQue
 	CommandQueue *command_queue = memnew(CommandQueue);
 	command_queue->queue_family = family_index;
 	command_queue->queue_index = picked_queue_index;
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		command_queue->kaizen_submission_queue = _kaizen_pipeline_queue_slot(p_identify_as_main_queue);
+	}
 	queue_family[picked_queue_index].virtual_count++;
 
 	// If is was identified as the main queue and a hook is active, indicate it as such to the hook.
@@ -3342,6 +3351,19 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
 			CRASH_NOW_MSG("Vulkan device was lost. This could be due to a driver issue, a hardware issue, or the driver resetting itself because it was unresponsive for too long (TDR).");
 		}
 		ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, vformat("Couldn't submit to Vulkan queue (VkResult error %d).", err));
+
+		if (_kaizen_pipeline_lifetime_enabled() &&
+				command_queue->kaizen_submission_queue < Kaizen::PIPELINE_QUEUE_COUNT) {
+			// Only a successful submission may create a completion dependency.
+			// A fenced submission closes the current group, so its fence
+			// confirms every submission chained without one.
+			const uint64_t serial = kaizen_submissions->note_submission(
+					command_queue->kaizen_submission_queue, fence != nullptr);
+			if (fence != nullptr) {
+				fence->kaizen_queue = command_queue->kaizen_submission_queue;
+				fence->kaizen_serial = serial;
+			}
+		}
 
 		if (fence != nullptr && !command_queue->pending_semaphores_for_fence.is_empty()) {
 			fence->queue_signaled_from = command_queue;
@@ -5344,6 +5366,10 @@ void RenderingDeviceDriverVulkan::command_copy_texture_to_buffer(CommandBufferID
 /******************/
 
 void RenderingDeviceDriverVulkan::pipeline_free(PipelineID p_pipeline) {
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		_kaizen_pipeline_retire((VkPipeline)p_pipeline.id);
+		return;
+	}
 	vkDestroyPipeline(vk_device, (VkPipeline)p_pipeline.id, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
 }
 
@@ -7583,11 +7609,155 @@ RenderingDeviceDriver::DriverWorkarounds RenderingDeviceDriverVulkan::get_driver
 
 /******************/
 
+uint32_t RenderingDeviceDriverVulkan::_kaizen_pipeline_queue_slot(bool p_identify_as_main_queue) {
+	if (p_identify_as_main_queue) {
+		// The main queue carries both graphics and compute work.
+		return 0;
+	}
+
+	const uint32_t slot = kaizen_next_submission_queue;
+	if (slot >= Kaizen::PIPELINE_QUEUE_COUNT) {
+		// Merging two physical queues into one completion domain would be
+		// unsound. Leaving the queue untracked is only conservative: objects
+		// used there stay pending until teardown. The engine creates at most
+		// main, transfer and present queues, so this is not expected.
+		WARN_PRINT_ONCE("Kaizen pipeline lifetime: more than three command queues; extra queue is not tracked.");
+		return UINT32_MAX;
+	}
+	kaizen_next_submission_queue = slot + 1;
+	return slot;
+}
+
+void RenderingDeviceDriverVulkan::_kaizen_pipeline_confirm(uint32_t p_queue, uint64_t p_serial) {
+	if (!_kaizen_pipeline_lifetime_enabled() || p_queue >= Kaizen::PIPELINE_QUEUE_COUNT) {
+		return;
+	}
+
+	kaizen_submissions->confirm(p_queue, p_serial);
+	kaizen_pipeline_registry->set_completed_serial(
+			static_cast<Kaizen::PipelineQueue>(p_queue),
+			kaizen_submissions->get_confirmed()[p_queue]);
+	_kaizen_pipeline_drain();
+}
+
+void RenderingDeviceDriverVulkan::_kaizen_pipeline_confirm_all() {
+	if (!_kaizen_pipeline_lifetime_enabled()) {
+		return;
+	}
+
+	kaizen_submissions->confirm_all();
+	const uint64_t *confirmed = kaizen_submissions->get_confirmed();
+	for (uint32_t i = 0; i < Kaizen::PIPELINE_QUEUE_COUNT; i++) {
+		kaizen_pipeline_registry->set_completed_serial(
+				static_cast<Kaizen::PipelineQueue>(i), confirmed[i]);
+	}
+	_kaizen_pipeline_drain();
+}
+
+void RenderingDeviceDriverVulkan::_kaizen_pipeline_drain() {
+	if (!_kaizen_pipeline_lifetime_enabled()) {
+		return;
+	}
+
+	Kaizen::PipelineHandle handles[64];
+	uint32_t count = 0;
+	while ((count = kaizen_pipeline_registry->collect_destroyable(handles, 64)) > 0) {
+		for (uint32_t i = 0; i < count; i++) {
+			const uint32_t index = handles[i].index;
+			const VkPipeline pipeline = kaizen_pending_pipelines[index];
+			if (pipeline != VK_NULL_HANDLE) {
+				vkDestroyPipeline(vk_device, pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+				kaizen_pending_pipelines[index] = VK_NULL_HANDLE;
+			}
+			if (!kaizen_pipeline_registry->destroy(handles[i])) {
+				// Defensive: a handle that cannot be destroyed must not keep
+				// the loop alive.
+				return;
+			}
+		}
+	}
+}
+
+void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline) {
+	if (!_kaizen_pipeline_lifetime_enabled()) {
+		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		return;
+	}
+
+	Kaizen::PipelineHandle handle;
+	for (uint32_t attempt = 0; attempt < 2 && handle.is_null(); attempt++) {
+		handle = kaizen_pipeline_registry->acquire(kaizen_next_pipeline_key, 0);
+		if (handle.is_null()) {
+			_kaizen_pipeline_drain();
+		}
+	}
+
+	if (handle.is_null()) {
+		// The registry is exhausted. Wait for the device so every pending
+		// object can be reclaimed, then try once more.
+		vkDeviceWaitIdle(vk_device);
+		_kaizen_pipeline_confirm_all();
+		handle = kaizen_pipeline_registry->acquire(kaizen_next_pipeline_key, 0);
+	}
+
+	if (handle.is_null()) {
+		// Nothing can be tracked and the device is idle, so this is safe.
+		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		return;
+	}
+	kaizen_next_pipeline_key++;
+
+	// Conservatively assume the object was used by every queue up to the last
+	// submission made so far. A queue that never submitted is skipped.
+	for (uint32_t i = 0; i < Kaizen::PIPELINE_QUEUE_COUNT; i++) {
+		const uint64_t serial = kaizen_submissions->last_serial(i);
+		if (serial != 0) {
+			kaizen_pipeline_registry->mark_use(handle, static_cast<Kaizen::PipelineQueue>(i), serial);
+		}
+	}
+
+	kaizen_pipeline_registry->release(handle);
+	if (!kaizen_pipeline_registry->retire_now(handle)) {
+		// Unreachable: no references are held here. Fall back to destroying
+		// after a device wait rather than leaking the object.
+		vkDeviceWaitIdle(vk_device);
+		_kaizen_pipeline_confirm_all();
+		kaizen_pipeline_registry->destroy(handle);
+		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		return;
+	}
+
+	kaizen_pending_pipelines[handle.index] = p_pipeline;
+
+	// Work submitted before this call may already be complete; re-evaluate
+	// retirement with the current completion values.
+	const uint64_t *confirmed = kaizen_submissions->get_confirmed();
+	for (uint32_t i = 0; i < Kaizen::PIPELINE_QUEUE_COUNT; i++) {
+		kaizen_pipeline_registry->set_completed_serial(
+				static_cast<Kaizen::PipelineQueue>(i), confirmed[i]);
+	}
+	_kaizen_pipeline_drain();
+}
+
 RenderingDeviceDriverVulkan::RenderingDeviceDriverVulkan(RenderingContextDriverVulkan *p_context_driver) {
 	DEV_ASSERT(p_context_driver != nullptr);
 
 	context_driver = p_context_driver;
 	max_descriptor_sets_per_pool = GLOBAL_GET("rendering/rendering_device/vulkan/max_descriptors_per_pool");
+
+	// Kaizen P2: opt-in deferred pipeline destruction. Disabled by default so
+	// the upstream behavior and its measurements stay unchanged.
+	const String pipeline_lifetime = OS::get_singleton() ? OS::get_singleton()->get_environment("KAIZEN_PIPELINE_LIFETIME") : String();
+	if (pipeline_lifetime == "on" || pipeline_lifetime == "1" || pipeline_lifetime == "true") {
+		const uint32_t capacity = 4096;
+		kaizen_pipeline_registry = memnew(Kaizen::PipelineRegistry(capacity, 0));
+		kaizen_submissions = memnew(Kaizen::PipelineSubmissionTracker(Kaizen::PIPELINE_QUEUE_COUNT));
+		kaizen_pending_pipelines.resize(capacity);
+		for (uint32_t i = 0; i < capacity; i++) {
+			kaizen_pending_pipelines[i] = VK_NULL_HANDLE;
+		}
+		print_line("[Kaizen][Pipelines] Deferred destruction enabled (4096 slots).");
+	}
 }
 
 RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
@@ -7616,6 +7786,28 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
 	}
 
 	if (vk_device != VK_NULL_HANDLE) {
+		// Kaizen P2: release any pipeline still waiting for completion. The
+		// device is about to be destroyed, so waiting is both safe and final.
+		if (_kaizen_pipeline_lifetime_enabled()) {
+			vkDeviceWaitIdle(vk_device);
+			_kaizen_pipeline_confirm_all();
+			_kaizen_pipeline_drain();
+		}
 		vkDestroyDevice(vk_device, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_DEVICE));
 	}
+
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		const Kaizen::PipelineStats stats = kaizen_pipeline_registry->get_stats();
+		print_line("[Kaizen][Pipelines] retired=" + String::num_uint64(stats.retired) +
+				" destroyed=" + String::num_uint64(stats.destroyed) +
+				" resident=" + String::num_uint64(stats.resident_count) +
+				" retiring=" + String::num_uint64(stats.retiring_count) +
+				" destroyable=" + String::num_uint64(stats.destroyable_count) +
+				" pending_bytes=" + String::num_uint64(stats.pending_bytes));
+	}
+
+	memdelete(kaizen_pipeline_registry);
+	kaizen_pipeline_registry = nullptr;
+	memdelete(kaizen_submissions);
+	kaizen_submissions = nullptr;
 }

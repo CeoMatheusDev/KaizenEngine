@@ -53,9 +53,9 @@ zero, because zero is reserved for null handles.
 ## Pipeline registry tests
 
 `test_pipeline_registry.cpp` exercises the P2 core in
-`kaizen/rendering/pipeline_cache/`: `PipelineRegistry`, `PipelineLRU` and
-`PipelineRetirementQueue`. Like the resource registry, it depends only on the
-C++ standard library.
+`kaizen/rendering/pipeline_cache/`: `PipelineRegistry`, `PipelineLRU`,
+`PipelineRetirementQueue` and `PipelineSubmissionTracker`. Like the resource
+registry, it depends only on the C++ standard library.
 
 ```bash
 ./tests/kaizen/run_tests.sh          # both suites
@@ -67,16 +67,17 @@ representative run, approximately ±10 % run-to-run):
 
 | Operation | mean | p50 | p95 | p99 | Throughput |
 | --- | --- | --- | --- | --- | --- |
-| Hit: `acquire` + `release` | 28.4 ns | 27.4 ns | 28.3 ns | 48.5 ns | 35.25 Mops/s |
-| Hit, near capacity | 27.8 ns | 27.4 ns | 27.4 ns | 42.7 ns | 36.00 Mops/s |
-| Miss: new slot + `release` | 108.7 ns | 87.6 ns | 118.0 ns | 164.3 ns | 9.20 Mops/s |
-| Evict → retire → destroy | 154.1 ns | 149.1 ns | 179.7 ns | 266.5 ns | 6.49 Mops/s |
-| Full lifetime | 159.9 ns | 156.9 ns | 161.8 ns | 276.3 ns | 6.25 Mops/s |
+| Hit: `acquire` + `release` | 27.9 ns | 27.8 ns | 27.9 ns | 28.2 ns | 35.83 Mops/s |
+| Hit, near capacity | 27.6 ns | 27.4 ns | 27.4 ns | 27.7 ns | 36.24 Mops/s |
+| Miss: new slot + `release` | 108.4 ns | 86.3 ns | 103.8 ns | 154.4 ns | 9.23 Mops/s |
+| Evict → retire → destroy | 154.5 ns | 152.9 ns | 153.5 ns | 226.7 ns | 6.47 Mops/s |
+| Full lifetime | 162.8 ns | 161.7 ns | 162.4 ns | 206.5 ns | 6.14 Mops/s |
+| Multi-queue lifetime | 193.0 ns | 191.7 ns | 192.4 ns | 237.6 ns | 5.18 Mops/s |
 
 Shared-registry throughput (one hot key, maximum contention, machine not idle):
 1 thread 34.06–35.85, 2 threads 2.69–6.95, 4 threads 2.06–3.16, 8 threads
-0.90–1.67 Mops/s. A slot is 40 B; with free-list and LRU links the fixed cost is
-52 B/slot. The suite is also clean under ASan+UBSan and TSan; sanitizers are not
+0.90–1.67 Mops/s. A slot is 64 B; with free-list and LRU links the fixed cost is
+76 B/slot (4.75 MiB at 65 536 slots). The suite is also clean under ASan+UBSan and TSan; sanitizers are not
 part of the default script.
 
 These numbers exclude Vulkan pipeline creation; a "miss" only allocates a
@@ -85,8 +86,14 @@ registry slot and inserts a key. Acceptance criteria covered:
 - No eviction at or below the byte budget; LRU selects the least recently used
   resident object.
 - Host and recording references independently prevent destruction.
-- Destruction waits for the backend completion serial; an unreached serial
-  keeps the object alive.
+- Destruction waits for every queue that used the object; graphics finishing
+  does not release an object that compute still uses, and queues may report
+  completion in any order.
+- A failed or aborted recording creates no completion dependency.
+- `retire_now()` is refused while a reference is live and waits for recorded
+  queue usage after it is accepted.
+- Fence groups map to one serial: unfenced submissions join the open group, the
+  fenced submission closes it, and a fence wait confirms exactly that serial.
 - A key has at most one live object; acquiring it while it retires is refused
   instead of creating a duplicate.
 - Reclaimed slots produce new generations; stale handles are rejected by every
@@ -129,6 +136,26 @@ number of releases confirmed by frame epochs while the engine was running.
 finalized (the scene and its default textures). `live=0` and `releases == allocs`
 are the pass criteria.
 
+## Vulkan device-level pipeline lifetime test (requires a GPU)
+
+`vulkan/pipeline_lifetime_vulkan.cpp` validates the P2 model against real
+`VkPipeline` objects. It creates a graphics and a compute queue, signals a
+timeline semaphore per submission, and only destroys a pipeline after the
+registry observed both queues completing.
+
+```bash
+./tests/kaizen/vulkan/run_vulkan_tests.sh
+```
+
+Requirements: Vulkan 1.2, a device with graphics + compute queues and timeline
+semaphores, `VK_LAYER_KHRONOS_validation`, and `spirv-as`. The script exits 77
+(skip) when they are missing; a skipped run is not a pass.
+
+Reference result on the RX 550 (RADV POLARIS12): 70 checks, 0 failures, 0
+validation errors. Scenarios: multi-queue completion in both orders, blocked
+destruction while recording, aborted submission, device-idle drain, zero live
+objects at shutdown, and key reuse after retirement.
+
 ## Vulkan image-buffer and texture-buffer callback tests
 
 The tests previously sketched here as empty files were removed: they contained
@@ -145,3 +172,11 @@ The current evidence for those two patches is limited to: the engine builds,
 the S1 benchmark renders correctly, and no tracked resource leaks. That is
 sufficient to prove the normal path still works, not to prove the new paths are
 exercised.
+
+## In-engine pipeline destruction (opt-in)
+
+The Vulkan driver defers `vkDestroyPipeline` through the registry only when
+`KAIZEN_PIPELINE_LIFETIME=on` is set. With the variable absent, destruction is
+the upstream immediate call. The hooks are documented in
+`patches/rendering-device/004-pipeline-lifetime-integration.md`; the model and
+the remaining work are in `docs/architecture/pipeline-lifetime.md`.

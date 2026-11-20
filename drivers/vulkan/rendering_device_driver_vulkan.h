@@ -35,6 +35,8 @@
 #include "core/templates/rb_map.h"
 #include "drivers/vulkan/rendering_context_driver_vulkan.h"
 #include "drivers/vulkan/rendering_shader_container_vulkan.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_submission.h"
 #include "servers/rendering/rendering_device_driver.h"
 
 #ifdef DEBUG_ENABLED
@@ -350,6 +352,9 @@ private:
 	struct Fence {
 		VkFence vk_fence = VK_NULL_HANDLE;
 		CommandQueue *queue_signaled_from = nullptr;
+		// Kaizen P2: submission group this fence confirms, if any.
+		uint32_t kaizen_queue = UINT32_MAX;
+		uint64_t kaizen_serial = 0;
 	};
 
 public:
@@ -383,6 +388,9 @@ private:
 		LocalVector<Pair<Fence *, uint32_t>> image_semaphores_for_fences;
 		uint32_t queue_family = 0;
 		uint32_t queue_index = 0;
+		// Kaizen P2: index in Kaizen::PipelineSubmissionTracker, or UINT32_MAX
+		// when pipeline lifetime tracking is disabled.
+		uint32_t kaizen_submission_queue = UINT32_MAX;
 	};
 
 public:
@@ -825,6 +833,25 @@ private:
 			RenderPassInfo,
 			CommandBufferInfo>;
 	PagedAllocator<VersatileResource, true> resources_allocator;
+
+	/**********************************/
+	/**** KAIZEN PIPELINE LIFETIME ****/
+	/**********************************/
+	// Opt-in (KAIZEN_PIPELINE_LIFETIME=on). Null when disabled, in which case
+	// pipeline_free() destroys immediately as upstream does.
+	Kaizen::PipelineRegistry *kaizen_pipeline_registry = nullptr;
+	Kaizen::PipelineSubmissionTracker *kaizen_submissions = nullptr;
+	// One VkPipeline per registry slot, indexed by handle.index.
+	LocalVector<VkPipeline> kaizen_pending_pipelines;
+	uint64_t kaizen_next_pipeline_key = 1;
+	uint32_t kaizen_next_submission_queue = 1;
+
+	bool _kaizen_pipeline_lifetime_enabled() const { return kaizen_pipeline_registry != nullptr; }
+	uint32_t _kaizen_pipeline_queue_slot(bool p_identify_as_main_queue);
+	void _kaizen_pipeline_confirm(uint32_t p_queue, uint64_t p_serial);
+	void _kaizen_pipeline_confirm_all();
+	void _kaizen_pipeline_drain();
+	void _kaizen_pipeline_retire(VkPipeline p_pipeline);
 
 	/******************/
 

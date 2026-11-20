@@ -48,7 +48,7 @@ Verified in `servers/rendering/rendering_device.cpp:8860-8940`:
 ## 5. Shader variant growth
 
 - Boolean specializations are encoded as a bitmask; each additional boolean doubles the theoretical variant space.
-- No variant budget, cap, or eviction policy was found in the variant table. Kaizen's P2 registry adds the policy core, but it is not connected to this table yet; see [Pipeline object lifetime and eviction](pipeline-lifetime.md).
+- No variant budget, cap, or eviction policy was found in the variant table. Kaizen's P2 registry adds the policy core, but it is not connected to this table yet; what is connected is completion-safe deferred destruction of freed pipeline objects (`KAIZEN_PIPELINE_LIFETIME=on`). Creation-side eviction remains open; see [Pipeline object lifetime and eviction](pipeline-lifetime.md).
 - Base specialization constants are stored per cache instance and can be changed through `update_specialization_constants()` / `update_shader()`, which invalidate the pipelines created before the change (the caches are re-set up).
 
 ## 6. Rules implied for R1
@@ -62,7 +62,9 @@ Verified in `servers/rendering/rendering_device.cpp:8860-8940`:
 ## 7. Open items
 
 - The P2 registry has no in-engine hit/miss, resident-memory, or eviction data
-  yet: it is compiled but not called by the renderer or the driver.
+  yet. The Vulkan driver does call it to defer `vkDestroyPipeline` when
+  `KAIZEN_PIPELINE_LIFETIME=on`, but creation is not gated on it, so hit/miss
+  and resident-memory figures are still not meaningful.
 
 - Cold vs. warm compilation time per backend and per scene — **not measured**.
 - Real variant counts for representative scenes — **not measured**.

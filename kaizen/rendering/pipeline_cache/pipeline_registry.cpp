@@ -48,6 +48,13 @@ bool PipelineRegistry::_resolve_locked(PipelineHandle p_handle, Slot *&r_slot) c
 	return true;
 }
 
+bool PipelineRegistry::_is_ready_locked(const Slot &p_slot) const {
+	if (p_slot.host_refs != 0 || p_slot.recording_refs != 0) {
+		return false;
+	}
+	return p_slot.usage.is_complete(completed_serials);
+}
+
 PipelineHandle PipelineRegistry::acquire(uint64_t p_key, uint64_t p_bytes) {
 	lock.lock();
 
@@ -95,7 +102,7 @@ PipelineHandle PipelineRegistry::acquire(uint64_t p_key, uint64_t p_bytes) {
 
 	slot.key = p_key;
 	slot.bytes = p_bytes;
-	slot.last_use_serial = 0;
+	slot.usage = PipelineQueueUsage();
 	slot.host_refs = 1;
 	slot.recording_refs = 0;
 	slot.state = PipelineState::Resident;
@@ -168,7 +175,15 @@ bool PipelineRegistry::begin_use(PipelineHandle p_handle) {
 	return true;
 }
 
-bool PipelineRegistry::end_use(PipelineHandle p_handle, uint64_t p_submission_serial) {
+bool PipelineRegistry::end_use(PipelineHandle p_handle, PipelineQueue p_queue, uint64_t p_submission_serial) {
+	const uint32_t queue = pipeline_queue_index(p_queue);
+	if (queue >= PIPELINE_QUEUE_COUNT || p_submission_serial == 0) {
+		lock.lock();
+		invalid_serials++;
+		lock.unlock();
+		return false;
+	}
+
 	lock.lock();
 
 	Slot *slot = nullptr;
@@ -188,9 +203,7 @@ bool PipelineRegistry::end_use(PipelineHandle p_handle, uint64_t p_submission_se
 	}
 
 	slot->recording_refs--;
-	if (p_submission_serial > slot->last_use_serial) {
-		slot->last_use_serial = p_submission_serial;
-	}
+	slot->usage.record(p_queue, p_submission_serial);
 
 	if (slot->host_refs == 0 && slot->recording_refs == 0 &&
 			slot->state == PipelineState::EvictionCandidate) {
@@ -201,7 +214,49 @@ bool PipelineRegistry::end_use(PipelineHandle p_handle, uint64_t p_submission_se
 	return true;
 }
 
-bool PipelineRegistry::mark_use(PipelineHandle p_handle, uint64_t p_submission_serial) {
+bool PipelineRegistry::abort_use(PipelineHandle p_handle) {
+	lock.lock();
+
+	Slot *slot = nullptr;
+	if (!_resolve_locked(p_handle, slot)) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->state != PipelineState::Resident && slot->state != PipelineState::EvictionCandidate) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->recording_refs == 0) {
+		lock.unlock();
+		return false;
+	}
+
+	// The submission never executed, so no queue usage is recorded. Dropping
+	// the reference is enough: the object either stays resident or retires
+	// with its previously recorded uses.
+	slot->recording_refs--;
+	aborted_recordings++;
+
+	if (slot->host_refs == 0 && slot->recording_refs == 0 &&
+			slot->state == PipelineState::EvictionCandidate) {
+		_retire_locked(p_handle.index);
+	}
+
+	lock.unlock();
+	return true;
+}
+
+bool PipelineRegistry::mark_use(PipelineHandle p_handle, PipelineQueue p_queue, uint64_t p_submission_serial) {
+	const uint32_t queue = pipeline_queue_index(p_queue);
+	if (queue >= PIPELINE_QUEUE_COUNT || p_submission_serial == 0) {
+		lock.lock();
+		invalid_serials++;
+		lock.unlock();
+		return false;
+	}
+
 	lock.lock();
 
 	Slot *slot = nullptr;
@@ -218,10 +273,7 @@ bool PipelineRegistry::mark_use(PipelineHandle p_handle, uint64_t p_submission_s
 		return false;
 	}
 
-	if (p_submission_serial > slot->last_use_serial) {
-		slot->last_use_serial = p_submission_serial;
-	}
-
+	slot->usage.record(p_queue, p_submission_serial);
 	lock.unlock();
 	return true;
 }
@@ -237,7 +289,8 @@ bool PipelineRegistry::describe(PipelineHandle p_handle, PipelineInfo &r_info) c
 
 	r_info.key = slot->key;
 	r_info.bytes = slot->bytes;
-	r_info.last_use_serial = slot->last_use_serial;
+	r_info.last_use_serial = slot->usage.max_serial();
+	r_info.usage = slot->usage;
 	r_info.generation = slot->generation;
 	r_info.host_refs = slot->host_refs;
 	r_info.recording_refs = slot->recording_refs;
@@ -255,14 +308,19 @@ bool PipelineRegistry::is_valid(PipelineHandle p_handle) const {
 	return valid;
 }
 
-uint32_t PipelineRegistry::set_completed_serial(uint64_t p_completed_serial) {
-	lock.lock();
-
-	if (p_completed_serial > completed_serial) {
-		completed_serial = p_completed_serial;
+uint32_t PipelineRegistry::set_completed_serial(PipelineQueue p_queue, uint64_t p_completed_serial) {
+	const uint32_t queue = pipeline_queue_index(p_queue);
+	if (queue >= PIPELINE_QUEUE_COUNT) {
+		return 0;
 	}
 
-	const uint32_t ready = retirement.collect_ready(completed_serial, ready_buffer.data(), (uint32_t)ready_buffer.size());
+	lock.lock();
+
+	if (p_completed_serial > completed_serials[queue]) {
+		completed_serials[queue] = p_completed_serial;
+	}
+
+	const uint32_t ready = retirement.collect_ready(completed_serials, ready_buffer.data(), (uint32_t)ready_buffer.size());
 
 	uint32_t transitioned = 0;
 	for (uint32_t i = 0; i < ready; i++) {
@@ -336,7 +394,7 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 	slot->state = PipelineState::Free;
 	slot->key = 0;
 	slot->bytes = 0;
-	slot->last_use_serial = 0;
+	slot->usage = PipelineQueueUsage();
 	slot->host_refs = 0;
 	slot->recording_refs = 0;
 
@@ -347,6 +405,15 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 	return true;
 }
 
+void PipelineRegistry::_move_to_pending_locked(Slot &r_slot) {
+	if (resident_bytes >= r_slot.bytes) {
+		resident_bytes -= r_slot.bytes;
+	} else {
+		resident_bytes = 0;
+	}
+	pending_bytes += r_slot.bytes;
+}
+
 void PipelineRegistry::_mark_candidate_locked(uint32_t p_index) {
 	Slot &slot = slots[p_index];
 	if (slot.state != PipelineState::Resident) {
@@ -355,13 +422,7 @@ void PipelineRegistry::_mark_candidate_locked(uint32_t p_index) {
 
 	slot.state = PipelineState::EvictionCandidate;
 	lru.remove(p_index);
-
-	if (resident_bytes >= slot.bytes) {
-		resident_bytes -= slot.bytes;
-	} else {
-		resident_bytes = 0;
-	}
-	pending_bytes += slot.bytes;
+	_move_to_pending_locked(slot);
 	eviction_candidates++;
 
 	if (slot.host_refs == 0 && slot.recording_refs == 0) {
@@ -376,7 +437,7 @@ void PipelineRegistry::_retire_locked(uint32_t p_index) {
 	}
 
 	slot.state = PipelineState::Retiring;
-	retirement.push(p_index, slot.generation, slot.last_use_serial);
+	retirement.push(p_index, slot.generation, slot.usage);
 	retired++;
 
 	// Normally the slot left the LRU when it became a candidate; this keeps the
@@ -393,6 +454,40 @@ void PipelineRegistry::_enforce_budget_locked() {
 		const uint32_t index = lru.peek_lru();
 		_mark_candidate_locked(index);
 	}
+}
+
+bool PipelineRegistry::retire_now(PipelineHandle p_handle) {
+	lock.lock();
+
+	Slot *slot = nullptr;
+	if (!_resolve_locked(p_handle, slot)) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->state != PipelineState::Resident && slot->state != PipelineState::EvictionCandidate) {
+		lock.unlock();
+		return false;
+	}
+
+	// The caller must have dropped every reference first; otherwise the
+	// object could still be recorded into a command buffer.
+	if (slot->host_refs != 0 || slot->recording_refs != 0) {
+		lock.unlock();
+		return false;
+	}
+
+	const uint32_t index = p_handle.index;
+	if (slot->state == PipelineState::Resident) {
+		_move_to_pending_locked(*slot);
+		lru.remove(index);
+	}
+
+	requested_retirements++;
+	_retire_locked(index);
+
+	lock.unlock();
+	return true;
 }
 
 uint32_t PipelineRegistry::enforce_budget() {
@@ -426,17 +521,22 @@ PipelineStats PipelineRegistry::get_stats() const {
 	stats.misses = misses;
 	stats.releases = releases;
 	stats.recording_starts = recording_starts;
+	stats.aborted_recordings = aborted_recordings;
 	stats.eviction_candidates = eviction_candidates;
+	stats.requested_retirements = requested_retirements;
 	stats.retired = retired;
 	stats.destroyable = destroyable;
 	stats.destroyed = destroyed;
 	stats.blocked_by_retirement = blocked_by_retirement;
 	stats.rejected_full = rejected_full;
 	stats.late_use = late_use;
+	stats.invalid_serials = invalid_serials;
 	stats.resident_bytes = resident_bytes;
 	stats.pending_bytes = pending_bytes;
 	stats.peak_resident_bytes = peak_resident_bytes;
-	stats.completed_serial = completed_serial;
+	for (uint32_t i = 0; i < PIPELINE_QUEUE_COUNT; i++) {
+		stats.completed_serials[i] = completed_serials[i];
+	}
 
 	for (const Slot &slot : slots) {
 		switch (slot.state) {

@@ -22,6 +22,7 @@
 
 #include "kaizen/rendering/pipeline_cache/pipeline_lru.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_submission.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_retirement.h"
 
 #include <algorithm>
@@ -59,6 +60,7 @@ void check_impl(bool p_condition, const char *p_expression, const char *p_test, 
 using Kaizen::PipelineHandle;
 using Kaizen::PipelineInfo;
 using Kaizen::PipelineLRU;
+using Kaizen::PipelineQueue;
 using Kaizen::PipelineRegistry;
 using Kaizen::PipelineRetirementQueue;
 using Kaizen::PipelineState;
@@ -128,10 +130,10 @@ TEST_BEGIN(release_rejects_invalid_sequences)
 	CHECK(!registry.release(handle));
 
 	// begin_use/end_use are paired.
-	CHECK(!registry.end_use(handle, 1)); // no recording reference yet
+	CHECK(!registry.end_use(handle, PipelineQueue::Graphics, 1)); // no recording reference yet
 	CHECK(registry.begin_use(handle));
-	CHECK(registry.end_use(handle, 1));
-	CHECK(!registry.end_use(handle, 2)); // already ended
+	CHECK(registry.end_use(handle, PipelineQueue::Graphics, 1));
+	CHECK(!registry.end_use(handle, PipelineQueue::Graphics, 2)); // already ended
 	CHECK(!registry.begin_use(PipelineHandle()));
 TEST_END()
 
@@ -141,7 +143,7 @@ TEST_BEGIN(stale_handle_rejected)
 	PipelineHandle handle = registry.acquire(1, KIB);
 	registry.release(handle);
 	registry.enforce_budget();
-	registry.set_completed_serial(0);
+	registry.set_completed_serial(PipelineQueue::Graphics, 0);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 	CHECK(!registry.is_valid(handle));
 
@@ -149,8 +151,8 @@ TEST_BEGIN(stale_handle_rejected)
 	CHECK(!registry.describe(handle, info));
 	CHECK(!registry.release(handle));
 	CHECK(!registry.begin_use(handle));
-	CHECK(!registry.end_use(handle, 1));
-	CHECK(!registry.mark_use(handle, 1));
+	CHECK(!registry.end_use(handle, PipelineQueue::Graphics, 1));
+	CHECK(!registry.mark_use(handle, PipelineQueue::Graphics, 1));
 	CHECK(!registry.destroy(handle));
 TEST_END()
 
@@ -199,7 +201,7 @@ TEST_BEGIN(lru_evicts_least_recently_used)
 	// Releasing the candidate host reference retires it.
 	CHECK(registry.release(b));
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
-	CHECK_EQ(registry.set_completed_serial(0), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 	CHECK(!registry.is_valid(b));
 	CHECK(registry.is_valid(a));
@@ -216,13 +218,13 @@ TEST_BEGIN(active_host_reference_blocks_destruction)
 	CHECK_EQ(info.host_refs, (uint32_t)1);
 
 	// No recording references, but the host reference keeps it alive.
-	registry.set_completed_serial(100);
+	registry.set_completed_serial(PipelineQueue::Graphics, 100);
 	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)0);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)0);
 
 	CHECK(registry.release(handle));
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
-	CHECK_EQ(registry.set_completed_serial(100), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 100), (uint32_t)1);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 	CHECK(!registry.is_valid(handle));
 TEST_END()
@@ -240,13 +242,13 @@ TEST_BEGIN(recording_reference_blocks_destruction)
 	CHECK(!registry.begin_use(handle));
 	CHECK(registry.is_valid(handle));
 
-	CHECK(registry.end_use(handle, 7));
+	CHECK(registry.end_use(handle, PipelineQueue::Graphics, 7));
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
 
-	CHECK_EQ(registry.set_completed_serial(6), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 6), (uint32_t)0);
 	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)0);
 
-	CHECK_EQ(registry.set_completed_serial(7), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 7), (uint32_t)1);
 	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)1);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 TEST_END()
@@ -255,22 +257,22 @@ TEST_BEGIN(pending_submission_delays_destruction)
 	PipelineRegistry registry(4, 0);
 	PipelineHandle handle = registry.acquire(1, KIB);
 
-	CHECK(registry.mark_use(handle, 10));
+	CHECK(registry.mark_use(handle, PipelineQueue::Graphics, 10));
 	CHECK(registry.release(handle));
 	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
 
-	CHECK_EQ(registry.set_completed_serial(9), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 9), (uint32_t)0);
 	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)0);
 
-	CHECK_EQ(registry.set_completed_serial(10), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 10), (uint32_t)1);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 TEST_END()
 
 TEST_BEGIN(late_use_is_rejected)
 	PipelineRegistry registry(4, 0);
 	PipelineHandle handle = registry.acquire(1, KIB);
-	CHECK(registry.mark_use(handle, 4));
+	CHECK(registry.mark_use(handle, PipelineQueue::Graphics, 4));
 	CHECK(registry.release(handle));
 	registry.enforce_budget();
 
@@ -278,7 +280,7 @@ TEST_BEGIN(late_use_is_rejected)
 	CHECK(registry.describe(handle, info));
 	CHECK_EQ(info.state, PipelineState::Retiring);
 
-	CHECK(!registry.mark_use(handle, 5));
+	CHECK(!registry.mark_use(handle, PipelineQueue::Graphics, 5));
 	CHECK(!registry.begin_use(handle));
 	CHECK_EQ(registry.get_stats().late_use, (uint64_t)1);
 TEST_END()
@@ -290,7 +292,7 @@ TEST_BEGIN(key_is_unique_while_retiring)
 	PipelineRegistry registry(4, 0);
 	PipelineHandle first = registry.acquire(1, KIB);
 	const uint32_t first_generation = first.generation;
-	CHECK(registry.mark_use(first, 5));
+	CHECK(registry.mark_use(first, PipelineQueue::Graphics, 5));
 	CHECK(registry.release(first));
 	registry.enforce_budget();
 
@@ -298,7 +300,7 @@ TEST_BEGIN(key_is_unique_while_retiring)
 	CHECK(registry.acquire(1, KIB).is_null());
 	CHECK_EQ(registry.get_stats().blocked_by_retirement, (uint64_t)1);
 
-	registry.set_completed_serial(5);
+	registry.set_completed_serial(PipelineQueue::Graphics, 5);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 
 	PipelineHandle second = registry.acquire(1, KIB);
@@ -316,7 +318,7 @@ TEST_BEGIN(generation_wrap_skips_zero)
 
 	registry.release(first);
 	registry.enforce_budget();
-	registry.set_completed_serial(0);
+	registry.set_completed_serial(PipelineQueue::Graphics, 0);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 
 	PipelineHandle second = registry.acquire(2, KIB);
@@ -337,7 +339,7 @@ TEST_BEGIN(capacity_full_fails_controlled)
 
 	registry.release(a);
 	registry.enforce_budget();
-	registry.set_completed_serial(0);
+	registry.set_completed_serial(PipelineQueue::Graphics, 0);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 
 	PipelineHandle reused = registry.acquire(3, KIB);
@@ -356,7 +358,7 @@ TEST_BEGIN(shutdown_drains_everything)
 		if (i % 2 == 0) {
 			CHECK(registry.begin_use(handle));
 		}
-		CHECK(registry.mark_use(handle, 9));
+		CHECK(registry.mark_use(handle, PipelineQueue::Graphics, 9));
 		handles.push_back(handle);
 	}
 
@@ -368,10 +370,10 @@ TEST_BEGIN(shutdown_drains_everything)
 	// the command buffers finish.
 	CHECK_EQ(registry.enforce_budget(), count);
 	for (uint32_t i = 0; i < count; i += 2) {
-		CHECK(registry.end_use(handles[i], 9));
+		CHECK(registry.end_use(handles[i], PipelineQueue::Graphics, 9));
 	}
 
-	CHECK_EQ(registry.set_completed_serial(9), count);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 9), count);
 	CHECK_EQ(drain_destroyable(registry), count);
 
 	const PipelineStats stats = registry.get_stats();
@@ -393,7 +395,7 @@ TEST_BEGIN(stats_reflect_lifecycle)
 	registry.acquire(1, KIB); // hit
 
 	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
-	CHECK(registry.mark_use(b, 3));
+	CHECK(registry.mark_use(b, PipelineQueue::Graphics, 3));
 
 	PipelineStats stats = registry.get_stats();
 	CHECK_EQ(stats.acquisitions, (uint64_t)3);
@@ -408,13 +410,226 @@ TEST_BEGIN(stats_reflect_lifecycle)
 	registry.release(b);
 	registry.set_budget(0);
 	registry.enforce_budget(); // `a` now has zero host refs and is evictable.
-	registry.set_completed_serial(3);
+	registry.set_completed_serial(PipelineQueue::Graphics, 3);
 	drain_destroyable(registry);
 
 	stats = registry.get_stats();
 	CHECK_EQ(stats.destroyed, (uint64_t)2);
 	CHECK_EQ(stats.resident_bytes, (uint64_t)0);
 	CHECK_EQ(stats.pending_bytes, (uint64_t)0);
+TEST_END()
+
+TEST_BEGIN(multi_queue_waits_for_all)
+	PipelineRegistry registry(4, 0);
+	PipelineHandle handle = registry.acquire(1, KIB);
+
+	CHECK(registry.begin_use(handle));
+	CHECK(registry.end_use(handle, PipelineQueue::Graphics, 10));
+	CHECK(registry.begin_use(handle));
+	CHECK(registry.end_use(handle, PipelineQueue::Compute, 20));
+
+	PipelineInfo info;
+	CHECK(registry.describe(handle, info));
+	CHECK(info.usage.is_used(PipelineQueue::Graphics));
+	CHECK(info.usage.is_used(PipelineQueue::Compute));
+	CHECK_EQ(info.usage.get(PipelineQueue::Graphics), (uint64_t)10);
+	CHECK_EQ(info.usage.get(PipelineQueue::Compute), (uint64_t)20);
+	CHECK_EQ(info.last_use_serial, (uint64_t)20);
+
+	CHECK(registry.release(handle));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
+	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
+
+	// Graphics finishing is not enough.
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 10), (uint32_t)0);
+	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)0);
+
+	// Compute must reach 20 as well.
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 19), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 20), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+TEST_END()
+
+TEST_BEGIN(queues_complete_out_of_order)
+	PipelineRegistry registry(8, 0);
+	PipelineHandle graphics_only = registry.acquire(1, KIB);
+	PipelineHandle compute_only = registry.acquire(2, KIB);
+
+	CHECK(registry.mark_use(graphics_only, PipelineQueue::Graphics, 5));
+	CHECK(registry.mark_use(compute_only, PipelineQueue::Compute, 5));
+	CHECK(registry.release(graphics_only));
+	CHECK(registry.release(compute_only));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)2);
+
+	// Compute finishes first: only the compute-only object may be destroyed.
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 5), (uint32_t)1);
+	CHECK_EQ(registry.get_stats().destroyable_count, (uint64_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+	CHECK(registry.is_valid(graphics_only));
+
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 4), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 5), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+	CHECK(!registry.is_valid(graphics_only));
+TEST_END()
+
+TEST_BEGIN(abort_use_drops_protection)
+	PipelineRegistry registry(4, 0);
+
+	// A never-submitted recording does not create a completion dependency.
+	PipelineHandle handle = registry.acquire(1, KIB);
+	CHECK(registry.begin_use(handle));
+	CHECK(registry.abort_use(handle));
+	CHECK_EQ(registry.get_stats().aborted_recordings, (uint64_t)1);
+	CHECK(!registry.abort_use(handle)); // no recording reference left
+
+	CHECK(registry.release(handle));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+
+	// An aborted submission must not erase the dependency of an older,
+	// successful submission on the same object.
+	PipelineHandle used = registry.acquire(2, KIB);
+	CHECK(registry.mark_use(used, PipelineQueue::Graphics, 7));
+	CHECK(registry.begin_use(used));
+	CHECK(registry.abort_use(used));
+	CHECK(registry.release(used));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 6), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 7), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+TEST_END()
+
+TEST_BEGIN(zero_and_invalid_serials_rejected)
+	PipelineRegistry registry(4, 0);
+	PipelineHandle handle = registry.acquire(1, KIB);
+
+	CHECK(!registry.mark_use(handle, PipelineQueue::Graphics, 0));
+	CHECK(!registry.end_use(handle, PipelineQueue::Graphics, 0));
+	CHECK_EQ(registry.get_stats().invalid_serials, (uint64_t)2);
+
+	// The failed end_use must not consume the recording reference.
+	CHECK(registry.begin_use(handle));
+	CHECK(!registry.end_use(handle, PipelineQueue::Graphics, 0));
+	CHECK(registry.abort_use(handle));
+
+	// The invalid call must not have recorded any queue usage.
+	PipelineInfo info;
+	CHECK(registry.describe(handle, info));
+	CHECK_EQ(info.usage.mask, (uint8_t)0);
+
+	// Completed serials are monotonic per queue.
+	CHECK(registry.mark_use(handle, PipelineQueue::Compute, 9));
+	CHECK(registry.release(handle));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 9), (uint32_t)1);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 3), (uint32_t)0);
+	CHECK_EQ(registry.get_stats().completed_serials[Kaizen::pipeline_queue_index(PipelineQueue::Compute)], (uint64_t)9);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+TEST_END()
+
+TEST_BEGIN(retire_now_requires_no_references)
+	PipelineRegistry registry(4, 0);
+	PipelineHandle handle = registry.acquire(1, KIB);
+
+	// A host reference means the caller may still hand it out.
+	CHECK(!registry.retire_now(handle));
+	// A recording reference means a command buffer may still use it.
+	CHECK(registry.begin_use(handle));
+	CHECK(!registry.retire_now(handle));
+	CHECK(registry.abort_use(handle));
+	CHECK(registry.release(handle));
+
+	CHECK(registry.retire_now(handle));
+	CHECK_EQ(registry.get_stats().requested_retirements, (uint64_t)1);
+	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
+	CHECK_EQ(registry.get_stats().resident_count, (uint64_t)0);
+	CHECK_EQ(registry.get_stats().pending_bytes, (uint64_t)KIB);
+	CHECK(!registry.retire_now(handle)); // already retiring
+
+	// No queue ever used it, so there is nothing to wait for.
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+	CHECK_EQ(registry.get_stats().resident_bytes, (uint64_t)0);
+	CHECK_EQ(registry.get_stats().pending_bytes, (uint64_t)0);
+TEST_END()
+
+TEST_BEGIN(retire_now_waits_for_recorded_use)
+	PipelineRegistry registry(4, 0);
+	PipelineHandle handle = registry.acquire(1, KIB);
+	CHECK(registry.mark_use(handle, PipelineQueue::Graphics, 12));
+	CHECK(registry.mark_use(handle, PipelineQueue::Compute, 4));
+	CHECK(registry.release(handle));
+	CHECK(registry.retire_now(handle));
+
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 12), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 3), (uint32_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Compute, 4), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+TEST_END()
+
+TEST_BEGIN(retire_now_from_candidate)
+	PipelineRegistry registry(4, 0);
+	PipelineHandle handle = registry.acquire(1, KIB);
+	CHECK(registry.release(handle));
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1); // budget 0 evicts now
+	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
+	// A candidate that already retired cannot be retired twice.
+	CHECK(!registry.retire_now(handle));
+	CHECK_EQ(registry.get_stats().requested_retirements, (uint64_t)0);
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
+TEST_END()
+
+TEST_BEGIN(submission_groups_and_fences)
+	Kaizen::PipelineSubmissionTracker tracker(2);
+
+	// First submission on the main queue has no fence: it opens a group.
+	CHECK_EQ(tracker.note_submission(0, false), (uint64_t)1);
+	CHECK_EQ(tracker.note_submission(0, false), (uint64_t)1);
+	CHECK_EQ(tracker.last_serial(0), (uint64_t)1);
+
+	// The last submission of the frame carries the fence and closes the group.
+	CHECK_EQ(tracker.note_submission(0, true), (uint64_t)1);
+	CHECK_EQ(tracker.last_serial(0), (uint64_t)1);
+
+	// The next submission opens a new group with the next serial.
+	CHECK_EQ(tracker.note_submission(0, true), (uint64_t)2);
+	CHECK_EQ(tracker.last_serial(0), (uint64_t)2);
+
+	// Queues have independent serial spaces.
+	CHECK_EQ(tracker.note_submission(1, true), (uint64_t)1);
+	CHECK_EQ(tracker.last_serial(1), (uint64_t)1);
+	CHECK_EQ(tracker.last_serial(0), (uint64_t)2);
+
+	// Confirmation is monotonic and per queue.
+	tracker.confirm(0, 1);
+	CHECK_EQ(tracker.get_confirmed()[0], (uint64_t)1);
+	tracker.confirm(0, 0);
+	CHECK_EQ(tracker.get_confirmed()[0], (uint64_t)1);
+	CHECK_EQ(tracker.get_confirmed()[1], (uint64_t)0);
+
+	tracker.confirm(1, 1);
+	CHECK_EQ(tracker.get_confirmed()[1], (uint64_t)1);
+
+	// An open group is confirmed by the next fenced submission, not by the
+	// confirmation of an earlier group.
+	CHECK_EQ(tracker.note_submission(0, false), (uint64_t)3);
+	CHECK_EQ(tracker.last_serial(0), (uint64_t)3);
+	CHECK_EQ(tracker.get_confirmed()[0], (uint64_t)1);
+	CHECK_EQ(tracker.note_submission(0, true), (uint64_t)3);
+
+	// confirm_all() is the device-idle escape hatch.
+	tracker.confirm_all();
+	CHECK_EQ(tracker.get_confirmed()[0], (uint64_t)3);
+	CHECK_EQ(tracker.get_confirmed()[1], (uint64_t)1);
+
+	// Out-of-range queues are ignored rather than corrupting state.
+	CHECK_EQ(tracker.note_submission(5, true), (uint64_t)0);
+	CHECK_EQ(tracker.last_serial(5), (uint64_t)0);
+	tracker.confirm(5, 1);
+	CHECK_EQ(tracker.get_confirmed()[1], (uint64_t)1);
 TEST_END()
 
 // ---------------------------------------------------------------------------
@@ -448,24 +663,47 @@ TEST_END()
 
 TEST_BEGIN(retirement_queue_basics)
 	PipelineRetirementQueue queue(8);
-	queue.push(0, 10, 5);
-	queue.push(1, 11, 2);
-	queue.push(2, 12, 9);
 
-	CHECK_EQ(queue.get_oldest_serial(), (uint64_t)2);
+	Kaizen::PipelineQueueUsage a;
+	a.record(PipelineQueue::Graphics, 5);
+	Kaizen::PipelineQueueUsage b;
+	b.record(PipelineQueue::Graphics, 2);
+	Kaizen::PipelineQueueUsage c;
+	c.record(PipelineQueue::Graphics, 9);
+	c.record(PipelineQueue::Compute, 3);
 
+	queue.push(0, 10, a);
+	queue.push(1, 11, b);
+	queue.push(2, 12, c);
+
+	const uint64_t completed_graphics_only[Kaizen::PIPELINE_QUEUE_COUNT] = { 4, 0, 0 };
 	PipelineRetirementQueue::Entry out[4];
-	CHECK_EQ(queue.collect_ready(4, out, 4), (uint32_t)1);
+	CHECK_EQ(queue.collect_ready(completed_graphics_only, out, 4), (uint32_t)1);
 	CHECK_EQ(out[0].index, (uint32_t)1);
 	CHECK_EQ(queue.size(), (uint32_t)2);
 
-	// A limited collection must not drop the entries it could not return.
-	CHECK_EQ(queue.collect_ready(9, out, 1), (uint32_t)1);
+	// c used graphics at 9 and compute at 3. Completing graphics is not enough.
+	const uint64_t graphics_done[Kaizen::PIPELINE_QUEUE_COUNT] = { 9, 0, 0 };
+	CHECK_EQ(queue.collect_ready(graphics_done, out, 4), (uint32_t)1);
 	CHECK_EQ(out[0].index, (uint32_t)0);
 	CHECK_EQ(queue.size(), (uint32_t)1);
 
-	CHECK_EQ(queue.collect_ready(9, out, 4), (uint32_t)1);
+	const uint64_t both_done[Kaizen::PIPELINE_QUEUE_COUNT] = { 9, 3, 0 };
+	CHECK_EQ(queue.collect_ready(both_done, out, 4), (uint32_t)1);
 	CHECK_EQ(out[0].index, (uint32_t)2);
+	CHECK(queue.is_empty());
+
+	// A limited collection must not drop the entries it could not return.
+	Kaizen::PipelineQueueUsage one;
+	one.record(PipelineQueue::Graphics, 1);
+	queue.push(3, 13, one);
+	queue.push(4, 14, one);
+	queue.push(5, 15, one);
+	const uint64_t serial_one[Kaizen::PIPELINE_QUEUE_COUNT] = { 1, 0, 0 };
+	CHECK_EQ(queue.collect_ready(serial_one, out, 2), (uint32_t)2);
+	CHECK_EQ(queue.size(), (uint32_t)1);
+	CHECK_EQ(queue.collect_ready(serial_one, out, 2), (uint32_t)1);
+	CHECK_EQ(out[0].index, (uint32_t)5);
 	CHECK(queue.is_empty());
 TEST_END()
 
@@ -484,6 +722,7 @@ TEST_BEGIN(concurrent_eviction_and_destruction)
 	std::atomic<uint32_t> go{ 0 };
 	std::atomic<uint32_t> acquired{ 0 };
 	std::atomic<uint32_t> rejected{ 0 };
+	std::atomic<uint32_t> unsafe_states{ 0 };
 
 	std::vector<std::thread> workers;
 	workers.reserve(worker_count);
@@ -502,11 +741,23 @@ TEST_BEGIN(concurrent_eviction_and_destruction)
 				}
 				acquired.fetch_add(1);
 
+				// A returned handle must never already belong to an object
+				// that is committed to destruction. It may become a candidate
+				// immediately (host_refs keeps it alive), but never Retiring
+				// or Destroyable.
+				PipelineInfo info;
+				if (!registry.describe(handle, info) || info.host_refs == 0 ||
+						info.state == PipelineState::Free ||
+						info.state == PipelineState::Retiring ||
+						info.state == PipelineState::Destroyable) {
+					unsafe_states.fetch_add(1);
+				}
+
 				const uint64_t use_serial = serial.fetch_add(1, std::memory_order_acq_rel) + 1;
 				if (registry.begin_use(handle)) {
 					// Simulate a command buffer that is submitted later.
-					registry.mark_use(handle, use_serial);
-					registry.end_use(handle, use_serial);
+					registry.mark_use(handle, PipelineQueue::Graphics, use_serial);
+					registry.end_use(handle, PipelineQueue::Graphics, use_serial);
 				}
 				registry.release(handle);
 				registry.enforce_budget();
@@ -520,7 +771,7 @@ TEST_BEGIN(concurrent_eviction_and_destruction)
 		while (go.load(std::memory_order_acquire) == 0) {
 		}
 		for (uint32_t i = 0; i < iterations * 2; i++) {
-			registry.set_completed_serial(serial.load(std::memory_order_acquire));
+			registry.set_completed_serial(PipelineQueue::Graphics, serial.load(std::memory_order_acquire));
 			drain_destroyable(registry);
 		}
 	});
@@ -536,10 +787,11 @@ TEST_BEGIN(concurrent_eviction_and_destruction)
 
 	CHECK(acquired.load() > 0);
 	CHECK(rejected.load() > 0); // The budget is deliberately too small.
+	CHECK_EQ(unsafe_states.load(), (uint32_t)0);
 
 	registry.set_budget(0);
 	registry.enforce_budget();
-	registry.set_completed_serial(UINT64_MAX);
+	registry.set_completed_serial(PipelineQueue::Graphics, UINT64_MAX);
 	for (uint32_t i = 0; i < 8; i++) {
 		drain_destroyable(registry);
 	}
@@ -696,10 +948,10 @@ void run_benchmark() {
 		uint64_t serial = 0;
 		bench::print("evict+retire+destroy", bench::measure(ops, 64, [&](uint32_t) {
 			PipelineHandle h = registry.acquire(1, KIB);
-			registry.mark_use(h, ++serial);
+			registry.mark_use(h, PipelineQueue::Graphics, ++serial);
 			registry.release(h);
 			registry.enforce_budget();
-			registry.set_completed_serial(serial);
+			registry.set_completed_serial(PipelineQueue::Graphics, serial);
 			drain_destroyable(registry);
 		}));
 	}
@@ -711,10 +963,28 @@ void run_benchmark() {
 		bench::print("full lifetime", bench::measure(ops, 64, [&](uint32_t) {
 			PipelineHandle h = registry.acquire(1, KIB);
 			registry.begin_use(h);
-			registry.end_use(h, ++serial);
+			registry.end_use(h, PipelineQueue::Graphics, ++serial);
 			registry.release(h);
 			registry.enforce_budget();
-			registry.set_completed_serial(serial);
+			registry.set_completed_serial(PipelineQueue::Graphics, serial);
+			drain_destroyable(registry);
+		}));
+	}
+
+	{
+		// Same full path, but the object is used by graphics and compute.
+		PipelineRegistry registry(4, 0);
+		uint64_t serial = 0;
+		bench::print("multi-queue lifetime", bench::measure(ops, 64, [&](uint32_t) {
+			PipelineHandle h = registry.acquire(1, KIB);
+			registry.begin_use(h);
+			registry.end_use(h, PipelineQueue::Graphics, ++serial);
+			registry.begin_use(h);
+			registry.end_use(h, PipelineQueue::Compute, serial);
+			registry.release(h);
+			registry.enforce_budget();
+			registry.set_completed_serial(PipelineQueue::Graphics, serial);
+			registry.set_completed_serial(PipelineQueue::Compute, serial);
 			drain_destroyable(registry);
 		}));
 	}
@@ -748,6 +1018,14 @@ int main(int argc, char **argv) {
 	capacity_full_fails_controlled();
 	shutdown_drains_everything();
 	stats_reflect_lifecycle();
+	multi_queue_waits_for_all();
+	queues_complete_out_of_order();
+	abort_use_drops_protection();
+	zero_and_invalid_serials_rejected();
+	retire_now_requires_no_references();
+	retire_now_waits_for_recorded_use();
+	retire_now_from_candidate();
+	submission_groups_and_fences();
 	lru_basics();
 	retirement_queue_basics();
 	concurrent_eviction_and_destruction();
