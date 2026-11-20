@@ -50,6 +50,55 @@ Overflow of the 32-bit generation counter is not reachable in practice (it
 would require 4.29 billion reuses of the same slot). On wrap the code skips
 zero, because zero is reserved for null handles.
 
+## Pipeline registry tests
+
+`test_pipeline_registry.cpp` exercises the P2 core in
+`kaizen/rendering/pipeline_cache/`: `PipelineRegistry`, `PipelineLRU` and
+`PipelineRetirementQueue`. Like the resource registry, it depends only on the
+C++ standard library.
+
+```bash
+./tests/kaizen/run_tests.sh          # both suites
+./tests/kaizen/run_tests.sh --bench  # both suites + microbenchmarks
+```
+
+Measured on the reference machine (Xeon E5-2680 v3, GCC, `-O2`; one
+representative run, approximately ±10 % run-to-run):
+
+| Operation | mean | p50 | p95 | p99 | Throughput |
+| --- | --- | --- | --- | --- | --- |
+| Hit: `acquire` + `release` | 28.4 ns | 27.4 ns | 28.3 ns | 48.5 ns | 35.25 Mops/s |
+| Hit, near capacity | 27.8 ns | 27.4 ns | 27.4 ns | 42.7 ns | 36.00 Mops/s |
+| Miss: new slot + `release` | 108.7 ns | 87.6 ns | 118.0 ns | 164.3 ns | 9.20 Mops/s |
+| Evict → retire → destroy | 154.1 ns | 149.1 ns | 179.7 ns | 266.5 ns | 6.49 Mops/s |
+| Full lifetime | 159.9 ns | 156.9 ns | 161.8 ns | 276.3 ns | 6.25 Mops/s |
+
+Shared-registry throughput (one hot key, maximum contention, machine not idle):
+1 thread 34.06–35.85, 2 threads 2.69–6.95, 4 threads 2.06–3.16, 8 threads
+0.90–1.67 Mops/s. A slot is 40 B; with free-list and LRU links the fixed cost is
+52 B/slot. The suite is also clean under ASan+UBSan and TSan; sanitizers are not
+part of the default script.
+
+These numbers exclude Vulkan pipeline creation; a "miss" only allocates a
+registry slot and inserts a key. Acceptance criteria covered:
+
+- No eviction at or below the byte budget; LRU selects the least recently used
+  resident object.
+- Host and recording references independently prevent destruction.
+- Destruction waits for the backend completion serial; an unreached serial
+  keeps the object alive.
+- A key has at most one live object; acquiring it while it retires is refused
+  instead of creating a duplicate.
+- Reclaimed slots produce new generations; stale handles are rejected by every
+  operation.
+- Capacity exhaustion fails in a controlled way and recovers after a destroy.
+- Late use of a retired object is counted and refused.
+- Four concurrent eviction threads plus a completion/destruction thread run
+  80 000 operations without freeing a referenced object; the registry drains to
+  zero at shutdown.
+- Statistics match the observed lifecycle (hits, misses, candidates, retired,
+  destroyed, resident/pending bytes).
+
 ## End-to-end churn test (requires the engine)
 
 `churn_project/` is a minimal project that creates two GPU textures per frame,

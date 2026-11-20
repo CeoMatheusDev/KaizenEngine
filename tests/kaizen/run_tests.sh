@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds and runs the standalone Kaizen resource registry tests.
-# These tests do not require an engine build: the registry core depends only
-# on the C++ standard library.
+# Builds and runs the standalone Kaizen subsystem tests.
+# These tests do not require an engine build: the core depends only on the
+# C++ standard library.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,13 +9,23 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 OUT_DIR="${TMPDIR:-/tmp}/kaizen-tests"
 mkdir -p "${OUT_DIR}"
 
-BIN="${OUT_DIR}/test_resource_registry"
-
 CXX="${CXX:-g++}"
-"${CXX}" -std=c++17 -O2 -Wall -Wextra -pthread \
-	-I"${REPO_ROOT}" \
+CXXFLAGS=(-std=c++17 -O2 -Wall -Wextra -pthread -I"${REPO_ROOT}")
+
+RESOURCE_BIN="${OUT_DIR}/test_resource_registry"
+PIPELINE_BIN="${OUT_DIR}/test_pipeline_registry"
+
+"${CXX}" "${CXXFLAGS[@]}" \
 	"${SCRIPT_DIR}/test_resource_registry.cpp" \
 	"${REPO_ROOT}/kaizen/diagnostics/rendering/resource_registry.cpp" \
-	-o "${BIN}"
+	-o "${RESOURCE_BIN}"
 
-"${BIN}" "$@"
+"${CXX}" "${CXXFLAGS[@]}" \
+	"${SCRIPT_DIR}/test_pipeline_registry.cpp" \
+	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_lru.cpp" \
+	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_registry.cpp" \
+	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_retirement.cpp" \
+	-o "${PIPELINE_BIN}"
+
+"${RESOURCE_BIN}" "$@"
+"${PIPELINE_BIN}" "$@"

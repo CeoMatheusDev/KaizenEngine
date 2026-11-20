@@ -58,7 +58,8 @@ The rendering stack is organized around the engine's rendering server and render
 - `servers/rendering/renderer_rd/forward_mobile/` — mobile-oriented renderer implementation;
 - `drivers/gles3/` — Compatibility (GLES3/WebGL 2) renderer infrastructure;
 - `drivers/vulkan/` — Vulkan driver integration;
-- `platform/web/` — Web platform integration.
+- `platform/web/` — Web platform integration;
+- `kaizen/` — Kaizen-owned subsystems that are compiled into the engine but do not modify upstream renderer files in place: resource lifetime diagnostics (`kaizen/diagnostics/rendering/`) and the P2 pipeline lifetime core (`kaizen/rendering/pipeline_cache/`).
 
 These paths are navigation anchors, not a complete dependency map. Before changing renderer selection, resource ownership, synchronization, or rendering-thread behavior, trace the actual call flow in the current source revision.
 

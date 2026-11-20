@@ -157,7 +157,7 @@ Selected once per process with `KAIZEN_DIAGNOSTICS`:
 | unset / `off` | One predictable branch per hook. Default for all published benchmarks. |
 | `basic` | Counters and byte accounting. |
 | `detailed` | Basic plus a preallocated 1024-entry event ring per registry. |
-| `validation` | Detailed plus strict handle checks at release time. |
+| `validation` | Same counters, event log and handle/double-free accounting as `detailed`. The name is reserved for runs whose summary is audited; it currently adds no per-operation work, so it has no separate cost row. |
 
 The runtime check is a plain field read; there is no atomic load on the disabled
 path. The registry storage (about 1.2 MiB for 16 384 GPU + 4 096 CPU slots) is
@@ -194,6 +194,10 @@ per-operation values within batches. 320 000 operations per configuration.
 | Detailed (event log) | 64.1 ns | 64.0 ns | 64.3 ns | 64.5 ns | 15.59 Mops/s |
 | Low occupancy (1 live) | 54.0 ns | 53.9 ns | 54.3 ns | 54.5 ns | 18.51 Mops/s |
 | Near capacity (4 095/4 096 live) | 54.0 ns | 53.9 ns | 54.3 ns | 54.4 ns | 18.52 Mops/s |
+
+`validation` is not a separate row: handle, generation and double-free checks
+run in every enabled mode, and `validation` only shares the event log with
+`detailed`. There is no additional per-operation work to measure.
 
 Throughput on a **shared** registry (maximum contention, 50 000 operations per
 thread):
@@ -268,13 +272,20 @@ confirmed by a later frame and not by the teardown flush.
    cleared at teardown. It is not sharded; contention is irrelevant today
    because creation/free are render-thread only, but this must be revisited if
    transfer workers ever create resources.
+6. **`validation` is an alias.** It shares the counters and event ring with
+   `detailed`; no extra check is implemented yet. It must not be described as
+   stronger validation until one exists.
 
 ## 9. Next steps
 
-1. **P2 — pipeline object eviction.** Distinguish `VkPipeline` objects from the
-   persistent `VkPipelineCache` blob, add reference counting and fence-based
-   deferred destruction, and use the tracker's pending-release accounting as
-   the safety signal.
+1. **P2 — pipeline object eviction.** The registry core is implemented and
+   tested in `kaizen/rendering/pipeline_cache/`; see
+   [Pipeline object lifetime and eviction](pipeline-lifetime.md). It keeps
+   `VkPipeline` objects separate from the persistent `VkPipelineCache` blob and
+   retires an object only when host/recording references and a backend
+   completion serial agree. It is **not wired into the driver yet**, because a
+   serial that covers every queue that used a pipeline requires timeline
+   semaphores and a device-level test.
 2. **P3 — GLES3 initialization.** Guarantee a destructible state after a failed
    constructor path.
 3. **GPU profiling.** Timestamp queries and frame pacing on top of the same
