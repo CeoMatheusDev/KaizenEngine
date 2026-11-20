@@ -3151,6 +3151,7 @@ Error RenderingDeviceDriverVulkan::fence_wait(FenceID p_fence) {
 	}
 
 	if (_kaizen_pipeline_lifetime_enabled() && fence->kaizen_serial != 0) {
+		DEV_ASSERT(fence->kaizen_queue < Kaizen::PIPELINE_QUEUE_COUNT);
 		_kaizen_pipeline_confirm(fence->kaizen_queue, fence->kaizen_serial);
 		fence->kaizen_queue = UINT32_MAX;
 		fence->kaizen_serial = 0;
@@ -7716,7 +7717,8 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline)
 		}
 	}
 
-	kaizen_pipeline_registry->release(handle);
+	const bool released = kaizen_pipeline_registry->release(handle);
+	DEV_ASSERT(released);
 	if (!kaizen_pipeline_registry->retire_now(handle)) {
 		// Unreachable: no references are held here. Fall back to destroying
 		// after a device wait rather than leaking the object.

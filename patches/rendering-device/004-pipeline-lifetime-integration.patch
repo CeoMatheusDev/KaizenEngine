@@ -1,12 +1,13 @@
 diff --git a/drivers/vulkan/rendering_device_driver_vulkan.cpp b/drivers/vulkan/rendering_device_driver_vulkan.cpp
-index 7020aca..a270405 100644
+index 7020aca..566dfeb 100644
 --- a/drivers/vulkan/rendering_device_driver_vulkan.cpp
 +++ b/drivers/vulkan/rendering_device_driver_vulkan.cpp
-@@ -3150,6 +3150,12 @@ Error RenderingDeviceDriverVulkan::fence_wait(FenceID p_fence) {
+@@ -3150,6 +3150,13 @@ Error RenderingDeviceDriverVulkan::fence_wait(FenceID p_fence) {
  		fence->queue_signaled_from = nullptr;
  	}
  
 +	if (_kaizen_pipeline_lifetime_enabled() && fence->kaizen_serial != 0) {
++		DEV_ASSERT(fence->kaizen_queue < Kaizen::PIPELINE_QUEUE_COUNT);
 +		_kaizen_pipeline_confirm(fence->kaizen_queue, fence->kaizen_serial);
 +		fence->kaizen_queue = UINT32_MAX;
 +		fence->kaizen_serial = 0;
@@ -15,7 +16,7 @@ index 7020aca..a270405 100644
  	return OK;
  }
  
-@@ -3247,6 +3253,9 @@ RDD::CommandQueueID RenderingDeviceDriverVulkan::command_queue_create(CommandQue
+@@ -3247,6 +3254,9 @@ RDD::CommandQueueID RenderingDeviceDriverVulkan::command_queue_create(CommandQue
  	CommandQueue *command_queue = memnew(CommandQueue);
  	command_queue->queue_family = family_index;
  	command_queue->queue_index = picked_queue_index;
@@ -25,7 +26,7 @@ index 7020aca..a270405 100644
  	queue_family[picked_queue_index].virtual_count++;
  
  	// If is was identified as the main queue and a hook is active, indicate it as such to the hook.
-@@ -3343,6 +3352,19 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
+@@ -3343,6 +3353,19 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
  		}
  		ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, vformat("Couldn't submit to Vulkan queue (VkResult error %d).", err));
  
@@ -45,7 +46,7 @@ index 7020aca..a270405 100644
  		if (fence != nullptr && !command_queue->pending_semaphores_for_fence.is_empty()) {
  			fence->queue_signaled_from = command_queue;
  
-@@ -5344,6 +5366,10 @@ void RenderingDeviceDriverVulkan::command_copy_texture_to_buffer(CommandBufferID
+@@ -5344,6 +5367,10 @@ void RenderingDeviceDriverVulkan::command_copy_texture_to_buffer(CommandBufferID
  /******************/
  
  void RenderingDeviceDriverVulkan::pipeline_free(PipelineID p_pipeline) {
@@ -56,7 +57,7 @@ index 7020aca..a270405 100644
  	vkDestroyPipeline(vk_device, (VkPipeline)p_pipeline.id, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
  }
  
-@@ -7583,11 +7609,155 @@ RenderingDeviceDriver::DriverWorkarounds RenderingDeviceDriverVulkan::get_driver
+@@ -7583,11 +7610,156 @@ RenderingDeviceDriver::DriverWorkarounds RenderingDeviceDriverVulkan::get_driver
  
  /******************/
  
@@ -167,7 +168,8 @@ index 7020aca..a270405 100644
 +		}
 +	}
 +
-+	kaizen_pipeline_registry->release(handle);
++	const bool released = kaizen_pipeline_registry->release(handle);
++	DEV_ASSERT(released);
 +	if (!kaizen_pipeline_registry->retire_now(handle)) {
 +		// Unreachable: no references are held here. Fall back to destroying
 +		// after a device wait rather than leaking the object.
@@ -212,7 +214,7 @@ index 7020aca..a270405 100644
  }
  
  RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
-@@ -7616,6 +7786,28 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
+@@ -7616,6 +7788,28 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
  	}
  
  	if (vk_device != VK_NULL_HANDLE) {

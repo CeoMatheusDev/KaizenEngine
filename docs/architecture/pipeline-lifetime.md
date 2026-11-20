@@ -498,6 +498,78 @@ frame boundaries and teardown, not during the sampled frame. A scene that
 creates pipelines cheaper (cached variants) would isolate the drain cost
 better; that is future work.
 
+### 8.9 Submission-failure audit (P2.2)
+
+The registry's invariants (I1-I11) are only as strong as the driver's
+cleanup discipline. The following table audits every exit point of the path
+that a pipeline object takes from `pipeline_free()` to `destroy()`, and states
+the obligation that must hold at each point. Obligations marked `[verified]`
+were checked by inspection and, where noted, by a test.
+
+| # | Exit point | Location | Obligation | Status |
+|---|---|---|---|---|
+| 1 | `_kaizen_pipeline_retire` called with a live host ref | `pipeline_free` | Cannot happen: `pipeline_free` is only called from `_free_pending_resources`, after the RID is freed, so no owner holds the pipeline. | `[verified by construction]` |
+| 2 | `acquire()` returns null (registry full) | `_kaizen_pipeline_retire` | Drain destroyables to free slots; if still full, wait for device idle and retry. Last resort: destroy immediately (device is idle, so safe). | `[verified]` (code path) |
+| 3 | `mark_use()` fails (state not Resident/Candidate) | `_kaizen_pipeline_retire` | Cannot happen: the object was just acquired as `Resident`. | `[verified by construction]` |
+| 4 | `release()` returns false | `_kaizen_pipeline_retire` | Cannot happen: `host_refs == 1` at this point. | `[verified by construction]` |
+| 5 | `retire_now()` returns false | `_kaizen_pipeline_retire` | Unreachable (no refs held). Fallback: wait for device idle, `confirm_all`, `destroy`, then `vkDestroyPipeline`. | `[verified]` (fallback path) |
+| 6 | `collect_destroyable` returns nothing after retire | `_kaizen_pipeline_retire` | Not an error: the object stays `Retiring` until a later `fence_wait` or teardown. `pending_bytes` accounts for it. | `[verified]` |
+| 7 | `vkQueueSubmit` fails | `command_queue_execute_and_present` | The driver returns `FAILED` before recording a serial. No serial is stored in the fence. The group stays open; the next successful fenced submission closes it. | `[verified]` (code path) |
+| 8 | `fence_wait` fails (`vkWaitForFences` error) | `fence_wait` | Returns early without calling `confirm()`. The pipeline stays retiring. The destructor's `confirm_all()` is the escape hatch after device idle. | `[verified]` (code path) |
+| 9 | `fence_wait` succeeds but fence had no kaizen serial | `fence_wait` | No-op for the registry. Happens for fences that were never associated with a pipeline submission (e.g. empty submits). | `[verified]` |
+| 10 | Fence is reused without being waited | driver lifecycle | Cannot happen: `_stall_for_frame` waits the fence before reuse; transfer workers are waited before reuse. | `[verified by construction]` |
+| 11 | `set_completed_serial` is never called again | runtime | The object stays retiring until the next frame's fence wait or teardown. No premature destruction. | `[verified]` |
+| 12 | `destroy()` fails | `_kaizen_pipeline_drain` | The slot stays `Destroyable`; the VkPipeline handle is retained in `kaizen_pending_pipelines[index]` and retried on the next drain. The loop breaks to avoid spinning. | `[verified]` (code path) |
+| 13 | Destructor: `vkDeviceWaitIdle` fails | `~RenderingDeviceDriverVulkan` | Proceeds to `confirm_all` and drain anyway; the device is being destroyed regardless. | `[verified]` (code path) |
+| 14 | Pipeline freed while a command buffer is still recording it | renderer contract | Not protected by the current driver: `recording_refs` is not wired. Relies on premise P2 (frame-ring ownership). This is the open gap. | `[open gap]` |
+
+Entries 7-9 cover the submission chain that the registry does not directly
+observe: the driver never calls `begin_use`/`end_use`/`abort_use` for a
+pipeline, because recording refs are not wired (entry 14). The failure paths
+that the registry *does* observe (1-6, 10-13) all leave the registry
+consistent, either by construction or by an explicit fallback.
+
+The one path that is genuinely unprotected is entry 14: a pipeline freed
+through the frame ring while a command buffer under construction still
+references it. The registry's `recording_refs` would catch this, but the
+driver does not feed it. Premise P2 documents this as a renderer-level
+contract; section 8.6 identifies the render-graph hooks that would close it.
+
+### 8.10 Render-graph hook investigation (P2.2)
+
+The candidate hook points identified in section 8.6 were investigated against
+the actual call sites:
+
+- `draw_graph.add_draw_list_bind_pipeline` / `add_compute_list_bind_pipeline` /
+  `add_raytracing_list_bind_pipeline` (`rendering_device.cpp:5861, 6569, 6837`)
+  only record a bind into the graph; they do not execute it. Hooking here
+  would protect the pipeline for the whole frame, which is correct but
+  conservative (it would pin every pipeline touched by the graph until the
+  frame's fence is confirmed, which is already what the frame ring does).
+- The actual `vkCmdBindPipeline` happens during `draw_graph.end()` inside
+  `execute_chained_cmds` (`rendering_device.cpp:8425-8444`), which is where
+  command buffers are recorded. Hooking here would be precise but requires the
+  graph to call back into the driver or into a Kaizen-owned recorder.
+- Submission and fence association happen in `command_queue_execute_and_present`
+  (already hooked for serials).
+- Command-buffer discard happens in `command_pool_reset` and in the frame
+  ring's `_free_pending_resources`; a discarded buffer must call `abort_use`.
+
+Conclusion: a single ownership point in the render graph is feasible only if
+the graph exposes a "pipeline acquired for this frame" callback. The current
+graph does not. Two options remain:
+
+1. Add a Kaizen-owned recorder that the graph calls at bind time (begin) and
+   that `execute_chained_cmds` drains at submission time (end/abort). This
+   touches the graph's bind and end paths.
+2. Keep premise P2 and add a regression test that asserts
+   `recording_refs == 0` at `pipeline_free()` time in debug builds. This does
+   not remove the fragility but makes a violation loud.
+
+Option 2 is the smaller change and is consistent with the "isolated documented
+hooks" policy. Option 1 is the correct long-term fix and is deferred to P2.3
+alongside creation-side eviction, because both require render-graph changes.
+
 ### 8.7 P2.2 closure status
 
 | Criterion | Status |
