@@ -8,10 +8,10 @@ namespace Kaizen {
 
 PipelineRegistry::PipelineRegistry(uint32_t p_capacity, uint64_t p_budget_bytes, uint32_t p_initial_generation) :
 		capacity(p_capacity == 0 ? 1 : p_capacity),
-		budget_bytes(p_budget_bytes),
 		slots(capacity),
 		lru(capacity),
-		retirement(capacity) {
+		retirement(capacity),
+		budget(p_budget_bytes, 90, 75, 32) {
 	free_indices.reserve(capacity);
 	// Push in reverse so index 0 is handed out first.
 	for (uint32_t i = capacity; i > 0; i--) {
@@ -153,10 +153,7 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 	key_to_index[p_key_identity] = index;
 	lru.touch(index);
 
-	resident_bytes += p_bytes;
-	if (resident_bytes > peak_resident_bytes) {
-		peak_resident_bytes = resident_bytes;
-	}
+	budget.add_resident_bytes(p_bytes);
 
 	physical_creates++;
 	logical_acquires++;
@@ -431,11 +428,7 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 		key_to_index.erase(existing);
 	}
 
-	if (pending_bytes >= slot->bytes) {
-		pending_bytes -= slot->bytes;
-	} else {
-		pending_bytes = 0;
-	}
+	budget.subtract_pending_bytes(slot->bytes);
 
 	slot->state = PipelineState::Free;
 	slot->key = 0;
@@ -453,24 +446,13 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 }
 
 void PipelineRegistry::_move_to_pending_locked(Slot &r_slot) {
-	if (resident_bytes >= r_slot.bytes) {
-		resident_bytes -= r_slot.bytes;
-	} else {
-		resident_bytes = 0;
-	}
-	pending_bytes += r_slot.bytes;
+	budget.subtract_resident_bytes(r_slot.bytes);
+	budget.add_pending_bytes(r_slot.bytes);
 }
 
 void PipelineRegistry::_move_to_resident_locked(Slot &r_slot) {
-	if (pending_bytes >= r_slot.bytes) {
-		pending_bytes -= r_slot.bytes;
-	} else {
-		pending_bytes = 0;
-	}
-	resident_bytes += r_slot.bytes;
-	if (resident_bytes > peak_resident_bytes) {
-		peak_resident_bytes = resident_bytes;
-	}
+	budget.subtract_pending_bytes(r_slot.bytes);
+	budget.add_resident_bytes(r_slot.bytes);
 }
 
 void PipelineRegistry::_mark_candidate_locked(uint32_t p_index) {
@@ -509,7 +491,18 @@ void PipelineRegistry::_retire_locked(uint32_t p_index) {
 }
 
 void PipelineRegistry::_enforce_budget_locked() {
-	while (resident_bytes > budget_bytes && !lru.is_empty()) {
+	// Path 1: budget_bytes == 0 means "evict aggressively" (legacy behavior).
+	if (budget.budget() == 0) {
+		while (!lru.is_empty()) {
+			const uint32_t index = lru.peek_lru();
+			_mark_candidate_locked(index);
+		}
+		return;
+	}
+
+	// Path 2: budget_bytes > 0, evict to the configured budget.
+	// Evict until resident_bytes <= budget_bytes.
+	while (budget.resident_bytes > budget.budget() && !lru.is_empty()) {
 		const uint32_t index = lru.peek_lru();
 		_mark_candidate_locked(index);
 	}
@@ -586,15 +579,15 @@ uint32_t PipelineRegistry::enforce_budget() {
 
 void PipelineRegistry::set_budget(uint64_t p_budget_bytes) {
 	lock.lock();
-	budget_bytes = p_budget_bytes;
+	budget.budget_bytes = p_budget_bytes;
 	lock.unlock();
 }
 
 uint64_t PipelineRegistry::get_budget() const {
 	lock.lock();
-	const uint64_t budget = budget_bytes;
+	const uint64_t budget_val = budget.budget_bytes;
 	lock.unlock();
-	return budget;
+	return budget_val;
 }
 
 void PipelineRegistry::set_shutting_down(bool p_shutting_down) {
@@ -621,9 +614,9 @@ PipelineStats PipelineRegistry::get_stats() const {
 	stats.late_releases = late_releases;
 	stats.late_use = late_use;
 	stats.invalid_serials = invalid_serials;
-	stats.resident_bytes = resident_bytes;
-	stats.pending_bytes = pending_bytes;
-	stats.peak_resident_bytes = peak_resident_bytes;
+	stats.resident_bytes = budget.resident_bytes;
+	stats.pending_bytes = budget.pending_bytes;
+	stats.peak_resident_bytes = budget.peak_resident_bytes;
 	for (uint32_t i = 0; i < PIPELINE_QUEUE_COUNT; i++) {
 		stats.completed_serials[i] = completed_serials[i];
 	}

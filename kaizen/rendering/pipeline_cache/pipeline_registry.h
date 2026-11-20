@@ -33,6 +33,7 @@
 #include "pipeline_key.h"
 #include "pipeline_retirement.h"
 #include "pipeline_types.h"
+#include "pipeline_budget.h"
 
 #include <atomic>
 #include <cstdint>
@@ -218,14 +219,10 @@ private:
 
 	mutable SpinLock lock;
 	uint32_t capacity = 0;
-	uint64_t budget_bytes = 0;
 
 	std::atomic<bool> shutting_down = false;
 
 	uint64_t completed_serials[PIPELINE_QUEUE_COUNT] = {};
-	uint64_t resident_bytes = 0;
-	uint64_t pending_bytes = 0;
-	uint64_t peak_resident_bytes = 0;
 
 	uint64_t logical_acquires = 0;
 	uint64_t shared_acquires = 0;
@@ -251,6 +248,7 @@ private:
 
 	PipelineLRU lru;
 	PipelineRetirementQueue retirement;
+	PipelineBudget budget;
 	std::vector<PipelineRetirementQueue::Entry> ready_buffer;
 };
 

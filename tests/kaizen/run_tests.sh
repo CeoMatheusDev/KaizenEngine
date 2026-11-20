@@ -26,6 +26,7 @@ PIPELINE_BIN="${OUT_DIR}/test_pipeline_registry"
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_registry.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_retirement.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_submission.cpp" \
+	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_budget.cpp" \
 	-o "${PIPELINE_BIN}"
 
 "${RESOURCE_BIN}" "$@"

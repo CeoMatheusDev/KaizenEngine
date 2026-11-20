@@ -53,6 +53,7 @@ fi
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_registry.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_retirement.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_submission.cpp" \
+	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_budget.cpp" \
 	"${VULKAN_LIB}" \
 	-o "${OUT_DIR}/pipeline_lifetime_vulkan"
 
