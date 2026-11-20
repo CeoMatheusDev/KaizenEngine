@@ -1,8 +1,8 @@
 # Pipeline Object Lifetime and Eviction (P2)
 
-> **Status:** Core implemented and validated against a live Vulkan device.
-> Deferred destruction is available in the Vulkan driver behind an opt-in
-> switch; creation-side eviction is not wired.
+> **Status:** Core and opt-in shared acquisition are implemented; the Vulkan
+> lifetime core is validated against a live device. Renderer/device/Vulkan
+> cache reuse still needs in-engine validation; automatic eviction is disabled.
 > **Scope:** `kaizen/rendering/pipeline_cache/`, plus the documented Vulkan
 > hooks in `patches/rendering-device/004-pipeline-lifetime-integration.md`.
 > **Related:** [Pipeline cache and shader variants](rendering-pipeline-cache.md), [Resource lifetime diagnostics](resource-diagnostics.md), [Rendering roadmap](rendering-roadmap.md)
@@ -116,14 +116,14 @@ A key maps to at most one live object. While an object with that key is
 only by `destroy()`, after which a new object (new generation) may be created.
 This trades a possible stall for a strict "one object per key" invariant.
 
-Callers that cannot tolerate the stall must drain destroyable entries before
-acquiring. In a rendering path, that means calling `set_completed_serial()` +
-`collect_destroyable()` + `destroy()` once per frame, before pipeline lookups.
+`RenderingDevice` keeps a semantic cache key unavailable until its callback
+confirms physical pipeline destruction. The Vulkan driver's separate lifetime
+registry still uses internal per-object handles; it protects submitted GPU
+work, but does not perform semantic deduplication.
 
-The current driver integration does not use keyed acquisition: it only defers
-destruction of objects the renderer already freed. Two objects for the same
-configuration may therefore coexist briefly. That is legal Vulkan; it is not a
-deduplication cache.
+The backend lifetime registry may therefore contain multiple per-object
+entries, while the opt-in `RenderingDevice` cache maps equivalent semantic
+keys to one shared RID.
 
 ### 2.5 Shutdown
 
@@ -210,11 +210,11 @@ KAIZEN_PIPELINE_LIFETIME=on ./bin/kaizen.linuxbsd.template_release.x86_64 ...
 Disabled is the default and preserves upstream destruction timing exactly. With
 the switch off, `pipeline_free()` is the upstream one-line function.
 
-What this integration does **not** do:
+What the Vulkan driver's lifetime integration does **not** do:
 
-- It does not deduplicate pipelines, evict during creation, or bound the
-  `PipelineCacheRD` variant list. Those need owner-level changes and hit/miss
-  measurements.
+- It does not perform semantic deduplication or budget-driven eviction;
+  those belong to the `RenderingDevice` cache. The renderer's
+  `PipelineCacheRD` variant list remains unbounded.
 - It does not track raytracing pipelines (`raytracing_pipeline_free()` still
   destroys immediately).
 - It does not replace the frame ring for other resources; only pipeline objects
@@ -567,8 +567,9 @@ graph does not. Two options remain:
    not remove the fragility but makes a violation loud.
 
 Option 2 is the smaller change and is consistent with the "isolated documented
-hooks" policy. Option 1 is the correct long-term fix and is deferred to P2.3
-alongside creation-side eviction, because both require render-graph changes.
+hooks" policy. Option 1 is the correct long-term fix and remains part of the open P2.2
+recording-lifetime work. It is separate from P2.3's cache integration and
+budget-eviction work.
 
 ### 8.7 P2.2 closure status
 
@@ -577,17 +578,25 @@ alongside creation-side eviction, because both require render-graph changes.
 | Churn in runtime | Validated (120 frames, 960 meshes, 204 pipelines, 0 validation errors). |
 | Recording refs | Not wired; render-graph hooks identified (see 8.6) but not implemented. |
 | Submission failure paths | `abort_use` (unit) + device forced-failure test; failure-map audit pending. |
-| Eviction | Not wired (creation-side; P2.3 territory). |
+| Eviction | Disabled by design until functional-cache identity, sharing, and lifetime tests pass (P2.3). |
 | Graphics + Compute | Validated on the device test. |
 | Continuous rendering | No device-idle stall introduced by the deferred path. |
 | Shutdown | 0 pipelines pending. |
 | Performance | Off vs on comparison done (8.8): no measurable frame-time overhead. |
 
-## 9. P2.3 — Pipeline cache management (planned)
+## 9. P2.3 — Pipeline cache management
 
-P2.3 turns the registry from a destruction-safety queue into a managed cache.
-It is deliberately a separate milestone from P2.2: P2.2 closes the lifetime
-contract, P2.3 adds creation-side eviction.
+P2.3 is split into tracking infrastructure and a functional, deduplicating
+cache. P2.2 remains open: recording references are not wired into the driver,
+so creation-side eviction must remain disabled until the cache lifetime
+contract is independently proven.
+
+| Area | State | Completion criterion |
+| --- | --- | --- |
+| P2.1 — Vulkan destruction | Closed | Destruction waits for confirmed completion on every queue that used the pipeline. |
+| P2.2 — Runtime lifetime | Open | References during command-buffer recording are not yet tracked end-to-end. |
+| P2.3 — Tracking infrastructure | Complete | Pipeline creation, accounting, retirement, and teardown cleanup are wired. |
+| P2.3 — Functional cache | Integrated; focused runtime checks passed | Full-key sharing and lifecycle are validated with a controlled duplicate request; independent renderer consumers remain unproven. |
 
 ### 9.1 Infrastructure already in place
 
@@ -601,60 +610,98 @@ contract, P2.3 adds creation-side eviction.
   `pipeline_cache_register_rid(handle, rid)`, `pipeline_cache_release(handle)`,
   `pipeline_cache_retire(handle)`, `pipeline_cache_enforce_budget()`,
   `pipeline_cache_drain()`, `pipeline_cache_confirm_all()`.
-- Per-frame `enforce_budget()` + `drain()` in `_begin_frame()`.
+- Per-frame `drain()` processes explicit retirements. Budget-driven
+  `enforce_budget()` is not called; the tracking registry uses an unlimited
+  budget until functional deduplication and shared ownership are integrated.
 - Teardown drain in `finalize()`.
 
-### 9.2 Current state (as of 5419686)
+### 9.2 Current state
 
-The `RenderingDevice`-level registry now tracks every pipeline created through
-`render_pipeline_create` / `compute_pipeline_create`, keyed by RID. On `free_rid`,
-the handle is released and retired; per-frame `enforce_budget` + `drain` evict
-under pressure, freeing RIDs through the frame ring (which reuses the
-driver-level deferred destruction). The churn project reports
+The `RenderingDevice`-level registry continues to track ordinary pipeline
+creations through `render_pipeline_create` / `compute_pipeline_create`, keyed
+by RID. The opt-in `PipelineCacheRD` path instead uses a canonical semantic key
+and shares one RID across logical versions. Final release retires that entry;
+the RID enters the frame ring, and a driver callback keeps the key unavailable
+until physical destruction is confirmed. Budget-driven eviction is disabled.
+The prior churn measurements, taken with budget enforcement enabled, reported
 `hits=0 misses=204 evicted=204 resident=0`; the S1 scene reports
 `hits=0 misses=209 evicted=209`.
 
-`hits=0` is expected today: each pipeline has a unique RID, so the registry
-acts as a live-pipeline tracker and eviction queue, not yet as a deduplicating
-cache. Deduplication requires semantic keys (hash of pipeline parameters) and
-`PipelineCacheRD` integration.
+This is tracking, not semantic deduplication: each creation receives a unique
+RID key, so these metrics do not demonstrate reuse. In addition, `evicted`
+counts registry retirement/accounting; it does not by itself prove that the
+driver object has already been physically destroyed.
 
-### 9.2 What remains
+The registry accepts a canonical `PipelineKey` and stores its complete
+serialized identity. Hashing is only an index aid; equality and lookup compare
+the full identity. The legacy `uint64_t` API remains available for tracking
+entries keyed by an opaque numeric ID.
 
-1. **`PipelineCacheRD` integration.** Modify `_generate_version` to call
-   `pipeline_cache_acquire(key, 0)` on a miss and register the RID; on a hit,
-   return the existing RID. Modify `_clear` to release/retire all handles.
-   The key is a hash of the version parameters (shader, vertex format,
-   framebuffer format, render pass, wireframe, bool specializations, raster
-   state, multisample, depth/stencil, blend, dynamic flags).
-2. **Eviction under pressure.** Set a real budget (in units of pipeline count
-   or estimated bytes) and let `enforce_budget()` evict LRU versions. Evicted
-   versions' RIDs are freed through the frame ring, which reuses the driver's
-   deferred destruction (P2.1).
-3. **Metrics.** `PipelineStats` already exposes `hits`, `misses`,
-   `eviction_candidates`, `retired`, `destroyed`, `resident_bytes`,
-   `peak_resident_bytes`, `resident_count`, `candidate_count`,
-   `retiring_count`, `destroyable_count`. `creation_time_ns` is the caller's
-   responsibility. `requested_bytes` is a logical estimate, not a measured
-   driver allocation.
-4. **Tests.** Keyed acquisition contract (hit/miss/dedup/concurrent), eviction
-   under pressure, and an in-engine churn that exercises eviction.
+`PipelineCacheRD` is wired to build the full render-state key and call the
+device's serialized get-or-create path. The device owns one registry reference
+per logical `PipelineCacheRD::Version`, maps the shared entry to its RID, and
+schedules retirement only after the final logical release. The
+`PipelineCacheRD` table does not add a second shared reference count. An
+opt-in `KAIZEN_PIPELINE_CACHE_VERIFY=on` runtime check now makes a second
+equivalent request for one generated pipeline, verifies the same RID/handle,
+releases the extra reference, probes that reacquire is blocked during
+retirement, and probes that a new registry generation is available after the
+physical-destruction callback. This is focused evidence for the
+`RenderingDevice` path, not proof that ordinary scenes have multiple independent
+consumers or produce natural hits.
 
-### 9.3 First delivery (acquire by key)
+### 9.3 Integration contracts
 
-The registry already satisfies the P2.3 first-delivery contract:
+1. **Identity.** Encode every parameter that changes pipeline compatibility or
+   creation: shader/variant, vertex input, pipeline layout, render-pass or
+   attachment compatibility, all rasterization/depth/stencil/blend state,
+   multisampling, dynamic state, flags, and specialization constants. Hashes
+   are not identity; equality must compare the complete canonical data.
+2. **Ownership.** `PipelineCacheRD` owns logical references. The device cache
+   owns the shared RID and physical residency. Releasing one consumer must not
+   invalidate another consumer's RID.
+3. **Retirement.** Once the last logical reference is released and the key
+   enters retirement, new acquires for that key must fail until physical
+   destruction completes. Only then may a new generation be created.
+4. **Eviction.** Keep budget-driven eviction disabled until identity,
+   shared-reference ownership, and lifetime behavior pass their tests.
 
-1. Cache hit: returns the existing object. (tested: `acquire_hit_and_miss`)
-2. Cache miss: creates a new object. (tested: `acquire_hit_and_miss`)
-3. Key already in retirement: no duplicate. (tested: `key_is_unique_while_retiring`)
-4. Failed creation: no partial registration — the caller only registers after
-   successful creation. (caller discipline)
-5. Concurrent acquisition: no two objects for the same key.
-   (tested: `concurrent_eviction_and_destruction`)
+At device shutdown, after rendering is stopped and the draw graph is finalized,
+the `RenderingDevice` retires remaining shared-cache entries even if their
+logical wrappers are still alive. The RIDs then use the normal frame-ring and
+driver callback path; later wrapper releases are ignored during shutdown. If
+resource teardown tries to free a shader before its shared pipeline references
+have gone away, the release is deferred and the dependency edge is preserved.
 
-The remaining work is the `PipelineCacheRD` wiring, which is a separate
-change because `PipelineCacheRD` is used by hundreds of renderer components
-and a bug there would break rendering.
+The 120-frame Vulkan churn run completed with 960 meshes. Without verification
+mode, it reported 204 misses and 0 natural hits, then retired and physically
+destroyed all 204 pipelines. With verification mode, the explicit duplicate
+request passed the same-RID and partial-release checks; retirement reacquire was
+blocked and reacquire after the physical callback passed. Verification mode
+adds one test-only cache hit and one test generation, so its cache counters are
+not workload metrics. Both runs ended with zero resident/retiring/destroyable
+driver entries and zero pending bytes. Teardown still emits a deferred shader
+release and a generic warning for one shader RID; a clean renderer-owner
+shutdown and independent multi-consumer test remain open.
+
+The functional-cache acceptance suite must prove:
+
+- Equivalent keys return the same pipeline/RID; different keys do not.
+- Forced hash collisions do not create false hits.
+- Releasing one consumer leaves all other consumers' references valid.
+- A retiring key cannot return an RID that is waiting for destruction.
+- The final release followed by completed lifetime destroys the object once.
+- Shutdown leaves no resident or pending objects.
+
+### 9.4 Remaining work
+
+1. Add a runtime scenario with independent `PipelineCacheRD` consumers of the
+   same semantic key, plus creation failure and clean shader teardown.
+2. Verify exact-once destruction and callback shutdown behavior across
+   supported failure/device-lost paths. Keep eviction disabled throughout.
+3. Only after those checks pass, separately enable a measured budget and LRU
+   eviction. Preserve the distinction between logical eviction and completed
+   driver destruction in metrics.
 
 ## 7. Limitations
 

@@ -41,6 +41,7 @@
 #pragma once
 
 #include "core/os/spin_lock.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
 #include "servers/rendering/rendering_device.h"
 
 class PipelineCacheRD {
@@ -63,6 +64,7 @@ class PipelineCacheRD {
 		bool wireframe;
 		uint32_t bool_specializations;
 		RID pipeline;
+		Kaizen::PipelineHandle cache_handle;
 	};
 
 	Version *versions = nullptr;

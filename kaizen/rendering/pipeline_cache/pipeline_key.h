@@ -1,102 +1,104 @@
 /**************************************************************************/
 /*  pipeline_key.h                                                        */
 /**************************************************************************/
-/*  Canonical key for a pipeline object created by PipelineCacheRD.       */
-/*                                                                        */
-/*  Two PipelineKeys are equal iff every parameter that affects the       */
-/*  created VkPipeline is identical. The hash is a 64-bit mix; equality  */
-/*  is always checked against the full key, so a hash collision can never */
-/*  cause two different pipelines to be confused.                        */
+/*  Canonical, padding-free identity for pipeline cache entries.          */
 /**************************************************************************/
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace Kaizen {
 
 struct PipelineKey {
-	// Shader identity.
-	uint64_t shader_id = 0;
-
-	// Render state.
-	uint32_t render_primitive = 0;
-	uint32_t dynamic_state_flags = 0;
-	uint32_t render_pass = 0;
-	uint32_t bool_specializations = 0;
-
-	// Vertex / framebuffer formats.
-	uint64_t vertex_format_id = 0;
-	uint64_t framebuffer_format_id = 0;
-
-	// Wireframe override.
-	bool wireframe = false;
-
-	// Rasterization state (serialized).
-	uint32_t cull_mode = 0;
-	uint32_t front_face = 0;
-	float line_width = 0.0f;
-	bool depth_clamp = false;
-	bool rasterizer_discard = false;
-
-	// Multisample state.
-	uint32_t sample_count = 0;
-	bool sample_shading = false;
-	float min_sample_shading = 0.0f;
-
-	// Depth/stencil state.
-	bool depth_test = false;
-	bool depth_write = false;
-	uint32_t depth_compare = 0;
-	bool stencil_test = false;
-
-	// Blend state (simplified; full blend state hashed via a sub-hash).
-	uint64_t blend_hash = 0;
-
-	// Specialization constants.
-	uint64_t specialization_hash = 0;
+	std::vector<uint8_t> data;
 
 	bool operator==(const PipelineKey &p_other) const {
-		return shader_id == p_other.shader_id &&
-				render_primitive == p_other.render_primitive &&
-				dynamic_state_flags == p_other.dynamic_state_flags &&
-				render_pass == p_other.render_pass &&
-				bool_specializations == p_other.bool_specializations &&
-				vertex_format_id == p_other.vertex_format_id &&
-				framebuffer_format_id == p_other.framebuffer_format_id &&
-				wireframe == p_other.wireframe &&
-				cull_mode == p_other.cull_mode &&
-				front_face == p_other.front_face &&
-				line_width == p_other.line_width &&
-				depth_clamp == p_other.depth_clamp &&
-				rasterizer_discard == p_other.rasterizer_discard &&
-				sample_count == p_other.sample_count &&
-				sample_shading == p_other.sample_shading &&
-				min_sample_shading == p_other.min_sample_shading &&
-				depth_test == p_other.depth_test &&
-				depth_write == p_other.depth_write &&
-				depth_compare == p_other.depth_compare &&
-				stencil_test == p_other.stencil_test &&
-				blend_hash == p_other.blend_hash &&
-				specialization_hash == p_other.specialization_hash;
+		return data == p_other.data;
 	}
 
-	bool operator!=(const PipelineKey &p_other) const { return !(*this == p_other); }
-};
+	bool operator!=(const PipelineKey &p_other) const {
+		return !(*this == p_other);
+	}
 
-// FNV-1a 64-bit hash of all fields.
-inline uint64_t pipeline_key_hash(const PipelineKey &p_key) {
-	uint64_t h = 0xcbf29ce484222325ULL;
-	auto mix = [&h](const void *p_data, size_t p_size) {
-		const unsigned char *bytes = static_cast<const unsigned char *>(p_data);
-		for (size_t i = 0; i < p_size; i++) {
-			h ^= bytes[i];
+	void add_bool(bool p_value) {
+		const uint8_t value = p_value ? 1 : 0;
+		_append(1, &value, sizeof(value));
+	}
+
+	void add_u32(uint32_t p_value) {
+		uint8_t value[sizeof(p_value)];
+		for (size_t i = 0; i < sizeof(value); i++) {
+			value[i] = static_cast<uint8_t>(p_value >> (i * 8));
+		}
+		_append(2, value, sizeof(value));
+	}
+
+	void add_i32(int32_t p_value) {
+		const uint32_t bits = static_cast<uint32_t>(p_value);
+		uint8_t value[sizeof(bits)];
+		for (size_t i = 0; i < sizeof(value); i++) {
+			value[i] = static_cast<uint8_t>(bits >> (i * 8));
+		}
+		_append(3, value, sizeof(value));
+	}
+
+	void add_u64(uint64_t p_value) {
+		uint8_t value[sizeof(p_value)];
+		for (size_t i = 0; i < sizeof(value); i++) {
+			value[i] = static_cast<uint8_t>(p_value >> (i * 8));
+		}
+		_append(4, value, sizeof(value));
+	}
+
+	void add_float(float p_value) {
+		static_assert(sizeof(float) == sizeof(uint32_t), "Pipeline keys require 32-bit floats.");
+		uint32_t bits = 0;
+		std::memcpy(&bits, &p_value, sizeof(bits));
+		uint8_t value[sizeof(bits)];
+		for (size_t i = 0; i < sizeof(value); i++) {
+			value[i] = static_cast<uint8_t>(bits >> (i * 8));
+		}
+		_append(5, value, sizeof(value));
+	}
+
+	void add_u32_array(const uint32_t *p_values, size_t p_count) {
+		std::vector<uint8_t> value;
+		value.reserve(p_count * sizeof(uint32_t));
+		for (size_t i = 0; i < p_count; i++) {
+			for (size_t byte = 0; byte < sizeof(uint32_t); byte++) {
+				value.push_back(static_cast<uint8_t>(p_values[i] >> (byte * 8)));
+			}
+		}
+		_append(6, value.data(), value.size());
+	}
+
+	uint64_t hash() const {
+		uint64_t h = 0xcbf29ce484222325ULL;
+		for (uint8_t byte : data) {
+			h ^= byte;
 			h *= 0x100000001b3ULL;
 		}
-	};
-	mix(&p_key, sizeof(PipelineKey));
-	return h;
+		return h;
+	}
+
+private:
+	void _append(uint8_t p_type, const uint8_t *p_value, size_t p_size) {
+		data.push_back(p_type);
+		for (size_t i = 0; i < sizeof(uint64_t); i++) {
+			data.push_back(static_cast<uint8_t>(static_cast<uint64_t>(p_size) >> (i * 8)));
+		}
+		if (p_size != 0) {
+			data.insert(data.end(), p_value, p_value + p_size);
+		}
+	}
+};
+
+inline uint64_t pipeline_key_hash(const PipelineKey &p_key) {
+	return p_key.hash();
 }
 
 } // namespace Kaizen

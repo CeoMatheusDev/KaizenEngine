@@ -165,15 +165,22 @@ camera. It validates that deferred pipeline destruction is exercised during
 active frames, not only at teardown.
 
 ```bash
+KAIZEN_PIPELINE_CACHE=on \
+KAIZEN_PIPELINE_CACHE_VERIFY=on \
 KAIZEN_PIPELINE_LIFETIME=on \
-  bin/kaizen.linuxbsd.template_release.x86_64 \
+  bin/kaizen.linuxbsd.editor.x86_64 \
   --path tests/kaizen/pipeline_churn_project --resolution 1280x720
 ```
 
-Reference result (120 frames, 960 meshes, RX 550, validation layer active):
-204 distinct pipelines retired and destroyed, `resident=0 retiring=0
-destroyable=0 pending_bytes=0` at shutdown, one pre-existing
-`VUID-VkShaderModuleCreateInfo-pCode-08740` and no new validation message.
+Latest runtime result (120 frames, 960 meshes, RX 550): `PipelineCache`
+verification reports equivalent-key RID sharing and partial release, blocks a
+probe acquire during retirement, and allows a new registry generation after the
+physical-destruction callback. The verification deliberately adds test-only
+acquisitions, so its cache hit/miss counters are not workload metrics. The
+Vulkan lifetime registry retired and destroyed all 204 physical pipelines with
+no resident, retiring, destroyable, or pending objects. Teardown still emits a
+deferred shader-release warning and the generic warning for one shader RID;
+independent multi-consumer reuse and clean renderer-owner teardown remain open.
 
 ## Vulkan image-buffer and texture-buffer callback tests
 

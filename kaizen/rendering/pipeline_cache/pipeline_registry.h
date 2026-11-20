@@ -30,11 +30,13 @@
 #pragma once
 
 #include "pipeline_lru.h"
+#include "pipeline_key.h"
 #include "pipeline_retirement.h"
 #include "pipeline_types.h"
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -113,6 +115,8 @@ public:
 	// Returns an existing Resident object (refcount++) or creates a new one.
 	// Returns a null handle while the key is retiring or when capacity is full.
 	PipelineHandle acquire(uint64_t p_key, uint64_t p_bytes);
+	// Compares the complete canonical key; its hash is never used as identity.
+	PipelineHandle acquire(const PipelineKey &p_key, uint64_t p_bytes);
 
 	// Drops a host reference. A Candidate that reaches zero refs is retired.
 	bool release(PipelineHandle p_handle);
@@ -159,6 +163,10 @@ public:
 	// mark_use()/end_use() still gates destruction.
 	bool retire_now(PipelineHandle p_handle);
 
+	// Device teardown only: the owner has stopped recording and waited for GPU
+	// work, so outstanding logical wrappers can no longer use this object.
+	bool retire_after_owner_shutdown(PipelineHandle p_handle);
+
 	void set_budget(uint64_t p_budget_bytes);
 	uint64_t get_budget() const;
 
@@ -183,6 +191,7 @@ private:
 
 	struct Slot {
 		uint64_t key = 0;
+		std::string key_identity;
 		uint64_t bytes = 0;
 		PipelineQueueUsage usage;
 		uint32_t generation = 0;
@@ -192,6 +201,7 @@ private:
 	};
 
 	PipelineHandle _make_handle_locked(uint32_t p_index) const;
+	PipelineHandle _acquire(const std::string &p_key_identity, uint64_t p_report_key, uint64_t p_bytes);
 	bool _resolve_locked(PipelineHandle p_handle, Slot *&r_slot) const;
 	bool _is_ready_locked(const Slot &p_slot) const;
 	void _mark_candidate_locked(uint32_t p_index);
@@ -226,7 +236,7 @@ private:
 
 	std::vector<Slot> slots;
 	std::vector<uint32_t> free_indices;
-	std::unordered_map<uint64_t, uint32_t> key_to_index;
+	std::unordered_map<std::string, uint32_t> key_to_index;
 
 	PipelineLRU lru;
 	PipelineRetirementQueue retirement;

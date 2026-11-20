@@ -21,6 +21,7 @@
 /**************************************************************************/
 
 #include "kaizen/rendering/pipeline_cache/pipeline_lru.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_key.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_submission.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_retirement.h"
@@ -32,6 +33,7 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -59,6 +61,7 @@ void check_impl(bool p_condition, const char *p_expression, const char *p_test, 
 
 using Kaizen::PipelineHandle;
 using Kaizen::PipelineInfo;
+using Kaizen::PipelineKey;
 using Kaizen::PipelineLRU;
 using Kaizen::PipelineQueue;
 using Kaizen::PipelineRegistry;
@@ -67,6 +70,12 @@ using Kaizen::PipelineState;
 using Kaizen::PipelineStats;
 
 constexpr uint64_t KIB = 1024;
+
+struct ConstantPipelineKeyHash {
+	size_t operator()(const PipelineKey &) const {
+		return 0;
+	}
+};
 
 // Drains every Destroyable entry. Returns how many were destroyed.
 uint32_t drain_destroyable(PipelineRegistry &r_registry) {
@@ -89,6 +98,99 @@ uint32_t drain_destroyable(PipelineRegistry &r_registry) {
 
 // ---------------------------------------------------------------------------
 // Lifecycle and accounting
+
+TEST_BEGIN(pipeline_key_uses_complete_canonical_identity)
+	PipelineKey first;
+	first.add_u64(0x123456789abcdef0ULL);
+	first.add_bool(true);
+	first.add_float(1.0f);
+
+	PipelineKey same;
+	same.add_u64(0x123456789abcdef0ULL);
+	same.add_bool(true);
+	same.add_float(1.0f);
+
+	PipelineKey different;
+	different.add_u64(0x123456789abcdef0ULL);
+	different.add_bool(false);
+	different.add_float(1.0f);
+
+	CHECK(first == same);
+	CHECK_EQ(Kaizen::pipeline_key_hash(first), Kaizen::pipeline_key_hash(same));
+	CHECK(first != different);
+
+	// Force every key into the same hash bucket; equality must still separate them.
+	std::unordered_map<PipelineKey, int, ConstantPipelineKeyHash> colliding_keys;
+	colliding_keys[first] = 1;
+	colliding_keys[different] = 2;
+	CHECK_EQ(colliding_keys.size(), (size_t)2);
+	CHECK_EQ(colliding_keys[first], 1);
+	CHECK_EQ(colliding_keys[different], 2);
+TEST_END()
+
+TEST_BEGIN(typed_registry_shares_exact_keys_and_blocks_retirement_reacquire)
+	PipelineRegistry registry(4, 0);
+
+	PipelineKey first_key;
+	first_key.add_u32(17);
+	first_key.add_u32(29);
+	PipelineKey different_key;
+	different_key.add_u32(17);
+	different_key.add_u32(30);
+
+	PipelineHandle first = registry.acquire(first_key, KIB);
+	PipelineHandle shared = registry.acquire(first_key, KIB);
+	PipelineHandle different = registry.acquire(different_key, KIB);
+	CHECK(!first.is_null());
+	CHECK_EQ(shared, first);
+	CHECK(!different.is_null());
+	CHECK(different != first);
+	CHECK_EQ(registry.get_stats().hits, (uint64_t)1);
+	CHECK_EQ(registry.get_stats().misses, (uint64_t)2);
+
+	CHECK(registry.release(first));
+	CHECK(registry.is_valid(shared));
+	PipelineInfo shared_info;
+	CHECK(registry.describe(shared, shared_info));
+	CHECK_EQ(shared_info.host_refs, (uint32_t)1);
+	CHECK(registry.release(shared));
+	CHECK(registry.retire_now(first));
+	CHECK(registry.acquire(first_key, KIB).is_null());
+
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	PipelineHandle destroyable[1];
+	CHECK_EQ(registry.collect_destroyable(destroyable, 1), (uint32_t)1);
+	CHECK(registry.acquire(first_key, KIB).is_null());
+	CHECK(registry.destroy(destroyable[0]));
+	PipelineHandle recreated = registry.acquire(first_key, KIB);
+	CHECK(!recreated.is_null());
+	CHECK(recreated != first);
+TEST_END()
+
+TEST_BEGIN(owner_shutdown_retires_entries_with_live_logical_references)
+	PipelineRegistry registry(2, 0);
+	PipelineKey key;
+	key.add_u32(41);
+
+	PipelineHandle owner = registry.acquire(key, KIB);
+	PipelineHandle shared = registry.acquire(key, KIB);
+	CHECK_EQ(shared, owner);
+	CHECK(registry.retire_after_owner_shutdown(owner));
+	CHECK(registry.acquire(key, KIB).is_null());
+
+	PipelineInfo info;
+	CHECK(registry.describe(owner, info));
+	CHECK_EQ(info.state, PipelineState::Retiring);
+	CHECK_EQ(info.host_refs, (uint32_t)0);
+	CHECK_EQ(info.recording_refs, (uint32_t)0);
+
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	PipelineHandle destroyable[1];
+	CHECK_EQ(registry.collect_destroyable(destroyable, 1), (uint32_t)1);
+	CHECK(registry.destroy(destroyable[0]));
+	CHECK_EQ(registry.get_stats().resident_count, (uint64_t)0);
+	CHECK_EQ(registry.get_stats().pending_bytes, (uint64_t)0);
+TEST_END()
 
 TEST_BEGIN(acquire_hit_and_miss)
 	PipelineRegistry registry(8, 4 * KIB);
@@ -1004,6 +1106,9 @@ void run_benchmark() {
 int main(int argc, char **argv) {
 	const bool bench = argc > 1 && std::strcmp(argv[1], "--bench") == 0;
 
+	pipeline_key_uses_complete_canonical_identity();
+	typed_registry_shares_exact_keys_and_blocks_retirement_reacquire();
+	owner_shutdown_retires_entries_with_live_logical_references();
 	acquire_hit_and_miss();
 	release_rejects_invalid_sequences();
 	stale_handle_rejected();

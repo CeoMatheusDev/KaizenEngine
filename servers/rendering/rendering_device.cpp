@@ -236,7 +236,7 @@ void RenderingDevice::_remove_dependency(RID p_id, RID p_depends_on) {
 	}
 }
 
-void RenderingDevice::_free_dependencies(RID p_id) {
+bool RenderingDevice::_free_dependencies(RID p_id) {
 	_THREAD_SAFE_METHOD_
 
 	// Direct dependencies must be freed.
@@ -244,7 +244,12 @@ void RenderingDevice::_free_dependencies(RID p_id) {
 	HashMap<RID, HashSet<RID>>::Iterator E = dependency_map.find(p_id);
 	if (E) {
 		while (E->value.size()) {
-			free_rid(*E->value.begin());
+			const RID dependent = *E->value.begin();
+			free_rid(dependent);
+			if (E->value.has(dependent)) {
+				WARN_PRINT("Deferring RID " + itos(p_id.get_id()) + " release because dependent RID " + itos(dependent.get_id()) + " is still referenced.");
+				return false;
+			}
 		}
 		dependency_map.remove(E);
 	}
@@ -262,6 +267,7 @@ void RenderingDevice::_free_dependencies(RID p_id) {
 
 		reverse_dependency_map.remove(E);
 	}
+	return true;
 }
 
 void RenderingDevice::_replace_dependency(RID p_dependent, RID p_old_dependency, RID p_new_dependency) {
@@ -4978,6 +4984,10 @@ bool RenderingDevice::uniform_sets_have_linear_pools() const {
 /*******************/
 
 RID RenderingDevice::render_pipeline_create(RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants) {
+	return _render_pipeline_create_internal(p_shader, p_framebuffer_format, p_vertex_format, p_render_primitive, p_rasterization_state, p_multisample_state, p_depth_stencil_state, p_blend_state, p_dynamic_state_flags, p_for_render_pass, p_specialization_constants, true);
+}
+
+RID RenderingDevice::_render_pipeline_create_internal(RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, bool p_track_pipeline) {
 	// Needs a shader.
 	Shader *shader = shader_owner.get_or_null(p_shader);
 	ERR_FAIL_NULL_V(shader, RID());
@@ -5168,7 +5178,8 @@ RID RenderingDevice::render_pipeline_create(RID p_shader, FramebufferFormatID p_
 	}
 
 	// Kaizen P2.3: track the pipeline with the creation-side cache (opt-in).
-	if (pipeline_cache_registry != nullptr) {
+	if (p_track_pipeline && pipeline_cache_registry != nullptr) {
+		MutexLock lock(pipeline_cache_mutex);
 		uint64_t key = id.get_id();
 		Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(key, 0);
 		if (!handle.is_null()) {
@@ -5184,6 +5195,60 @@ bool RenderingDevice::render_pipeline_is_valid(RID p_pipeline) {
 	_THREAD_SAFE_METHOD_
 
 	return render_pipeline_owner.owns(p_pipeline);
+}
+
+RID RenderingDevice::render_pipeline_create_cached(const Kaizen::PipelineKey &p_key, RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, Kaizen::PipelineHandle &r_handle) {
+	r_handle = Kaizen::PipelineHandle();
+	if (pipeline_cache_registry == nullptr) {
+		return render_pipeline_create(p_shader, p_framebuffer_format, p_vertex_format, p_render_primitive, p_rasterization_state, p_multisample_state, p_depth_stencil_state, p_blend_state, p_dynamic_state_flags, p_for_render_pass, p_specialization_constants);
+	}
+
+	MutexLock lock(pipeline_cache_mutex);
+	Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(p_key, 0);
+	ERR_FAIL_COND_V_MSG(handle.is_null(), RID(), "Pipeline cache key is retiring or the registry is full.");
+
+	if (pipeline_cache_rids.has(handle.index)) {
+		const RID existing_pipeline = pipeline_cache_rids[handle.index];
+		if (!render_pipeline_owner.owns(existing_pipeline)) {
+			pipeline_cache_registry->release(handle);
+			Kaizen::PipelineInfo info;
+			if (pipeline_cache_registry->describe(handle, info) && info.host_refs == 0 && info.recording_refs == 0) {
+				pipeline_cache_registry->retire_now(handle);
+			}
+			ERR_FAIL_V_MSG(RID(), "Pipeline cache registry contains an invalid render pipeline RID.");
+		}
+		r_handle = handle;
+		return existing_pipeline;
+	}
+
+	RID pipeline = _render_pipeline_create_internal(p_shader, p_framebuffer_format, p_vertex_format, p_render_primitive, p_rasterization_state, p_multisample_state, p_depth_stencil_state, p_blend_state, p_dynamic_state_flags, p_for_render_pass, p_specialization_constants, false);
+	if (pipeline.is_null()) {
+		ERR_FAIL_COND_V_MSG(!pipeline_cache_registry->release(handle), RID(), "Failed to release pipeline cache reservation after pipeline creation failed.");
+		Kaizen::PipelineInfo info;
+		if (pipeline_cache_registry->describe(handle, info) && info.host_refs == 0 && info.recording_refs == 0) {
+			pipeline_cache_registry->retire_now(handle);
+		}
+		return RID();
+	}
+
+	RenderPipeline *pipeline_data = render_pipeline_owner.get_or_null(pipeline);
+	if (pipeline_data == nullptr) {
+		free_rid(pipeline);
+		if (!pipeline_cache_registry->release(handle)) {
+			ERR_PRINT("Failed to release a pipeline cache reference after losing its created RID.");
+		} else {
+			pipeline_cache_registry->retire_now(handle);
+		}
+		ERR_FAIL_V_MSG(RID(), "Created render pipeline RID is missing from its owner.");
+	}
+	pipeline_data->cache_free_data = memnew(PipelineCacheFreeData);
+	pipeline_data->cache_free_data->device = this;
+	pipeline_data->cache_free_data->registry_index = handle.index;
+	pipeline_data->cache_free_data->registry_generation = handle.generation;
+	pipeline_data->cache_free_data->key = p_key;
+	pipeline_cache_rids[handle.index] = pipeline;
+	r_handle = handle;
+	return pipeline;
 }
 
 RID RenderingDevice::compute_pipeline_create(RID p_shader, const Vector<PipelineSpecializationConstant> &p_specialization_constants) {
@@ -5242,6 +5307,7 @@ RID RenderingDevice::compute_pipeline_create(RID p_shader, const Vector<Pipeline
 
 	// Kaizen P2.3: track the pipeline with the creation-side cache (opt-in).
 	if (pipeline_cache_registry != nullptr) {
+		MutexLock lock(pipeline_cache_mutex);
 		uint64_t key = id.get_id();
 		Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(key, 0);
 		if (!handle.is_null()) {
@@ -7786,7 +7852,24 @@ bool RenderingDevice::_dependencies_make_mutable(RID p_id, RDG::ResourceTracker 
 void RenderingDevice::free_rid(RID p_rid) {
 	ERR_RENDER_THREAD_GUARD();
 
-	_free_dependencies(p_rid); // Recursively erase dependencies first, to avoid potential API problems.
+	{
+		MutexLock lock(pipeline_cache_mutex);
+		RenderPipeline *pipeline = render_pipeline_owner.get_or_null(p_rid);
+		if (pipeline != nullptr && pipeline->cache_free_data != nullptr && pipeline_cache_registry != nullptr) {
+			Kaizen::PipelineHandle handle;
+			handle.index = pipeline->cache_free_data->registry_index;
+			handle.generation = pipeline->cache_free_data->registry_generation;
+			Kaizen::PipelineInfo info;
+			if (pipeline_cache_registry->describe(handle, info) && info.host_refs != 0) {
+				WARN_PRINT("Deferring shared render pipeline release while PipelineCacheRD references remain.");
+				return;
+			}
+		}
+	}
+
+	if (!_free_dependencies(p_rid)) {
+		return;
+	}
 	_free_internal(p_rid);
 }
 
@@ -7903,23 +7986,29 @@ void RenderingDevice::_free_internal(RID p_id) {
 		RenderPipeline *pipeline = render_pipeline_owner.get_or_null(p_id);
 		frames[frame].render_pipelines_to_dispose_of.push_back(*pipeline);
 		// Kaizen P2.3: release the creation-side cache reference.
-		if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
-			Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
-			pipeline_cache_registry->release(h);
-			pipeline_cache_registry->retire_now(h);
-			pipeline_cache_rid_to_handle.erase(p_id.get_id());
-			pipeline_cache_rids.erase(h.index);
+		{
+			MutexLock lock(pipeline_cache_mutex);
+			if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
+				Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
+				pipeline_cache_registry->release(h);
+				pipeline_cache_registry->retire_now(h);
+				pipeline_cache_rid_to_handle.erase(p_id.get_id());
+				pipeline_cache_rids.erase(h.index);
+			}
 		}
 		render_pipeline_owner.free(p_id);
 	} else if (compute_pipeline_owner.owns(p_id)) {
 		ComputePipeline *pipeline = compute_pipeline_owner.get_or_null(p_id);
 		frames[frame].compute_pipelines_to_dispose_of.push_back(*pipeline);
-		if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
-			Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
-			pipeline_cache_registry->release(h);
-			pipeline_cache_registry->retire_now(h);
-			pipeline_cache_rid_to_handle.erase(p_id.get_id());
-			pipeline_cache_rids.erase(h.index);
+		{
+			MutexLock lock(pipeline_cache_mutex);
+			if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
+				Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
+				pipeline_cache_registry->release(h);
+				pipeline_cache_registry->retire_now(h);
+				pipeline_cache_rid_to_handle.erase(p_id.get_id());
+				pipeline_cache_rids.erase(h.index);
+			}
 		}
 		compute_pipeline_owner.free(p_id);
 	} else if (acceleration_structure_owner.owns(p_id)) {
@@ -8232,7 +8321,11 @@ void RenderingDevice::_free_pending_resources(int p_frame) {
 	while (frames[p_frame].render_pipelines_to_dispose_of.front()) {
 		RenderPipeline *pipeline = &frames[p_frame].render_pipelines_to_dispose_of.front()->get();
 
-		driver->pipeline_free(pipeline->driver_id);
+		if (pipeline->cache_free_data != nullptr) {
+			driver->pipeline_free_with_callback(pipeline->driver_id, _pipeline_cache_free_callback, pipeline->cache_free_data);
+		} else {
+			driver->pipeline_free(pipeline->driver_id);
+		}
 
 		frames[p_frame].render_pipelines_to_dispose_of.pop_front();
 	}
@@ -8404,10 +8497,9 @@ void RenderingDevice::_begin_frame(bool p_presented) {
 	// submission that could have used the disposed resources has completed.
 	KaizenResourceTracker::get_singleton()->notify_frame_completed(frames_drawn);
 
-	// Kaizen P2.3: creation-side pipeline cache eviction (opt-in). Drains
-	// destroyable entries produced by enforce_budget() above.
+	// Drain only explicit retirements. Budget-driven eviction stays disabled
+	// until semantic-key sharing and its lifetime contract are integrated.
 	if (pipeline_cache_registry != nullptr) {
-		pipeline_cache_enforce_budget();
 		pipeline_cache_drain();
 	}
 
@@ -8681,8 +8773,8 @@ Error RenderingDevice::initialize(RenderingContextDriver *p_context, DisplayServ
 	const String pipeline_cache_mode = OS::get_singleton() ? OS::get_singleton()->get_environment("KAIZEN_PIPELINE_CACHE") : String();
 	if (pipeline_cache_mode == "on" || pipeline_cache_mode == "1" || pipeline_cache_mode == "true") {
 		const uint32_t capacity = 4096;
-		pipeline_cache_registry = memnew(Kaizen::PipelineRegistry(capacity, 0));
-		print_verbose("[Kaizen][PipelineCache] Creation-side cache enabled (4096 slots).");
+		pipeline_cache_registry = memnew(Kaizen::PipelineRegistry(capacity, UINT64_MAX));
+		print_verbose("[Kaizen][PipelineCache] Pipeline tracking enabled (4096 slots; eviction disabled).");
 	}
 
 	print_verbose("Devices:");
@@ -9223,6 +9315,7 @@ Kaizen::PipelineHandle RenderingDevice::pipeline_cache_acquire(uint64_t p_key, u
 	if (pipeline_cache_registry == nullptr) {
 		return Kaizen::PipelineHandle();
 	}
+	MutexLock lock(pipeline_cache_mutex);
 	Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(p_key, p_bytes);
 	if (!handle.is_null()) {
 		// Track the slot so eviction can free the corresponding RID.
@@ -9231,10 +9324,71 @@ Kaizen::PipelineHandle RenderingDevice::pipeline_cache_acquire(uint64_t p_key, u
 	return handle;
 }
 
+void RenderingDevice::_pipeline_cache_free_callback(void *p_userdata) {
+	PipelineCacheFreeData *free_data = static_cast<PipelineCacheFreeData *>(p_userdata);
+	if (free_data == nullptr) {
+		return;
+	}
+
+	RenderingDevice *device = free_data->device;
+	Kaizen::PipelineHandle handle;
+	handle.index = free_data->registry_index;
+	handle.generation = free_data->registry_generation;
+	bool physically_destroyed = false;
+	if (device->pipeline_cache_registry != nullptr) {
+		MutexLock lock(device->pipeline_cache_mutex);
+		if (device->pipeline_cache_registry->is_valid(handle)) {
+			if (!device->pipeline_cache_registry->destroy(handle)) {
+				device->pipeline_cache_physically_freed[handle.index] = handle;
+			} else {
+				physically_destroyed = true;
+				device->pipeline_cache_rids.erase(handle.index);
+				device->pipeline_cache_waiting_for_free.erase(handle.index);
+				device->pipeline_cache_physically_freed.erase(handle.index);
+			}
+		}
+	}
+
+	static bool retirement_reacquire_test_ran = false;
+	if (physically_destroyed && !retirement_reacquire_test_ran &&
+			OS::get_singleton()->get_environment("KAIZEN_PIPELINE_CACHE_VERIFY") == "on") {
+		retirement_reacquire_test_ran = true;
+		Kaizen::PipelineHandle recreated = device->pipeline_cache_registry->acquire(free_data->key, 0);
+		const bool new_generation = !recreated.is_null() && recreated != handle;
+		if (!recreated.is_null()) {
+			const bool released = device->pipeline_cache_registry->release(recreated);
+			const bool retired = released && device->pipeline_cache_registry->retire_now(recreated);
+			if (retired) {
+				device->pipeline_cache_registry->set_completed_serial(Kaizen::PipelineQueue::Graphics, 0);
+				if (!device->pipeline_cache_registry->destroy(recreated)) {
+					ERR_PRINT("Pipeline cache verification failed: could not drain its test generation.");
+				}
+			} else {
+				ERR_PRINT("Pipeline cache verification failed: could not retire its test generation.");
+			}
+		}
+		if (!new_generation) {
+			ERR_PRINT("Pipeline cache verification failed: physical destruction did not release the key for a new generation.");
+		}
+		print_line(new_generation ? "[Kaizen][PipelineCacheTest] reacquire after physical destruction: PASS" :
+									"[Kaizen][PipelineCacheTest] reacquire after physical destruction: FAIL");
+	}
+	memdelete(free_data);
+}
+
+Kaizen::PipelineHandle RenderingDevice::pipeline_cache_acquire(const Kaizen::PipelineKey &p_key, uint64_t p_bytes) {
+	if (pipeline_cache_registry == nullptr) {
+		return Kaizen::PipelineHandle();
+	}
+	MutexLock lock(pipeline_cache_mutex);
+	return pipeline_cache_registry->acquire(p_key, p_bytes);
+}
+
 void RenderingDevice::pipeline_cache_register_rid(Kaizen::PipelineHandle p_handle, RID p_rid) {
 	if (pipeline_cache_registry == nullptr || p_handle.is_null()) {
 		return;
 	}
+	MutexLock lock(pipeline_cache_mutex);
 	pipeline_cache_rids[p_handle.index] = p_rid;
 }
 
@@ -9242,13 +9396,22 @@ void RenderingDevice::pipeline_cache_release(Kaizen::PipelineHandle p_handle) {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
-	pipeline_cache_registry->release(p_handle);
+	MutexLock lock(pipeline_cache_mutex);
+	if (pipeline_cache_shutting_down) {
+		return;
+	}
+	ERR_FAIL_COND_MSG(!pipeline_cache_registry->release(p_handle), "Invalid or duplicate pipeline cache reference release.");
+	Kaizen::PipelineInfo info;
+	if (pipeline_cache_registry->describe(p_handle, info) && info.host_refs == 0 && info.recording_refs == 0) {
+		pipeline_cache_registry->retire_now(p_handle);
+	}
 }
 
 void RenderingDevice::pipeline_cache_retire(Kaizen::PipelineHandle p_handle) {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
+	MutexLock lock(pipeline_cache_mutex);
 	pipeline_cache_registry->retire_now(p_handle);
 }
 
@@ -9256,6 +9419,7 @@ void RenderingDevice::pipeline_cache_enforce_budget() {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
+	MutexLock lock(pipeline_cache_mutex);
 	pipeline_cache_registry->enforce_budget();
 }
 
@@ -9263,18 +9427,76 @@ void RenderingDevice::pipeline_cache_drain() {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
-	Kaizen::PipelineHandle handles[64];
+	// Shared-cache entries have no registry-recorded GPU use yet. Retiring
+	// them makes their RID enter the normal RenderingDevice frame-ring path,
+	// which supplies physical completion-safe destruction.
+	Vector<Kaizen::PipelineHandle> handles;
+	handles.resize(pipeline_cache_registry->get_capacity());
 	uint32_t count = 0;
-	while ((count = pipeline_cache_registry->collect_destroyable(handles, 64)) > 0) {
-		for (uint32_t i = 0; i < count; i++) {
-			if (pipeline_cache_rids.has(handles[i].index)) {
-				RID rid = pipeline_cache_rids[handles[i].index];
-				pipeline_cache_rids.erase(handles[i].index);
-				if (rid.is_valid()) {
-					free_rid(rid);
-				}
+	{
+		MutexLock lock(pipeline_cache_mutex);
+		pipeline_cache_registry->set_completed_serial(Kaizen::PipelineQueue::Graphics, 0);
+		count = pipeline_cache_registry->collect_destroyable(handles.ptrw(), handles.size());
+	}
+	for (uint32_t i = 0; i < count; i++) {
+		const Kaizen::PipelineHandle handle = handles[i];
+		RID rid;
+		bool free_pipeline = false;
+		bool destroy_entry = false;
+		{
+			MutexLock lock(pipeline_cache_mutex);
+			if (pipeline_cache_registry == nullptr || !pipeline_cache_registry->is_valid(handle)) {
+				continue;
 			}
-			pipeline_cache_registry->destroy(handles[i]);
+			if (pipeline_cache_physically_freed.has(handle.index) && pipeline_cache_physically_freed[handle.index] == handle) {
+				pipeline_cache_rids.erase(handle.index);
+				destroy_entry = true;
+			} else if (pipeline_cache_waiting_for_free.has(handle.index)) {
+				continue;
+			} else if (pipeline_cache_rids.has(handle.index)) {
+				rid = pipeline_cache_rids[handle.index];
+				pipeline_cache_rids.erase(handle.index);
+				if (rid.is_valid()) {
+					const RenderPipeline *pipeline = render_pipeline_owner.get_or_null(rid);
+					const bool cache_managed = pipeline != nullptr &&
+							pipeline->cache_free_data != nullptr &&
+							pipeline->cache_free_data->registry_index == handle.index &&
+							pipeline->cache_free_data->registry_generation == handle.generation;
+					free_pipeline = true;
+					if (cache_managed) {
+						pipeline_cache_waiting_for_free[handle.index] = handle;
+						if (OS::get_singleton()->get_environment("KAIZEN_PIPELINE_CACHE_VERIFY") == "on") {
+							Kaizen::PipelineHandle probe = pipeline_cache_registry->acquire(pipeline->cache_free_data->key, 0);
+							const bool blocked = probe.is_null();
+							if (!probe.is_null()) {
+								pipeline_cache_registry->release(probe);
+							}
+							if (!blocked) {
+								ERR_PRINT("Pipeline cache verification failed: acquire succeeded while the old RID was retiring.");
+							}
+							print_line(blocked ? "[Kaizen][PipelineCacheTest] reacquire blocked during retirement: PASS" :
+												 "[Kaizen][PipelineCacheTest] reacquire blocked during retirement: FAIL");
+						}
+					} else {
+						destroy_entry = true;
+					}
+				} else {
+					destroy_entry = true;
+				}
+			} else {
+				// Failed creation has no RID to dispose.
+				destroy_entry = true;
+			}
+		}
+
+		if (free_pipeline) {
+			free_rid(rid);
+		}
+		if (destroy_entry) {
+			MutexLock lock(pipeline_cache_mutex);
+			ERR_FAIL_COND_MSG(!pipeline_cache_registry->destroy(handle), "Failed to destroy a completed pipeline cache entry.");
+			pipeline_cache_physically_freed.erase(handle.index);
+			pipeline_cache_waiting_for_free.erase(handle.index);
 		}
 	}
 }
@@ -9283,7 +9505,10 @@ void RenderingDevice::pipeline_cache_confirm_all() {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
-	pipeline_cache_registry->set_completed_serial(Kaizen::PipelineQueue::Graphics, UINT64_MAX);
+	{
+		MutexLock lock(pipeline_cache_mutex);
+		pipeline_cache_registry->set_completed_serial(Kaizen::PipelineQueue::Graphics, UINT64_MAX);
+	}
 	pipeline_cache_drain();
 }
 
@@ -9301,6 +9526,31 @@ void RenderingDevice::finalize() {
 
 	// Delete everything the graph has created.
 	draw_graph.finalize();
+
+	if (pipeline_cache_registry != nullptr) {
+		pipeline_cache_shutting_down = true;
+		bool retirement_failed = false;
+		{
+			MutexLock lock(pipeline_cache_mutex);
+			for (const KeyValue<uint32_t, RID> &entry : pipeline_cache_rids) {
+				const RenderPipeline *pipeline = render_pipeline_owner.get_or_null(entry.value);
+				if (pipeline == nullptr || pipeline->cache_free_data == nullptr) {
+					continue;
+				}
+				Kaizen::PipelineHandle handle;
+				handle.index = pipeline->cache_free_data->registry_index;
+				handle.generation = pipeline->cache_free_data->registry_generation;
+				if (!pipeline_cache_registry->retire_after_owner_shutdown(handle)) {
+					retirement_failed = true;
+					break;
+				}
+			}
+		}
+		if (retirement_failed) {
+			ERR_PRINT("Failed to retire a shared pipeline during device shutdown.");
+		}
+		pipeline_cache_drain();
+	}
 
 	// Free all resources.
 	_free_rids(render_pipeline_owner, "Pipeline");
@@ -9391,6 +9641,8 @@ void RenderingDevice::finalize() {
 		memdelete(pipeline_cache_registry);
 		pipeline_cache_registry = nullptr;
 		pipeline_cache_rids.clear();
+		pipeline_cache_waiting_for_free.clear();
+		pipeline_cache_physically_freed.clear();
 		pipeline_cache_rid_to_handle.clear();
 	}
 

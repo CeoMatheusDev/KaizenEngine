@@ -31,7 +31,7 @@ func _process(_delta: float) -> void:
 		var p50_v := _percentile(_frame_times, 0.5)
 		var p95_v := _percentile(_frame_times, 0.95)
 		var p99_v := _percentile(_frame_times, 0.99)
-		var worst_v := _frame_times.back()
+		var worst_v: float = _frame_times.back()
 		print("pipeline churn: completed %d frames, created=%d freed=%d" % [_frame, _created, _freed])
 		print("frame_ms: mean=%.3f p50=%.3f p95=%.3f p99=%.3f worst=%.3f" % [mean_v, p50_v, p95_v, p99_v, worst_v])
 		get_tree().quit()

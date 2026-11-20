@@ -617,6 +617,7 @@ private:
 
 public:
 	virtual void pipeline_free(PipelineID p_pipeline) override final;
+	virtual void pipeline_free_with_callback(PipelineID p_pipeline, PipelineFreeCallback p_callback, void *p_userdata) override final;
 
 	// ----- BINDING -----
 
@@ -843,6 +844,8 @@ private:
 	Kaizen::PipelineSubmissionTracker *kaizen_submissions = nullptr;
 	// One VkPipeline per registry slot, indexed by handle.index.
 	LocalVector<VkPipeline> kaizen_pending_pipelines;
+	LocalVector<PipelineFreeCallback> kaizen_pipeline_free_callbacks;
+	LocalVector<void *> kaizen_pipeline_free_userdata;
 	uint64_t kaizen_next_pipeline_key = 1;
 	uint32_t kaizen_next_submission_queue = 1;
 
@@ -851,7 +854,7 @@ private:
 	void _kaizen_pipeline_confirm(uint32_t p_queue, uint64_t p_serial);
 	void _kaizen_pipeline_confirm_all();
 	void _kaizen_pipeline_drain();
-	void _kaizen_pipeline_retire(VkPipeline p_pipeline);
+	void _kaizen_pipeline_retire(VkPipeline p_pipeline, PipelineFreeCallback p_callback = nullptr, void *p_userdata = nullptr);
 
 	/******************/
 

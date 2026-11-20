@@ -4,6 +4,13 @@
 > **Verified against revision:** `eb7dd94` (2026-11-18)
 > **Related:** [Rendering audit (R0)](rendering-audit.md), [Rendering resource lifetime](rendering-resource-lifetime.md)
 
+> **Kaizen P2 status:** `PipelineCacheRD` uses full-key shared acquisition
+> behind `KAIZEN_PIPELINE_CACHE=on`. Focused renderer/device/Vulkan runtime
+> checks cover duplicate acquire, partial release, blocked retirement reacquire,
+> and key reuse after physical destruction. Natural multi-consumer hits and
+> clean shader teardown remain open; budget-driven eviction stays disabled. See
+> [Pipeline object lifetime and eviction](pipeline-lifetime.md).
+
 This document describes how pipeline state objects (PSOs) are cached at two levels, how the device cache is persisted between runs, and which backends actually support it.
 
 ## 1. Two cache layers
@@ -20,7 +27,7 @@ They are independent: the variant table decides **which** pipeline is needed; th
 - Key fields: shader, vertex format id, framebuffer format id, render pass, wireframe flag, and a boolean-specialization bitmask (`servers/rendering/renderer_rd/pipeline_cache_rd.h` — `struct Version`).
 - Sample count is derived from the framebuffer format during generation (`pipeline_cache_rd.cpp` — `_generate_version()`), so the same key can produce different pipelines for different MSAA settings.
 - Lookup is a **linear scan** over the version array under a `SpinLock` (`pipeline_cache_rd.h` — `get_render_pipeline()`).
-- On a miss, `_generate_version()` calls `RD::render_pipeline_create()` **while holding the lock**.
+- On a miss, `_generate_version()` calls `RD::render_pipeline_create_cached()` **while holding the lock**; the opt-in device path returns a shared RID for equivalent full keys.
 - `setup()` clears all versions and resets state; `_clear()` frees pipelines through `RD::free_rid()` and contains a TODO noting that clearing probably should recompile variants instead of stalling.
 
 **Implication:** per-draw lookups are O(number of variants). With many variants this becomes measurable, and compilation under the spin lock serializes threads. R1/R2 should consider a hash map keyed by a deterministic variant key and compilation outside the lock.
@@ -48,7 +55,7 @@ Verified in `servers/rendering/rendering_device.cpp:8860-8940`:
 ## 5. Shader variant growth
 
 - Boolean specializations are encoded as a bitmask; each additional boolean doubles the theoretical variant space.
-- No variant budget, cap, or eviction policy was found in the variant table. Kaizen's P2 registry adds the policy core, but it is not connected to this table yet; what is connected is completion-safe deferred destruction of freed pipeline objects (`KAIZEN_PIPELINE_LIFETIME=on`). Creation-side eviction remains open; see [Pipeline object lifetime and eviction](pipeline-lifetime.md).
+- No variant budget, cap, or eviction policy exists in the variant table. Kaizen's P2 registry is connected to `PipelineCacheRD` for semantic deduplication when opted in. Budget-driven eviction is intentionally disabled; explicit final logical releases are retired. The integration still needs in-engine validation. See [Pipeline object lifetime and eviction](pipeline-lifetime.md).
 - Base specialization constants are stored per cache instance and can be changed through `update_specialization_constants()` / `update_shader()`, which invalidate the pipelines created before the change (the caches are re-set up).
 
 ## 6. Rules implied for R1
@@ -61,10 +68,12 @@ Verified in `servers/rendering/rendering_device.cpp:8860-8940`:
 
 ## 7. Open items
 
-- The P2 registry has no in-engine hit/miss, resident-memory, or eviction data
-  yet. The Vulkan driver does call it to defer `vkDestroyPipeline` when
-  `KAIZEN_PIPELINE_LIFETIME=on`, but creation is not gated on it, so hit/miss
-  and resident-memory figures are still not meaningful.
+- P2 tracking reports creation-side registry counters, but those historical
+  measurements are not functional-cache hit/miss or measured driver-memory
+  figures. Semantic `PipelineKey` acquisition is now wired through
+  `PipelineCacheRD`; real renderer/Vulkan hit rates and shared-lifetime
+  behavior have not yet been measured. Automatic budget eviction remains
+  disabled.
 
 - Cold vs. warm compilation time per backend and per scene — **not measured**.
 - Real variant counts for representative scenes — **not measured**.

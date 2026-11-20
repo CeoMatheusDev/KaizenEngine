@@ -34,6 +34,22 @@ PipelineHandle PipelineRegistry::_make_handle_locked(uint32_t p_index) const {
 	return handle;
 }
 
+static std::string numeric_pipeline_key_identity(uint64_t p_key) {
+	std::string identity(1, '\0');
+	for (size_t i = 0; i < sizeof(p_key); i++) {
+		identity.push_back(static_cast<char>(p_key >> (i * 8)));
+	}
+	return identity;
+}
+
+static std::string canonical_pipeline_key_identity(const PipelineKey &p_key) {
+	std::string identity(1, '\1');
+	if (!p_key.data.empty()) {
+		identity.append(reinterpret_cast<const char *>(p_key.data.data()), p_key.data.size());
+	}
+	return identity;
+}
+
 bool PipelineRegistry::_resolve_locked(PipelineHandle p_handle, Slot *&r_slot) const {
 	if (p_handle.is_null() || p_handle.index >= capacity) {
 		return false;
@@ -56,10 +72,18 @@ bool PipelineRegistry::_is_ready_locked(const Slot &p_slot) const {
 }
 
 PipelineHandle PipelineRegistry::acquire(uint64_t p_key, uint64_t p_bytes) {
+	return _acquire(numeric_pipeline_key_identity(p_key), p_key, p_bytes);
+}
+
+PipelineHandle PipelineRegistry::acquire(const PipelineKey &p_key, uint64_t p_bytes) {
+	return _acquire(canonical_pipeline_key_identity(p_key), pipeline_key_hash(p_key), p_bytes);
+}
+
+PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uint64_t p_report_key, uint64_t p_bytes) {
 	lock.lock();
 
 	PipelineHandle result;
-	auto existing = key_to_index.find(p_key);
+	auto existing = key_to_index.find(p_key_identity);
 
 	if (existing != key_to_index.end()) {
 		const uint32_t index = existing->second;
@@ -100,14 +124,15 @@ PipelineHandle PipelineRegistry::acquire(uint64_t p_key, uint64_t p_bytes) {
 		slot.generation++;
 	}
 
-	slot.key = p_key;
+	slot.key = p_report_key;
+	slot.key_identity = p_key_identity;
 	slot.bytes = p_bytes;
 	slot.usage = PipelineQueueUsage();
 	slot.host_refs = 1;
 	slot.recording_refs = 0;
 	slot.state = PipelineState::Resident;
 
-	key_to_index[p_key] = index;
+	key_to_index[p_key_identity] = index;
 	lru.touch(index);
 
 	resident_bytes += p_bytes;
@@ -378,9 +403,8 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 
 	const uint32_t index = p_handle.index;
 
-	// Only erase the key mapping if it still points at this slot; a new object
-	// for the same key may already have been created after retirement.
-	auto existing = key_to_index.find(slot->key);
+	// Keep the identity reserved until this physical slot is destroyed.
+	auto existing = key_to_index.find(slot->key_identity);
 	if (existing != key_to_index.end() && existing->second == index) {
 		key_to_index.erase(existing);
 	}
@@ -393,6 +417,7 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 
 	slot->state = PipelineState::Free;
 	slot->key = 0;
+	slot->key_identity.clear();
 	slot->bytes = 0;
 	slot->usage = PipelineQueueUsage();
 	slot->host_refs = 0;
@@ -485,6 +510,32 @@ bool PipelineRegistry::retire_now(PipelineHandle p_handle) {
 
 	requested_retirements++;
 	_retire_locked(index);
+
+	lock.unlock();
+	return true;
+}
+
+bool PipelineRegistry::retire_after_owner_shutdown(PipelineHandle p_handle) {
+	lock.lock();
+
+	Slot *slot = nullptr;
+	if (!_resolve_locked(p_handle, slot)) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->state == PipelineState::Resident) {
+		_move_to_pending_locked(*slot);
+		lru.remove(p_handle.index);
+	} else if (slot->state != PipelineState::EvictionCandidate) {
+		const bool already_retiring = slot->state == PipelineState::Retiring || slot->state == PipelineState::Destroyable;
+		lock.unlock();
+		return already_retiring;
+	}
+
+	slot->host_refs = 0;
+	slot->recording_refs = 0;
+	_retire_locked(p_handle.index);
 
 	lock.unlock();
 	return true;

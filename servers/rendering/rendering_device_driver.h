@@ -601,7 +601,15 @@ public:
 	/**** PIPELINE ****/
 	/******************/
 
+	using PipelineFreeCallback = void (*)(void *);
+
 	virtual void pipeline_free(PipelineID p_pipeline) = 0;
+	virtual void pipeline_free_with_callback(PipelineID p_pipeline, PipelineFreeCallback p_callback, void *p_userdata) {
+		pipeline_free(p_pipeline);
+		if (p_callback != nullptr) {
+			p_callback(p_userdata);
+		}
+	}
 
 	// ----- BINDING -----
 

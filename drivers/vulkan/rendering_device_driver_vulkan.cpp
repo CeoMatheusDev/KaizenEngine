@@ -5374,6 +5374,17 @@ void RenderingDeviceDriverVulkan::pipeline_free(PipelineID p_pipeline) {
 	vkDestroyPipeline(vk_device, (VkPipeline)p_pipeline.id, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
 }
 
+void RenderingDeviceDriverVulkan::pipeline_free_with_callback(PipelineID p_pipeline, PipelineFreeCallback p_callback, void *p_userdata) {
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		_kaizen_pipeline_retire((VkPipeline)p_pipeline.id, p_callback, p_userdata);
+		return;
+	}
+	pipeline_free(p_pipeline);
+	if (p_callback != nullptr) {
+		p_callback(p_userdata);
+	}
+}
+
 // ----- BINDING -----
 
 void RenderingDeviceDriverVulkan::command_bind_push_constants(CommandBufferID p_cmd_buffer, ShaderID p_shader, uint32_t p_dst_first_index, VectorView<uint32_t> p_data) {
@@ -7670,6 +7681,13 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_drain() {
 				vkDestroyPipeline(vk_device, pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
 				kaizen_pending_pipelines[index] = VK_NULL_HANDLE;
 			}
+			PipelineFreeCallback callback = kaizen_pipeline_free_callbacks[index];
+			void *userdata = kaizen_pipeline_free_userdata[index];
+			kaizen_pipeline_free_callbacks[index] = nullptr;
+			kaizen_pipeline_free_userdata[index] = nullptr;
+			if (callback != nullptr) {
+				callback(userdata);
+			}
 			if (!kaizen_pipeline_registry->destroy(handles[i])) {
 				// Defensive: a handle that cannot be destroyed must not keep
 				// the loop alive.
@@ -7679,9 +7697,12 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_drain() {
 	}
 }
 
-void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline) {
+void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline, PipelineFreeCallback p_callback, void *p_userdata) {
 	if (!_kaizen_pipeline_lifetime_enabled()) {
 		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		if (p_callback != nullptr) {
+			p_callback(p_userdata);
+		}
 		return;
 	}
 
@@ -7704,6 +7725,9 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline)
 	if (handle.is_null()) {
 		// Nothing can be tracked and the device is idle, so this is safe.
 		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		if (p_callback != nullptr) {
+			p_callback(p_userdata);
+		}
 		return;
 	}
 	kaizen_next_pipeline_key++;
@@ -7717,8 +7741,9 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline)
 		}
 	}
 
-	const bool released = kaizen_pipeline_registry->release(handle);
-	DEV_ASSERT(released);
+	if (!kaizen_pipeline_registry->release(handle)) {
+		ERR_PRINT("Failed to release a pipeline registry reference during Vulkan pipeline retirement.");
+	}
 	if (!kaizen_pipeline_registry->retire_now(handle)) {
 		// Unreachable: no references are held here. Fall back to destroying
 		// after a device wait rather than leaking the object.
@@ -7726,10 +7751,15 @@ void RenderingDeviceDriverVulkan::_kaizen_pipeline_retire(VkPipeline p_pipeline)
 		_kaizen_pipeline_confirm_all();
 		kaizen_pipeline_registry->destroy(handle);
 		vkDestroyPipeline(vk_device, p_pipeline, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
+		if (p_callback != nullptr) {
+			p_callback(p_userdata);
+		}
 		return;
 	}
 
 	kaizen_pending_pipelines[handle.index] = p_pipeline;
+	kaizen_pipeline_free_callbacks[handle.index] = p_callback;
+	kaizen_pipeline_free_userdata[handle.index] = p_userdata;
 
 	// Work submitted before this call may already be complete; re-evaluate
 	// retirement with the current completion values.
@@ -7755,8 +7785,12 @@ RenderingDeviceDriverVulkan::RenderingDeviceDriverVulkan(RenderingContextDriverV
 		kaizen_pipeline_registry = memnew(Kaizen::PipelineRegistry(capacity, 0));
 		kaizen_submissions = memnew(Kaizen::PipelineSubmissionTracker(Kaizen::PIPELINE_QUEUE_COUNT));
 		kaizen_pending_pipelines.resize(capacity);
+		kaizen_pipeline_free_callbacks.resize(capacity);
+		kaizen_pipeline_free_userdata.resize(capacity);
 		for (uint32_t i = 0; i < capacity; i++) {
 			kaizen_pending_pipelines[i] = VK_NULL_HANDLE;
+			kaizen_pipeline_free_callbacks[i] = nullptr;
+			kaizen_pipeline_free_userdata[i] = nullptr;
 		}
 		print_line("[Kaizen][Pipelines] Deferred destruction enabled (4096 slots).");
 	}
