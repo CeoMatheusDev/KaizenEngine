@@ -58,6 +58,11 @@
 class RDTextureFormat;
 class RDTextureView;
 class RDAttachmentFormat;
+
+namespace Kaizen {
+class PipelineRegistry;
+struct PipelineHandle;
+}
 class RDSamplerState;
 class RDVertexAttribute;
 class RDShaderSource;
@@ -1254,6 +1259,12 @@ private:
 	RID_Owner<RenderPipeline, true> render_pipeline_owner;
 
 	bool pipeline_cache_enabled = false;
+
+	// Kaizen P2.3: opt-in creation-side pipeline cache (KAIZEN_PIPELINE_CACHE=on).
+	// Separate from the driver-level destruction registry (KAIZEN_PIPELINE_LIFETIME).
+	Kaizen::PipelineRegistry *pipeline_cache_registry = nullptr;
+	HashMap<uint32_t, RID> pipeline_cache_rids; // registry slot -> RID
+	uint64_t pipeline_cache_next_key = 1;
 	size_t pipeline_cache_size = 0;
 	String pipeline_cache_file_path;
 	WorkerThreadPool::TaskID pipeline_cache_save_task = WorkerThreadPool::INVALID_TASK_ID;
@@ -1318,6 +1329,15 @@ public:
 	void update_pipeline_cache(bool p_closing = false);
 
 	_FORCE_INLINE_ bool is_pipeline_cache_enabled() const { return pipeline_cache_enabled; }
+
+	// Kaizen P2.3 pipeline cache API (no-op when disabled).
+	Kaizen::PipelineHandle pipeline_cache_acquire(uint64_t p_key, uint64_t p_bytes);
+	void pipeline_cache_register_rid(Kaizen::PipelineHandle p_handle, RID p_rid);
+	void pipeline_cache_release(Kaizen::PipelineHandle p_handle);
+	void pipeline_cache_retire(Kaizen::PipelineHandle p_handle);
+	void pipeline_cache_enforce_budget();
+	void pipeline_cache_drain();
+	void pipeline_cache_confirm_all();
 
 private:
 	/****************/

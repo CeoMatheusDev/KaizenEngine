@@ -583,6 +583,64 @@ alongside creation-side eviction, because both require render-graph changes.
 | Shutdown | 0 pipelines pending. |
 | Performance | Off vs on comparison done (8.8): no measurable frame-time overhead. |
 
+## 9. P2.3 — Pipeline cache management (planned)
+
+P2.3 turns the registry from a destruction-safety queue into a managed cache.
+It is deliberately a separate milestone from P2.2: P2.2 closes the lifetime
+contract, P2.3 adds creation-side eviction.
+
+### 9.1 Infrastructure already in place
+
+- `RenderingDevice` owns an opt-in `Kaizen::PipelineRegistry`
+  (`KAIZEN_PIPELINE_CACHE=on`), separate from the driver-level destruction
+  registry (`KAIZEN_PIPELINE_LIFETIME`). The two registries have different
+  responsibilities: the `RenderingDevice`-level one manages the cache policy
+  (which RIDs are live); the driver-level one manages destruction safety
+  (when the VkPipeline can be destroyed).
+- Methods exposed: `pipeline_cache_acquire(key, bytes)`,
+  `pipeline_cache_register_rid(handle, rid)`, `pipeline_cache_release(handle)`,
+  `pipeline_cache_retire(handle)`, `pipeline_cache_enforce_budget()`,
+  `pipeline_cache_drain()`, `pipeline_cache_confirm_all()`.
+- Per-frame `enforce_budget()` + `drain()` in `_begin_frame()`.
+- Teardown drain in `finalize()`.
+
+### 9.2 What remains
+
+1. **`PipelineCacheRD` integration.** Modify `_generate_version` to call
+   `pipeline_cache_acquire(key, 0)` on a miss and register the RID; on a hit,
+   return the existing RID. Modify `_clear` to release/retire all handles.
+   The key is a hash of the version parameters (shader, vertex format,
+   framebuffer format, render pass, wireframe, bool specializations, raster
+   state, multisample, depth/stencil, blend, dynamic flags).
+2. **Eviction under pressure.** Set a real budget (in units of pipeline count
+   or estimated bytes) and let `enforce_budget()` evict LRU versions. Evicted
+   versions' RIDs are freed through the frame ring, which reuses the driver's
+   deferred destruction (P2.1).
+3. **Metrics.** `PipelineStats` already exposes `hits`, `misses`,
+   `eviction_candidates`, `retired`, `destroyed`, `resident_bytes`,
+   `peak_resident_bytes`, `resident_count`, `candidate_count`,
+   `retiring_count`, `destroyable_count`. `creation_time_ns` is the caller's
+   responsibility. `requested_bytes` is a logical estimate, not a measured
+   driver allocation.
+4. **Tests.** Keyed acquisition contract (hit/miss/dedup/concurrent), eviction
+   under pressure, and an in-engine churn that exercises eviction.
+
+### 9.3 First delivery (acquire by key)
+
+The registry already satisfies the P2.3 first-delivery contract:
+
+1. Cache hit: returns the existing object. (tested: `acquire_hit_and_miss`)
+2. Cache miss: creates a new object. (tested: `acquire_hit_and_miss`)
+3. Key already in retirement: no duplicate. (tested: `key_is_unique_while_retiring`)
+4. Failed creation: no partial registration — the caller only registers after
+   successful creation. (caller discipline)
+5. Concurrent acquisition: no two objects for the same key.
+   (tested: `concurrent_eviction_and_destruction`)
+
+The remaining work is the `PipelineCacheRD` wiring, which is a separate
+change because `PipelineCacheRD` is used by hundreds of renderer components
+and a bug there would break rendering.
+
 ## 7. Limitations
 
 1. **Opt-in, destruction-only.** The driver defers destruction safely when

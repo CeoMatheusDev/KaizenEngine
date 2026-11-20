@@ -51,6 +51,7 @@
 #include "core/templates/fixed_vector.h"
 
 #include "kaizen/diagnostics/rendering/resource_tracker.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
 
 #include "servers/rendering/renderer_rd/uniform_set_cache_rd.h"
 #include "servers/rendering/rendering_device_binds.h"
@@ -8358,10 +8359,22 @@ void RenderingDevice::_begin_frame(bool p_presented) {
 
 	// Erase pending resources.
 	KaizenProfileZoneGrouped(_profile_zone, "_free_pending_resources");
+	// Contract test for premise P2 (pipeline lifetime): the slot's fence must
+	// have been waited before any pipeline is freed. _stall_for_frame() sets
+	// fence_signaled to false after the wait; if it is still true here the
+	// ordering regressed and deferred destruction would be unsafe.
+	DEV_ASSERT(!frames[frame].fence_signaled);
 	_free_pending_resources(frame);
 	// _stall_for_frame(frame) already waited on this slot's fence, so every
 	// submission that could have used the disposed resources has completed.
 	KaizenResourceTracker::get_singleton()->notify_frame_completed(frames_drawn);
+
+	// Kaizen P2.3: creation-side pipeline cache eviction (opt-in). Drains
+	// destroyable entries produced by enforce_budget() above.
+	if (pipeline_cache_registry != nullptr) {
+		pipeline_cache_enforce_budget();
+		pipeline_cache_drain();
+	}
 
 	// Advance staging buffers if used.
 	if (upload_staging_buffers.used) {
@@ -8626,6 +8639,16 @@ Error RenderingDevice::initialize(RenderingContextDriver *p_context, DisplayServ
 
 	context = p_context;
 	driver = context->driver_create();
+
+	// Kaizen P2.3: opt-in creation-side pipeline cache (KAIZEN_PIPELINE_CACHE=on).
+	// Separate from KAIZEN_PIPELINE_LIFETIME (destruction safety). Disabled by
+	// default so upstream behaviour and measurements stay unchanged.
+	const String pipeline_cache_mode = OS::get_singleton() ? OS::get_singleton()->get_environment("KAIZEN_PIPELINE_CACHE") : String();
+	if (pipeline_cache_mode == "on" || pipeline_cache_mode == "1" || pipeline_cache_mode == "true") {
+		const uint32_t capacity = 4096;
+		pipeline_cache_registry = memnew(Kaizen::PipelineRegistry(capacity, 0));
+		print_verbose("[Kaizen][PipelineCache] Creation-side cache enabled (4096 slots).");
+	}
 
 	print_verbose("Devices:");
 	int32_t device_index = Engine::get_singleton()->get_gpu_index();
@@ -9160,6 +9183,75 @@ uint64_t RenderingDevice::limit_get(Limit p_limit) const {
 	return driver->limit_get(p_limit);
 }
 
+
+Kaizen::PipelineHandle RenderingDevice::pipeline_cache_acquire(uint64_t p_key, uint64_t p_bytes) {
+	if (pipeline_cache_registry == nullptr) {
+		return Kaizen::PipelineHandle();
+	}
+	Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(p_key, p_bytes);
+	if (!handle.is_null()) {
+		// Track the slot so eviction can free the corresponding RID.
+		// The RID is registered by the caller via pipeline_cache_register_rid().
+	}
+	return handle;
+}
+
+void RenderingDevice::pipeline_cache_register_rid(Kaizen::PipelineHandle p_handle, RID p_rid) {
+	if (pipeline_cache_registry == nullptr || p_handle.is_null()) {
+		return;
+	}
+	pipeline_cache_rids[p_handle.index] = p_rid;
+}
+
+void RenderingDevice::pipeline_cache_release(Kaizen::PipelineHandle p_handle) {
+	if (pipeline_cache_registry == nullptr) {
+		return;
+	}
+	pipeline_cache_registry->release(p_handle);
+}
+
+void RenderingDevice::pipeline_cache_retire(Kaizen::PipelineHandle p_handle) {
+	if (pipeline_cache_registry == nullptr) {
+		return;
+	}
+	pipeline_cache_registry->retire_now(p_handle);
+}
+
+void RenderingDevice::pipeline_cache_enforce_budget() {
+	if (pipeline_cache_registry == nullptr) {
+		return;
+	}
+	pipeline_cache_registry->enforce_budget();
+}
+
+void RenderingDevice::pipeline_cache_drain() {
+	if (pipeline_cache_registry == nullptr) {
+		return;
+	}
+	Kaizen::PipelineHandle handles[64];
+	uint32_t count = 0;
+	while ((count = pipeline_cache_registry->collect_destroyable(handles, 64)) > 0) {
+		for (uint32_t i = 0; i < count; i++) {
+			if (pipeline_cache_rids.has(handles[i].index)) {
+				RID rid = pipeline_cache_rids[handles[i].index];
+				pipeline_cache_rids.erase(handles[i].index);
+				if (rid.is_valid()) {
+					free_rid(rid);
+				}
+			}
+			pipeline_cache_registry->destroy(handles[i]);
+		}
+	}
+}
+
+void RenderingDevice::pipeline_cache_confirm_all() {
+	if (pipeline_cache_registry == nullptr) {
+		return;
+	}
+	pipeline_cache_registry->set_completed_serial(Kaizen::PipelineQueue::Graphics, UINT64_MAX);
+	pipeline_cache_drain();
+}
+
 void RenderingDevice::finalize() {
 	ERR_RENDER_THREAD_GUARD();
 
@@ -9251,6 +9343,14 @@ void RenderingDevice::finalize() {
 
 	// The GPU is idle at this point, so every deferred release is complete.
 	KaizenResourceTracker::get_singleton()->notify_device_teardown();
+
+	if (pipeline_cache_registry != nullptr) {
+		pipeline_cache_confirm_all();
+		pipeline_cache_drain();
+		memdelete(pipeline_cache_registry);
+		pipeline_cache_registry = nullptr;
+		pipeline_cache_rids.clear();
+	}
 
 	if (pipeline_cache_enabled) {
 		update_pipeline_cache(true);
