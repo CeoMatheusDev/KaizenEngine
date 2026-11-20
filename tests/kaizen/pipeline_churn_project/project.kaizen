@@ -1,0 +1,14 @@
+; Engine configuration file.
+; Pipeline churn project: creates and frees 3D meshes with varying material
+; states every frame to exercise pipeline creation and deferred destruction.
+
+config_version=5
+
+[application]
+
+config/name="Pipeline Churn"
+run/main_scene="res://main.tscn"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"

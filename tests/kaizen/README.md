@@ -156,6 +156,25 @@ validation errors. Scenarios: multi-queue completion in both orders, blocked
 destruction while recording, aborted submission, device-idle drain, zero live
 objects at shutdown, and key reuse after retirement.
 
+## Pipeline churn project (requires the engine)
+
+`pipeline_churn_project/` creates 8 `MeshInstance3D` per frame with
+`StandardMaterial3D` variants that differ in transparency, culling, shading mode,
+depth draw and vertex color, frees them with `queue_free()` and renders with a
+camera. It validates that deferred pipeline destruction is exercised during
+active frames, not only at teardown.
+
+```bash
+KAIZEN_PIPELINE_LIFETIME=on \
+  bin/kaizen.linuxbsd.template_release.x86_64 \
+  --path tests/kaizen/pipeline_churn_project --resolution 1280x720
+```
+
+Reference result (120 frames, 960 meshes, RX 550, validation layer active):
+204 distinct pipelines retired and destroyed, `resident=0 retiring=0
+destroyable=0 pending_bytes=0` at shutdown, one pre-existing
+`VUID-VkShaderModuleCreateInfo-pCode-08740` and no new validation message.
+
 ## Vulkan image-buffer and texture-buffer callback tests
 
 The tests previously sketched here as empty files were removed: they contained

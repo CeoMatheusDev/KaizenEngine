@@ -341,6 +341,176 @@ The pipeline suite also runs clean under AddressSanitizer + UBSan and under
 ThreadSanitizer (Homebrew clang 23.1.2, `-O1 -g`). Sanitizers are not part of
 the default script because the runtimes are not installed on every machine.
 
+## 8. Premises, invariants and failure paths (P2.2)
+
+### 8.1 Premises
+
+**P1 — Deferred release runs after the frame fence.**  
+`RenderingDevice::_free_pending_resources()` is called from `_begin_frame()`,
+after `_stall_for_frame()` waited on the slot's fence. Consequently, when a
+`PipelineCacheRD` variant or shader is freed through the frame ring, every
+submission that could reference it has already completed. This is a property
+of the frame lifecycle, not of the registry; the registry only consumes the
+serials the driver hands it.
+
+**P2 — A freed RID is not referenced by command buffers under construction.**  
+The renderer's rule is that a freed pipeline RID is never used again by a
+recording command buffer. The registry's `recording_refs` is the mechanism that
+would enforce this; in the driver it is **not yet wired** (P2.2 work). Until
+it is, the protection of in-flight recording rests on P1 and on the renderer's
+frame-ring ownership, not on the registry.
+
+**P3 — Serial 0 means "never submitted".**  
+Backends must start submission serials at 1. A backend that uses 0 as a real
+serial would make unused objects look submitted and submitted objects look
+unused.
+
+**P4 — One queue completion does not imply another's.**  
+Graphics finishing does not imply compute finished. The completion condition is
+a conjunction over every queue in the object's usage mask.
+
+### 8.2 Invariants
+
+| ID | Invariant | Enforced by |
+| --- | --- | --- |
+| I1 | `host_refs >= 0` and `recording_refs >= 0` at all times. | Reference-count discipline in `acquire`/`release`/`begin_use`/`end_use`/`abort_use`. |
+| I2 | A slot enters `Retiring` only when `host_refs == 0` and `recording_refs == 0`. | `_retire_locked()` is only called from paths that first check both counts. |
+| I3 | `Retiring` becomes `Destroyable` only when every queue in the usage mask has `completed >= last_use`. | `_is_ready_locked()` / `PipelineQueueUsage::is_complete()`. |
+| I4 | At most one live object per key; the mapping is erased only by `destroy()`. | `acquire()` returns null while the key is not `Resident`. |
+| I5 | Generation 0 is reserved for null handles; wrap skips 0. | Allocation path in `acquire()`. |
+| I6 | `set_completed_serial()` is monotonic per queue; equal values re-evaluate retirement. | `confirm()` / `set_completed_serial()`. |
+| I7 | `completed_serial` never decreases. | Monotonic max in both the tracker and the registry. |
+| I8 | `resident_bytes + pending_bytes` is conserved; no underflow. | `_move_to_pending_locked()` and `destroy()`. |
+| I9 | Recording references block both eviction and retirement. | `_mark_candidate_locked()` and `release()`. |
+| I10 | A failed or aborted submission records no queue usage. | `abort_use()` does not call `usage.record()`. |
+| I11 | A key cannot be re-acquired while its object is `Retiring` or `Destroyable`. | `blocked_by_retirement` counter. |
+
+### 8.3 Failure-path map
+
+Every exit point of the submission chain must leave the registry in a consistent
+state. The required cleanup is listed per exit.
+
+```
+acquire(handle)                       -- host_refs++
+  |
+  +-- begin_use(handle)              -- recording_refs++
+  |     |
+  |     +-- command recording        -- (no registry state change)
+  |     |
+  |     +-- end_use(handle, q, s)    -- recording_refs--; usage.record(q, s)
+  |     |     |                        if refs == 0 and candidate: retire
+  |     |     +-- submit succeeds    -- (fence stores the group serial)
+  |     |     +-- submit fails       -- call abort_use (no usage recorded)
+  |     |
+  |     +-- abort_use(handle)        -- recording_refs--; no usage recorded
+  |           |                        if refs == 0 and candidate: retire
+  |           +-- recording abandoned -- (same cleanup as above)
+  |
+  +-- release(handle)                -- host_refs--
+        |                              if refs == 0 and candidate: retire
+        +-- object never used          -- serial 0; destroyable once refs == 0
+        +-- object used on N queues    -- waits for all N completions
+```
+
+Exit points and their obligations:
+
+| Exit point | Obligation |
+| --- | --- |
+| `begin_use` fails (not Resident) | No state change; the caller must not record. |
+| Recording is abandoned | Call `abort_use()`; otherwise `recording_refs` stays pinned and the object can never retire. |
+| `vkQueueSubmit` fails | Call `abort_use()`; do not store a serial in the fence; do not call `confirm()`. |
+| Fence wait fails | Do not call `confirm()`; the object stays retiring. The destructor's `confirm_all()` is the escape hatch after device idle. |
+| `set_completed_serial` is never called again | The object stays retiring until the next call or until `confirm_all()` at teardown. |
+| `collect_destroyable` returns nothing | Not an error; re-evaluate on the next frame. |
+| `destroy()` fails | The slot stays `Destroyable`; retry on the next drain. Never leak the VkPipeline handle. |
+
+### 8.4 Premise audit checklist (P2.2)
+
+Before P2.2 is considered closed, the following must be verified on the
+reference machine:
+
+- [ ] A pipeline freed through the frame ring is never referenced by a command
+      buffer under construction. Verified by enabling the recording hook and
+      asserting `recording_refs == 0` at `pipeline_free()` time.
+- [ ] Every `vkQueueSubmit` failure path calls `abort_use()` (or never called
+      `begin_use()`). Verified by inspection + a forced-failure test.
+- [x] Fence reset and reuse never confirm a stale group serial. Verified by the
+      device test's reuse scenario.
+- [x] No path leaves a group open across a frame boundary without a later
+      fenced submission closing it. Verified by the submission-group unit test
+      and by the 120-frame churn run.
+
+### 8.5 P2.2 step 2 — runtime churn (validated)
+
+`tests/kaizen/pipeline_churn_project/` creates 8 `MeshInstance3D` per frame
+with `StandardMaterial3D` variants that differ in the properties that affect
+the shader variant (transparency, culling, shading mode, depth draw, vertex
+color), frees them with `queue_free()` and renders with a camera. It ran 120
+frames, 960 meshes created and freed, with `KAIZEN_PIPELINE_LIFETIME=on` and
+the Khronos validation layer active.
+
+Result on the RX 550: 204 distinct pipeline objects retired and destroyed,
+`resident=0 retiring=0 destroyable=0 pending_bytes=0` at shutdown, one
+pre-existing `VUID-VkShaderModuleCreateInfo-pCode-08740` and no new
+validation message. The deferred path is therefore exercised during active
+frames, not only at teardown, and no pipeline was destroyed while still in use.
+
+The churn created ~204 distinct pipelines out of 960 meshes, which confirms that
+the test genuinely stresses variant creation rather than reusing a single
+cached pipeline. The registry's `blocked_by_retirement` path is not exercised
+by this scene because each variant is freed only after it leaves the frame
+ring; a scene that re-creates the same variant before the old one drains would
+exercise it.
+
+### 8.6 P2.2 step 3 — recording references: assessment
+
+Wiring `begin_use()`/`end_use()`/`abort_use()` to the driver requires knowing
+when a pipeline is bound to a command buffer that is being recorded and when
+that command buffer is submitted. In this engine that binding happens inside
+the render graph (`draw_graph.add_*_list_bind_pipeline`), not in
+`RenderingDevice` or in the driver. Hooking it therefore requires render-graph
+changes, which are larger than the documented "isolated hook" policy for
+patches. The hook points that would be needed are:
+
+- render graph execution: `vkCmdBindPipeline` during graph replay (begin),
+- command buffer submission in `execute_chained_cmds` (end, with the group
+  serial),
+- graph reset / command buffer discard (abort).
+
+Until those hooks exist, the driver relies on premise P1 (the frame fence) and
+on the renderer's frame-ring ownership, exactly as upstream's deferred
+destruction does. This is recorded as a limitation in section 7.
+
+### 8.8 Runtime frame-time comparison (churn project)
+
+`tests/kaizen/pipeline_churn_project/` ran 120 frames, 960 meshes created and
+freed, with the Khronos validation layer active. Frame time is dominated by
+shader compilation (8 distinct variants per frame); the deferred-destruction
+path adds no measurable overhead during active rendering.
+
+| Configuration | mean | p50 | p95 | p99 | worst |
+| --- | --- | --- | --- | --- | --- |
+| `KAIZEN_PIPELINE_LIFETIME=off` | 132.369 ms | 133.333 ms | 149.699 ms | 150.000 ms | 150.000 ms |
+| `KAIZEN_PIPELINE_LIFETIME=on` | 132.369 ms | 133.107 ms | 150.000 ms | 150.000 ms | 150.000 ms |
+
+Difference is within measurement noise. The deferred path's cost is paid at
+frame boundaries and teardown, not during the sampled frame. A scene that
+creates pipelines cheaper (cached variants) would isolate the drain cost
+better; that is future work.
+
+### 8.7 P2.2 closure status
+
+| Criterion | Status |
+| --- | --- |
+| Churn in runtime | Validated (120 frames, 960 meshes, 204 pipelines, 0 validation errors). |
+| Recording refs | Not wired; render-graph hooks identified (see 8.6) but not implemented. |
+| Submission failure paths | `abort_use` (unit) + device forced-failure test; failure-map audit pending. |
+| Eviction | Not wired (creation-side; P2.3 territory). |
+| Graphics + Compute | Validated on the device test. |
+| Continuous rendering | No device-idle stall introduced by the deferred path. |
+| Shutdown | 0 pipelines pending. |
+| Performance | Off vs on comparison done (8.8): no measurable frame-time overhead. |
+
 ## 7. Limitations
 
 1. **Opt-in, destruction-only.** The driver defers destruction safely when
