@@ -1,8 +1,8 @@
 # Pipeline Object Lifetime and Eviction (P2)
 
-> **Status:** Core and opt-in shared acquisition are implemented; the Vulkan
-> lifetime core is validated against a live device. Renderer/device/Vulkan
-> cache reuse still needs in-engine validation; automatic eviction is disabled.
+> **Status:** Core and opt-in shared acquisition are implemented; focused
+> renderer/device/Vulkan lifecycle checks pass. Natural multi-consumer reuse
+> and clean shader teardown remain open; automatic eviction is disabled.
 > **Scope:** `kaizen/rendering/pipeline_cache/`, plus the documented Vulkan
 > hooks in `patches/rendering-device/004-pipeline-lifetime-integration.md`.
 > **Related:** [Pipeline cache and shader variants](rendering-pipeline-cache.md), [Resource lifetime diagnostics](resource-diagnostics.md), [Rendering roadmap](rendering-roadmap.md)

@@ -1,7 +1,8 @@
 # Rendering Audit (R0 — Initial Baseline)
 
 > **Status:** Initial R0 result — **source-level verification only**
-> **Verified against revision:** `eb7dd94` (2026-11-18)
+> **R0 baseline verified against:** `eb7dd94` (2026-11-18)
+> **Pipeline-cache update verified against:** `d7524ae` (2026-11-20)
 > **Method:** direct reading of the current source tree. No runtime profiling, device testing, or mobile/Web execution was performed.
 > **Scope:** renderer selection, initialization and ownership, threading model, resource lifetime entry points, shader pipeline, and the existing rendering device graph.
 
@@ -78,7 +79,7 @@ Construction path:
 - **Build time:** `SConstruct:1196-1212` registers the `RD_GLSL`, `GLSL_HEADER`, and `GLES3_GLSL` builders (`glsl_builders.py`, `gles3_builders.py`). These embed shader source text into `*.glsl.gen.h` files; they do not produce SPIR-V.
 - **Runtime GLSL to SPIR-V:** `RenderingDevice::shader_compile_spirv_from_source()` calls the glslang module (`modules/glslang`, `compile_glslang_shader`) (`servers/rendering/rendering_device.cpp:288-294`; also `servers/rendering/rendering_device_binds.cpp:215`).
 - **Godot shading language to backend code:** `ShaderCompiler::compile()` in `servers/rendering/shader_compiler.cpp:1580`, with preprocessor and language layers under `servers/rendering/`.
-- **Pipeline variants:** `PipelineCacheRD` caches pipelines keyed by vertex format, framebuffer format, render pass, wireframe, and boolean specializations, guarded by a `SpinLock` (`servers/rendering/renderer_rd/pipeline_cache_rd.h`).
+- **Pipeline variants:** `PipelineCacheRD` keeps a renderer-local lookup by vertex format, framebuffer format, render pass, wireframe, and boolean specializations, guarded by a `SpinLock` (`servers/rendering/renderer_rd/pipeline_cache_rd.h`). Its opt-in device path separately builds a canonical full-state `PipelineKey` for shared RID acquisition; renderer/device/Vulkan lifecycle smoke checks are documented in [Pipeline cache and shader variants](rendering-pipeline-cache.md).
 - **Includes:** `ShaderIncludeDB` resolves shader includes (`servers/rendering/shader_include_db.*`).
 
 **Not yet mapped:** pipeline cache persistence across runs, cache invalidation rules on driver updates, and compilation cost measurements.
