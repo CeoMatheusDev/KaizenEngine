@@ -126,7 +126,9 @@ class ResourceRegistry {
 public:
 	// `p_capacity` is the maximum number of simultaneously live resources.
 	// Memory is reserved up front; the registry never grows at runtime.
-	explicit ResourceRegistry(ResourceKind p_kind, uint32_t p_capacity = 4096);
+	// `p_initial_generation` exists so tests can validate generation wrap
+	// behaviour without billions of operations; production uses the default.
+	explicit ResourceRegistry(ResourceKind p_kind, uint32_t p_capacity = 4096, uint32_t p_initial_generation = 1);
 	~ResourceRegistry() = default;
 
 	ResourceRegistry(const ResourceRegistry &) = delete;
@@ -157,6 +159,8 @@ public:
 
 	// Copies the last `p_max` events, newest last. Returns how many were copied.
 	uint32_t get_events(ResourceEvent *r_events, uint32_t p_max) const;
+
+	static constexpr uint32_t EVENT_CAPACITY = 1024;
 
 	ResourceKind get_kind() const { return kind; }
 	uint32_t get_capacity() const { return capacity; }
@@ -199,7 +203,6 @@ private:
 
 	// Event ring (Detailed/Validation only). The buffer is allocated only when
 	// the log is enabled, so Disabled/Basic modes pay no memory for it.
-	static constexpr uint32_t EVENT_CAPACITY = 1024;
 	std::vector<ResourceEvent> events;
 	uint32_t event_head = 0;
 	uint32_t event_count = 0;

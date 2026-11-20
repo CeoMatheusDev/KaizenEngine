@@ -21,6 +21,7 @@
 
 #include "kaizen/diagnostics/rendering/resource_registry.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -386,30 +387,321 @@ TEST_BEGIN(concurrent_alloc_free)
 	CHECK_EQ(stats.double_frees, (uint64_t)0);
 TEST_END()
 
-// ---------------------------------------------------------------------------
+TEST_BEGIN(generation_wrap_skips_zero)
+	// Start at the last 32-bit generation so the next reuse wraps.
+	ResourceRegistry registry(ResourceKind::GPU, 2, UINT32_MAX);
 
-void run_benchmark() {
-	const uint32_t capacity = 65536;
-	const uint32_t iterations = 1000000;
+	ResourceHandle first = registry.allocate("A", 1, 0);
+	CHECK_EQ(first.generation, UINT32_MAX);
 
-	ResourceRegistry registry(ResourceKind::GPU, capacity);
-	registry.set_event_log_enabled(false);
+	CHECK(registry.begin_release(first, 0));
+	CHECK_EQ(registry.confirm_releases_until(0), (uint32_t)1);
 
-	const auto start = std::chrono::steady_clock::now();
-	ResourceHandle handle = registry.allocate("A", 4096, 0);
-	for (uint32_t i = 0; i < iterations; i++) {
+	ResourceHandle second = registry.allocate("B", 1, 0);
+	CHECK_EQ(second.index, first.index);
+	CHECK_EQ(second.generation, (uint32_t)1); // Zero is reserved for null handles.
+	CHECK(!registry.is_valid(first));
+	CHECK(registry.begin_release(first, 0) == false);
+	CHECK_EQ(registry.get_stats().generation_mismatches, (uint64_t)1);
+TEST_END()
+
+TEST_BEGIN(large_byte_values_are_exact)
+	const uint64_t one_tib = 1ull << 40;
+	ResourceRegistry registry(ResourceKind::GPU, 4);
+
+	ResourceHandle a = registry.allocate("A", one_tib, 0);
+	ResourceHandle b = registry.allocate("B", one_tib, 0);
+
+	Kaizen::ResourceStats stats = registry.get_stats();
+	CHECK_EQ(stats.alive_requested_bytes, 2 * one_tib);
+	CHECK_EQ(stats.peak_live_requested_bytes, 2 * one_tib);
+
+	CHECK(registry.begin_release(a, 1));
+	CHECK_EQ(registry.confirm_releases_until(1), (uint32_t)1);
+
+	stats = registry.get_stats();
+	CHECK_EQ(stats.released_requested_bytes, one_tib);
+	CHECK_EQ(stats.get_live_requested_bytes(), one_tib);
+	CHECK_EQ(stats.pending_requested_bytes, (uint64_t)0);
+
+	CHECK(registry.begin_release(b, 2));
+	CHECK_EQ(registry.confirm_releases_until(2), (uint32_t)1);
+	CHECK_EQ(registry.get_stats().released_requested_bytes, 2 * one_tib);
+	CHECK_EQ(registry.get_stats().get_live_requested_bytes(), (uint64_t)0);
+TEST_END()
+
+TEST_BEGIN(event_ring_overflow_keeps_newest)
+	ResourceRegistry registry(ResourceKind::GPU, 4);
+	registry.set_event_log_enabled(true);
+
+	const uint32_t cycles = 2000; // 3 events per cycle, far beyond the 1024-entry ring.
+	uint32_t last_generation = 0;
+	uint64_t last_frame = 0;
+	for (uint32_t i = 0; i < cycles; i++) {
+		ResourceHandle handle = registry.allocate("A", 16, i);
+		last_generation = handle.generation;
+		last_frame = i;
 		registry.begin_release(handle, i);
 		registry.confirm_releases_until(i);
-		handle = registry.allocate("A", 4096, i);
+	}
+
+	std::vector<Kaizen::ResourceEvent> events(ResourceRegistry::EVENT_CAPACITY);
+	const uint32_t count = registry.get_events(events.data(), events.size());
+	CHECK_EQ(count, ResourceRegistry::EVENT_CAPACITY);
+
+	// The newest cycle must still be present, in order.
+	CHECK_EQ(events[count - 3].type, Kaizen::ResourceEvent::Type::Allocated);
+	CHECK_EQ(events[count - 3].frame, last_frame);
+	CHECK_EQ(events[count - 3].generation, last_generation);
+	CHECK_EQ(events[count - 2].type, Kaizen::ResourceEvent::Type::ReleaseRequested);
+	CHECK_EQ(events[count - 1].type, Kaizen::ResourceEvent::Type::Released);
+	CHECK_EQ(events[count - 1].generation, last_generation);
+
+	// Requesting fewer events must return the same newest tail.
+	Kaizen::ResourceEvent tail[10];
+	CHECK_EQ(registry.get_events(tail, 10), (uint32_t)10);
+	CHECK_EQ(tail[9].frame, events[count - 1].frame);
+	CHECK_EQ(tail[9].type, events[count - 1].type);
+	CHECK_EQ(tail[9].generation, events[count - 1].generation);
+TEST_END()
+
+TEST_BEGIN(snapshot_consistency_under_concurrency)
+	const uint32_t thread_count = 4;
+	const uint32_t per_thread = 20000;
+	ResourceRegistry registry(ResourceKind::GPU, 4096);
+
+	std::atomic<uint64_t> allocated_bytes{ 0 };
+	std::atomic<uint32_t> workers_done{ 0 };
+	std::atomic<uint32_t> snapshots{ 0 };
+	std::atomic<uint32_t> invariant_failures{ 0 };
+	std::atomic<uint32_t> ready{ 0 };
+	std::atomic<bool> go{ false };
+
+	auto verify_snapshot = [&]() {
+		const Kaizen::ResourceStats stats = registry.get_stats();
+		const uint64_t total = allocated_bytes.load();
+		const uint64_t live_bytes = stats.get_live_requested_bytes();
+
+		bool ok = true;
+		ok = ok && (stats.allocations >= stats.releases);
+		ok = ok && (stats.live_resources == stats.allocations - stats.releases);
+		ok = ok && (stats.live_resources >= stats.pending_releases);
+		ok = ok && (live_bytes == stats.alive_requested_bytes + stats.pending_requested_bytes);
+		ok = ok && (stats.peak_live_requested_bytes >= live_bytes);
+		ok = ok && (stats.released_requested_bytes + live_bytes <= total);
+		ok = ok && (stats.alive_requested_bytes <= stats.peak_live_requested_bytes);
+		ok = ok && (stats.alive_backend_bytes + stats.pending_backend_bytes == live_bytes);
+		if (!ok) {
+			invariant_failures.fetch_add(1);
+		}
+		snapshots.fetch_add(1);
+	};
+
+	std::thread sampler([&]() {
+		ready.fetch_add(1);
+		while (!go.load(std::memory_order_acquire)) {
+		}
+		while (workers_done.load(std::memory_order_acquire) < thread_count) {
+			verify_snapshot();
+		}
+		verify_snapshot();
+	});
+
+	std::vector<std::thread> workers;
+	workers.reserve(thread_count);
+	for (uint32_t t = 0; t < thread_count; t++) {
+		workers.emplace_back([&]() {
+			ready.fetch_add(1);
+			while (!go.load(std::memory_order_acquire)) {
+			}
+
+			std::vector<ResourceHandle> local;
+			local.reserve(32);
+			for (uint32_t i = 0; i < per_thread; i++) {
+				const uint64_t bytes = 16 * ((i % 7) + 1);
+				// Count the bytes before publishing the resource so a snapshot can
+				// never observe more live bytes than were ever requested.
+				allocated_bytes.fetch_add(bytes, std::memory_order_relaxed);
+
+				ResourceHandle handle = registry.allocate("A", bytes, i);
+				if (handle.is_null()) {
+					continue;
+				}
+				local.push_back(handle);
+
+				if (local.size() >= 32) {
+					for (ResourceHandle &h : local) {
+						registry.begin_release(h, i);
+					}
+					registry.confirm_releases_until(i);
+					local.clear();
+				}
+			}
+
+			for (ResourceHandle &h : local) {
+				registry.begin_release(h, per_thread);
+			}
+			registry.confirm_releases_until(per_thread);
+			workers_done.fetch_add(1);
+		});
+	}
+
+	while (ready.load() < thread_count + 1) {
+	}
+	go.store(true, std::memory_order_release);
+
+	for (std::thread &worker : workers) {
+		worker.join();
+	}
+	sampler.join();
+
+	CHECK_EQ(invariant_failures.load(), (uint32_t)0);
+	CHECK(snapshots.load() > 0);
+
+	const Kaizen::ResourceStats final_stats = registry.get_stats();
+	CHECK_EQ(final_stats.allocations, (uint64_t)thread_count * per_thread);
+	CHECK_EQ(final_stats.releases, final_stats.allocations);
+	CHECK_EQ(final_stats.live_resources, (uint64_t)0);
+	CHECK_EQ(final_stats.pending_releases, (uint64_t)0);
+	CHECK_EQ(final_stats.get_live_requested_bytes(), (uint64_t)0);
+	CHECK_EQ(final_stats.released_requested_bytes, allocated_bytes.load());
+	CHECK_EQ(final_stats.registry_full, (uint64_t)0);
+	CHECK_EQ(final_stats.invalid_handles, (uint64_t)0);
+	CHECK_EQ(final_stats.generation_mismatches, (uint64_t)0);
+	CHECK_EQ(final_stats.double_frees, (uint64_t)0);
+TEST_END()
+
+// ---------------------------------------------------------------------------
+// Benchmarks
+
+namespace bench {
+
+double percentile_sorted(const std::vector<double> &p_values, double p) {
+	if (p_values.empty()) {
+		return 0.0;
+	}
+	const size_t index = (size_t)((p / 100.0) * (p_values.size() - 1));
+	return p_values[index];
+}
+
+struct Latency {
+	double mean_ns = 0;
+	double p50_ns = 0;
+	double p95_ns = 0;
+	double p99_ns = 0;
+	double cycles_per_second = 0;
+};
+
+// Measures one op = allocate + begin_release + confirm. Operations are timed
+// in batches so the steady_clock overhead does not dominate the result; the
+// reported percentiles are per-operation values within each batch.
+Latency measure(ResourceRegistry &registry, uint32_t cycles, uint32_t batch) {
+	std::vector<double> per_cycle;
+	per_cycle.reserve(cycles / batch + 2);
+
+	uint32_t done = 0;
+	double total_ns = 0;
+	while (done < cycles) {
+		const uint32_t n = (cycles - done) < batch ? (cycles - done) : batch;
+		const auto start = std::chrono::steady_clock::now();
+		for (uint32_t i = 0; i < n; i++) {
+			ResourceHandle handle = registry.allocate("A", 4096, done + i);
+			registry.begin_release(handle, done + i);
+			registry.confirm_releases_until(done + i);
+		}
+		const auto end = std::chrono::steady_clock::now();
+		const double ns = std::chrono::duration<double, std::nano>(end - start).count();
+		total_ns += ns;
+		per_cycle.push_back(ns / n);
+		done += n;
+	}
+
+	std::sort(per_cycle.begin(), per_cycle.end());
+
+	Latency out;
+	out.mean_ns = total_ns / cycles;
+	out.p50_ns = percentile_sorted(per_cycle, 50);
+	out.p95_ns = percentile_sorted(per_cycle, 95);
+	out.p99_ns = percentile_sorted(per_cycle, 99);
+	out.cycles_per_second = 1e9 / out.mean_ns;
+	return out;
+}
+
+void print(const char *p_label, const Latency &p_latency) {
+	std::printf("bench %-18s mean=%6.1f ns  p50=%6.1f  p95=%6.1f  p99=%6.1f ns  %6.2f Mops/s\n",
+			p_label, p_latency.mean_ns, p_latency.p50_ns, p_latency.p95_ns, p_latency.p99_ns,
+			p_latency.cycles_per_second / 1e6);
+}
+
+double throughput(uint32_t threads, uint32_t per_thread) {
+	ResourceRegistry registry(ResourceKind::GPU, 65536);
+	std::atomic<uint32_t> ready{ 0 };
+	std::atomic<bool> go{ false };
+
+	std::vector<std::thread> workers;
+	workers.reserve(threads);
+	for (uint32_t t = 0; t < threads; t++) {
+		workers.emplace_back([&registry, &ready, &go, per_thread]() {
+			ready.fetch_add(1);
+			while (!go.load(std::memory_order_acquire)) {
+			}
+			for (uint32_t i = 0; i < per_thread; i++) {
+				ResourceHandle handle = registry.allocate("A", 4096, i);
+				registry.begin_release(handle, i);
+				registry.confirm_releases_until(i);
+			}
+		});
+	}
+
+	while (ready.load() < threads) {
+	}
+	const auto start = std::chrono::steady_clock::now();
+	go.store(true, std::memory_order_release);
+	for (std::thread &worker : workers) {
+		worker.join();
 	}
 	const auto end = std::chrono::steady_clock::now();
 
-	const double ns = std::chrono::duration<double, std::nano>(end - start).count();
-	const double per_op = ns / (iterations * 3.0); // allocate + begin_release + confirm.
-	std::printf("bench: %u cycles (alloc+release+confirm) in %.3f ms -> %.1f ns/op\n",
-			iterations, ns / 1e6, per_op);
-	std::printf("bench: registry footprint = %.1f KiB per %u slots\n",
-			(capacity * (double)sizeof(Kaizen::ResourceRecord)) / 1024.0, capacity);
+	const double seconds = std::chrono::duration<double>(end - start).count();
+	return ((double)threads * per_thread) / seconds / 1e6;
+}
+
+} // namespace bench
+
+void run_benchmark() {
+	const uint32_t cycles = 320000;
+
+	{
+		ResourceRegistry registry(ResourceKind::GPU, 65536);
+		bench::print("basic", bench::measure(registry, cycles, 64));
+	}
+	{
+		ResourceRegistry registry(ResourceKind::GPU, 65536);
+		registry.set_event_log_enabled(true);
+		bench::print("detailed events", bench::measure(registry, cycles, 64));
+	}
+	{
+		ResourceRegistry registry(ResourceKind::GPU, 65536);
+		ResourceHandle anchor = registry.allocate("A", 4096, 0);
+		bench::print("low occupancy", bench::measure(registry, cycles, 64));
+		registry.begin_release(anchor, cycles);
+		registry.confirm_releases_until(cycles);
+	}
+	{
+		ResourceRegistry registry(ResourceKind::GPU, 4096);
+		for (uint32_t i = 0; i < 4095; i++) {
+			registry.allocate("A", 16, 0);
+		}
+		bench::print("near capacity", bench::measure(registry, cycles, 64));
+	}
+
+	std::printf("bench throughput (alloc+release+confirm, shared registry):\n");
+	for (uint32_t threads : { 1u, 2u, 4u, 8u }) {
+		std::printf("bench threads=%u %6.2f Mops/s\n", threads, bench::throughput(threads, 50000));
+	}
+
+	std::printf("bench registry footprint: %.1f KiB per %u slots\n",
+			(65536 * (double)sizeof(Kaizen::ResourceRecord)) / 1024.0, 65536);
 }
 
 } // namespace
@@ -428,6 +720,10 @@ int main(int argc, char **argv) {
 	multi_frame_epochs();
 	event_log_records_lifetime();
 	concurrent_alloc_free();
+	generation_wrap_skips_zero();
+	large_byte_values_are_exact();
+	event_ring_overflow_keeps_newest();
+	snapshot_consistency_under_concurrency();
 
 	if (bench) {
 		run_benchmark();

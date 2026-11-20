@@ -19,10 +19,17 @@ Measured on the reference machine (Xeon E5-2680 v3, GCC, `-O2`):
 
 | Metric | Value |
 | --- | --- |
-| Checks | 140 |
+| Checks | 182 |
 | Failures | 0 |
-| Allocation + release + confirmation | 19.5 ns/op |
+| Basic op (alloc+release+confirm) | 54.0 ns mean, p50 53.9 / p95 54.3 / p99 54.6 |
+| Detailed op (event log) | 64.1 ns mean, 15.6 Mops/s |
+| Near-capacity op | 54.0 ns (free list stays O(1)) |
 | Registry footprint (65 536 slots) | 3.5 MiB (56 B per slot) |
+
+Throughput on a shared registry (maximum contention) is 18.63 / 1.35 / 0.48 /
+0.23 Mops/s at 1 / 2 / 4 / 8 threads. The registry serializes operations and is
+intended for the render thread; the multi-threaded test proves safety, not
+scalability. See `docs/architecture/resource-diagnostics.md` section 7.2.
 
 Acceptance criteria covered:
 
@@ -34,7 +41,10 @@ Acceptance criteria covered:
 - CPU and GPU registries stay independent (same index, different handles).
 - Deferred release moves bytes from alive to pending and only then to released.
 - Concurrent alloc/free from 8 threads (200 000 operations).
-- The event ring records allocation, release request and release completion.
+- Snapshot invariants hold while other threads allocate and release.
+- The event ring records allocation, release request and release completion,
+  and keeps the newest 1 024 entries when it overflows.
+- Generation wrap skips zero and invalidates the previous handle.
 
 Overflow of the 32-bit generation counter is not reachable in practice (it
 would require 4.29 billion reuses of the same slot). On wrap the code skips

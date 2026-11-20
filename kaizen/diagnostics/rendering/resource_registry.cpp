@@ -6,9 +6,17 @@
 
 namespace Kaizen {
 
-ResourceRegistry::ResourceRegistry(ResourceKind p_kind, uint32_t p_capacity) :
+ResourceRegistry::ResourceRegistry(ResourceKind p_kind, uint32_t p_capacity, uint32_t p_initial_generation) :
 		kind(p_kind), capacity(p_capacity) {
 	records.resize(capacity);
+
+	// A fresh allocation must yield `p_initial_generation`, so the slot starts
+	// one below it. Generation 0 is reserved for null handles.
+	const uint32_t starting_generation = p_initial_generation == 0 ? 0 : p_initial_generation - 1;
+	for (ResourceRecord &record : records) {
+		record.generation = starting_generation;
+	}
+
 	free_indices.reserve(capacity);
 	pending.reserve(capacity);
 }
@@ -78,10 +86,11 @@ ResourceHandle ResourceRegistry::allocate(const char *p_type, uint64_t p_request
 	}
 
 	ResourceRecord &record = records[index];
-	record.generation++;
-	if (record.generation == 0) {
-		// 0 is reserved for null handles; skip it on wrap (practically unreachable).
+	// 0 is reserved for null handles; skip it on wrap.
+	if (record.generation == UINT32_MAX) {
 		record.generation = 1;
+	} else {
+		record.generation++;
 	}
 	record.kind = kind;
 	record.state = ResourceState::Alive;

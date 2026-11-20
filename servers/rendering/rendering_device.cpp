@@ -7772,7 +7772,8 @@ void RenderingDevice::free_rid(RID p_rid) {
 void RenderingDevice::_free_internal(RID p_id) {
 	// Kaizen: track the logical release. The slot is only returned to the
 	// tracker's pool once the ring frame that owns the deferred destruction is
-	// processed (see _free_pending_resources / notify_frame_completed).
+	// processed (see _free_pending_resources / notify_frame_completed), which
+	// happens after _stall_for_frame() waited on that slot's fence.
 	KaizenResourceTracker::get_singleton()->notify_logical_free(p_id, frames_drawn + frames.size());
 
 #ifdef DEV_ENABLED
@@ -8358,6 +8359,8 @@ void RenderingDevice::_begin_frame(bool p_presented) {
 	// Erase pending resources.
 	KaizenProfileZoneGrouped(_profile_zone, "_free_pending_resources");
 	_free_pending_resources(frame);
+	// _stall_for_frame(frame) already waited on this slot's fence, so every
+	// submission that could have used the disposed resources has completed.
 	KaizenResourceTracker::get_singleton()->notify_frame_completed(frames_drawn);
 
 	// Advance staging buffers if used.
