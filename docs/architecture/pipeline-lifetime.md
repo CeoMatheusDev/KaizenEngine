@@ -604,6 +604,21 @@ contract, P2.3 adds creation-side eviction.
 - Per-frame `enforce_budget()` + `drain()` in `_begin_frame()`.
 - Teardown drain in `finalize()`.
 
+### 9.2 Current state (as of 5419686)
+
+The `RenderingDevice`-level registry now tracks every pipeline created through
+`render_pipeline_create` / `compute_pipeline_create`, keyed by RID. On `free_rid`,
+the handle is released and retired; per-frame `enforce_budget` + `drain` evict
+under pressure, freeing RIDs through the frame ring (which reuses the
+driver-level deferred destruction). The churn project reports
+`hits=0 misses=204 evicted=204 resident=0`; the S1 scene reports
+`hits=0 misses=209 evicted=209`.
+
+`hits=0` is expected today: each pipeline has a unique RID, so the registry
+acts as a live-pipeline tracker and eviction queue, not yet as a deduplicating
+cache. Deduplication requires semantic keys (hash of pipeline parameters) and
+`PipelineCacheRD` integration.
+
 ### 9.2 What remains
 
 1. **`PipelineCacheRD` integration.** Modify `_generate_version` to call
