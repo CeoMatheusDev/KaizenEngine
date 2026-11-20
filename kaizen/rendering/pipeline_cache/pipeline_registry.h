@@ -73,21 +73,23 @@ struct PipelineInfo {
 };
 
 struct PipelineStats {
-	uint64_t acquisitions = 0; // Successful acquire() calls (new or cached).
-	uint64_t hits = 0; // acquire() on a Resident entry.
-	uint64_t misses = 0; // Object created.
+	uint64_t physical_creates = 0; // Total physical pipeline creations.
+	uint64_t physical_destroys = 0; // Total physical pipeline destructions.
+
+	uint64_t logical_acquires = 0; // Total acquire() calls that succeeded (hits + misses).
+	uint64_t shared_acquires = 0; // acquire() on an existing Resident entry (cache hit).
 	uint64_t releases = 0;
 
 	uint64_t recording_starts = 0;
 	uint64_t aborted_recordings = 0;
 	uint64_t eviction_candidates = 0;
-	uint64_t requested_retirements = 0; // retire_now() calls that moved an object.
+	uint64_t retirement_requests = 0; // retire_now() calls that moved an object.
 	uint64_t retired = 0;
 	uint64_t destroyable = 0;
-	uint64_t destroyed = 0;
 
 	uint64_t blocked_by_retirement = 0; // acquire() while key is not Resident.
 	uint64_t rejected_full = 0;
+	uint64_t late_releases = 0; // release() on a retiring/destroyable handle.
 	uint64_t late_use = 0; // mark_use() on a retired/destroyable handle.
 	uint64_t invalid_serials = 0; // end_use/mark_use with serial 0.
 
@@ -170,6 +172,10 @@ public:
 	void set_budget(uint64_t p_budget_bytes);
 	uint64_t get_budget() const;
 
+	// Signals that the owning device is shutting down. Late releases and late
+	// uses are still counted for diagnostics, but no new work is accepted.
+	void set_shutting_down(bool p_shutting_down);
+
 	PipelineStats get_stats() const;
 	uint32_t get_capacity() const { return capacity; }
 
@@ -207,30 +213,35 @@ private:
 	void _mark_candidate_locked(uint32_t p_index);
 	void _retire_locked(uint32_t p_index);
 	void _move_to_pending_locked(Slot &r_slot);
+	void _move_to_resident_locked(Slot &r_slot);
 	void _enforce_budget_locked();
 
 	mutable SpinLock lock;
 	uint32_t capacity = 0;
 	uint64_t budget_bytes = 0;
 
+	std::atomic<bool> shutting_down = false;
+
 	uint64_t completed_serials[PIPELINE_QUEUE_COUNT] = {};
 	uint64_t resident_bytes = 0;
 	uint64_t pending_bytes = 0;
 	uint64_t peak_resident_bytes = 0;
 
-	uint64_t acquisitions = 0;
-	uint64_t hits = 0;
-	uint64_t misses = 0;
+	uint64_t logical_acquires = 0;
+	uint64_t shared_acquires = 0;
 	uint64_t releases = 0;
 	uint64_t recording_starts = 0;
 	uint64_t aborted_recordings = 0;
 	uint64_t eviction_candidates = 0;
-	uint64_t requested_retirements = 0; // retire_now() calls that moved an object.
+	uint64_t retirement_requests = 0; // retire_now() calls that moved an object.
 	uint64_t retired = 0;
 	uint64_t destroyable = 0;
-	uint64_t destroyed = 0;
+	uint64_t physical_creates = 0;
+	uint64_t physical_destroys = 0;
+
 	uint64_t blocked_by_retirement = 0;
 	uint64_t rejected_full = 0;
+	uint64_t late_releases = 0;
 	uint64_t late_use = 0;
 	uint64_t invalid_serials = 0;
 

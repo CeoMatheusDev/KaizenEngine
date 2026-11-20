@@ -145,8 +145,8 @@ TEST_BEGIN(typed_registry_shares_exact_keys_and_blocks_retirement_reacquire)
 	CHECK_EQ(shared, first);
 	CHECK(!different.is_null());
 	CHECK(different != first);
-	CHECK_EQ(registry.get_stats().hits, (uint64_t)1);
-	CHECK_EQ(registry.get_stats().misses, (uint64_t)2);
+	CHECK_EQ(registry.get_stats().shared_acquires, (uint64_t)1);
+	CHECK_EQ(registry.get_stats().physical_creates, (uint64_t)2);
 
 	CHECK(registry.release(first));
 	CHECK(registry.is_valid(shared));
@@ -207,9 +207,9 @@ TEST_BEGIN(acquire_hit_and_miss)
 	CHECK(b != a);
 
 	PipelineStats stats = registry.get_stats();
-	CHECK_EQ(stats.acquisitions, (uint64_t)3);
-	CHECK_EQ(stats.hits, (uint64_t)1);
-	CHECK_EQ(stats.misses, (uint64_t)2);
+	CHECK_EQ(stats.logical_acquires, (uint64_t)3);
+	CHECK_EQ(stats.shared_acquires, (uint64_t)1);
+	CHECK_EQ(stats.physical_creates, (uint64_t)2);
 	CHECK_EQ(stats.resident_count, (uint64_t)2);
 	CHECK_EQ(stats.resident_bytes, 2 * KIB);
 
@@ -295,12 +295,32 @@ TEST_BEGIN(lru_evicts_least_recently_used)
 	CHECK_EQ(stats.resident_count, (uint64_t)2);
 	CHECK_EQ(stats.resident_bytes, 2 * KIB);
 
-	// Key 2 is no longer acquirable while its object drains.
-	CHECK(registry.acquire(2, KIB).is_null());
+	// Key 2 is still acquirable while its object is only an EvictionCandidate:
+	// acquiring it again brings it back to full Resident status, restoring the
+	// memory accounting and moving it to the most-recently-used end of the LRU.
+	PipelineHandle revived = registry.acquire(2, KIB);
+	CHECK_EQ(revived, b);
+
+	stats = registry.get_stats();
+	CHECK_EQ(stats.candidate_count, (uint64_t)0);
+	CHECK_EQ(stats.resident_count, (uint64_t)3);
+	CHECK_EQ(stats.resident_bytes, 3 * KIB);
+	CHECK_EQ(stats.pending_bytes, (uint64_t)0);
+	CHECK_EQ(stats.physical_creates, (uint64_t)3);
+
 	CHECK(!registry.acquire(1, KIB).is_null());
 	CHECK(!registry.acquire(3, KIB).is_null());
 
-	// Releasing the candidate host reference retires it.
+	// Dropping the revived reference leaves key 2 Resident: it still holds the
+	// original host reference created by the initial acquire().
+	CHECK(registry.release(revived));
+	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)0);
+	CHECK_EQ(registry.get_stats().candidate_count, (uint64_t)0);
+
+	// Under budget pressure it becomes the least recently used candidate again.
+	CHECK_EQ(registry.enforce_budget(), (uint32_t)1);
+
+	// Releasing the last host reference retires it.
 	CHECK(registry.release(b));
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
 	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
@@ -485,7 +505,7 @@ TEST_BEGIN(shutdown_drains_everything)
 	CHECK_EQ(stats.destroyable_count, (uint64_t)0);
 	CHECK_EQ(stats.resident_bytes, (uint64_t)0);
 	CHECK_EQ(stats.pending_bytes, (uint64_t)0);
-	CHECK_EQ(stats.destroyed, (uint64_t)count);
+	CHECK_EQ(stats.physical_destroys, (uint64_t)count);
 	CHECK_EQ(stats.releases, (uint64_t)count);
 	CHECK_EQ(stats.retired, (uint64_t)count);
 TEST_END()
@@ -500,9 +520,9 @@ TEST_BEGIN(stats_reflect_lifecycle)
 	CHECK(registry.mark_use(b, PipelineQueue::Graphics, 3));
 
 	PipelineStats stats = registry.get_stats();
-	CHECK_EQ(stats.acquisitions, (uint64_t)3);
-	CHECK_EQ(stats.hits, (uint64_t)1);
-	CHECK_EQ(stats.misses, (uint64_t)2);
+	CHECK_EQ(stats.logical_acquires, (uint64_t)3);
+	CHECK_EQ(stats.shared_acquires, (uint64_t)1);
+	CHECK_EQ(stats.physical_creates, (uint64_t)2);
 	CHECK_EQ(stats.peak_resident_bytes, 2 * KIB);
 	CHECK_EQ(stats.pending_bytes, KIB);
 	CHECK_EQ(stats.candidate_count + stats.retiring_count, (uint64_t)1);
@@ -516,7 +536,7 @@ TEST_BEGIN(stats_reflect_lifecycle)
 	drain_destroyable(registry);
 
 	stats = registry.get_stats();
-	CHECK_EQ(stats.destroyed, (uint64_t)2);
+	CHECK_EQ(stats.physical_destroys, (uint64_t)2);
 	CHECK_EQ(stats.resident_bytes, (uint64_t)0);
 	CHECK_EQ(stats.pending_bytes, (uint64_t)0);
 TEST_END()
@@ -644,7 +664,7 @@ TEST_BEGIN(retire_now_requires_no_references)
 	CHECK(registry.release(handle));
 
 	CHECK(registry.retire_now(handle));
-	CHECK_EQ(registry.get_stats().requested_retirements, (uint64_t)1);
+	CHECK_EQ(registry.get_stats().retirement_requests, (uint64_t)1);
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
 	CHECK_EQ(registry.get_stats().resident_count, (uint64_t)0);
 	CHECK_EQ(registry.get_stats().pending_bytes, (uint64_t)KIB);
@@ -679,7 +699,7 @@ TEST_BEGIN(retire_now_from_candidate)
 	CHECK_EQ(registry.get_stats().retiring_count, (uint64_t)1);
 	// A candidate that already retired cannot be retired twice.
 	CHECK(!registry.retire_now(handle));
-	CHECK_EQ(registry.get_stats().requested_retirements, (uint64_t)0);
+	CHECK_EQ(registry.get_stats().retirement_requests, (uint64_t)0);
 	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
 	CHECK_EQ(drain_destroyable(registry), (uint32_t)1);
 TEST_END()
@@ -906,8 +926,8 @@ TEST_BEGIN(concurrent_eviction_and_destruction)
 	CHECK_EQ(stats.resident_bytes, (uint64_t)0);
 	CHECK_EQ(stats.pending_bytes, (uint64_t)0);
 	CHECK_EQ(stats.late_use, (uint64_t)0);
-	CHECK_EQ(stats.destroyed, stats.retired);
-	CHECK(stats.hits > 0);
+	CHECK_EQ(stats.physical_destroys, stats.retired);
+	CHECK(stats.shared_acquires > 0);
 TEST_END()
 
 // ---------------------------------------------------------------------------

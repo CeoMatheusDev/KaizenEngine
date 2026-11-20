@@ -594,7 +594,7 @@ bool run_idle_phase(const uint8_t *p_spirv, size_t p_size) {
 	CHECK_EQ(stats.candidate_count, (uint64_t)0);
 	CHECK_EQ(stats.retiring_count, (uint64_t)0);
 	CHECK_EQ(stats.destroyable_count, (uint64_t)0);
-	CHECK_EQ(stats.destroyed, (uint64_t)1);
+	CHECK_EQ(stats.physical_destroys, (uint64_t)1);
 	return true;
 }
 

@@ -89,10 +89,28 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 		const uint32_t index = existing->second;
 		Slot &slot = slots[index];
 
+		if (slot.state == PipelineState::EvictionCandidate) {
+			// The object was only marked as a budget candidate and has not
+			// retired yet. Acquiring it again brings it back to full Resident
+			// status: its bytes move from pending back to resident and it goes
+			// to the most-recently-used end of the LRU list.
+			_move_to_resident_locked(slot);
+			slot.state = PipelineState::Resident;
+			lru.touch(index);
+
+			slot.host_refs++;
+			shared_acquires++;
+			logical_acquires++;
+			result = _make_handle_locked(index);
+			lock.unlock();
+			return result;
+		}
+
 		if (slot.state != PipelineState::Resident) {
-			// The object exists but is on its way out. Creating a second object
-			// for the same key would break the "one live object per key" rule,
-			// so the caller must retry after it is destroyed.
+			// The object exists but is on its way out (Retiring or
+			// Destroyable). Creating a second object for the same key would
+			// break the "one live object per key" rule, so the caller must
+			// retry after the previous object is destroyed.
 			blocked_by_retirement++;
 			lock.unlock();
 			return result;
@@ -100,8 +118,8 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 
 		slot.host_refs++;
 		lru.touch(index);
-		hits++;
-		acquisitions++;
+		shared_acquires++;
+		logical_acquires++;
 		result = _make_handle_locked(index);
 		lock.unlock();
 		return result;
@@ -140,8 +158,8 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 		peak_resident_bytes = resident_bytes;
 	}
 
-	misses++;
-	acquisitions++;
+	physical_creates++;
+	logical_acquires++;
 	result = _make_handle_locked(index);
 	lock.unlock();
 	return result;
@@ -157,6 +175,9 @@ bool PipelineRegistry::release(PipelineHandle p_handle) {
 	}
 
 	if (slot->state == PipelineState::Retiring || slot->state == PipelineState::Destroyable) {
+		if (shutting_down.load(std::memory_order_acquire)) {
+			late_releases++;
+		}
 		lock.unlock();
 		return false;
 	}
@@ -168,6 +189,7 @@ bool PipelineRegistry::release(PipelineHandle p_handle) {
 
 	slot->host_refs--;
 	releases++;
+	shared_acquires++;
 
 	if (slot->host_refs == 0 && slot->recording_refs == 0 &&
 			slot->state == PipelineState::EvictionCandidate) {
@@ -424,7 +446,7 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 	slot->recording_refs = 0;
 
 	free_indices.push_back(index);
-	destroyed++;
+	physical_destroys++;
 
 	lock.unlock();
 	return true;
@@ -437,6 +459,18 @@ void PipelineRegistry::_move_to_pending_locked(Slot &r_slot) {
 		resident_bytes = 0;
 	}
 	pending_bytes += r_slot.bytes;
+}
+
+void PipelineRegistry::_move_to_resident_locked(Slot &r_slot) {
+	if (pending_bytes >= r_slot.bytes) {
+		pending_bytes -= r_slot.bytes;
+	} else {
+		pending_bytes = 0;
+	}
+	resident_bytes += r_slot.bytes;
+	if (resident_bytes > peak_resident_bytes) {
+		peak_resident_bytes = resident_bytes;
+	}
 }
 
 void PipelineRegistry::_mark_candidate_locked(uint32_t p_index) {
@@ -508,7 +542,7 @@ bool PipelineRegistry::retire_now(PipelineHandle p_handle) {
 		lru.remove(index);
 	}
 
-	requested_retirements++;
+	retirement_requests++;
 	_retire_locked(index);
 
 	lock.unlock();
@@ -563,23 +597,28 @@ uint64_t PipelineRegistry::get_budget() const {
 	return budget;
 }
 
+void PipelineRegistry::set_shutting_down(bool p_shutting_down) {
+	shutting_down.store(p_shutting_down, std::memory_order_release);
+}
+
 PipelineStats PipelineRegistry::get_stats() const {
 	lock.lock();
 
 	PipelineStats stats;
-	stats.acquisitions = acquisitions;
-	stats.hits = hits;
-	stats.misses = misses;
+	stats.physical_creates = physical_creates;
+	stats.physical_destroys = physical_destroys;
+	stats.logical_acquires = logical_acquires;
+	stats.shared_acquires = shared_acquires;
 	stats.releases = releases;
 	stats.recording_starts = recording_starts;
 	stats.aborted_recordings = aborted_recordings;
 	stats.eviction_candidates = eviction_candidates;
-	stats.requested_retirements = requested_retirements;
+	stats.retirement_requests = retirement_requests;
 	stats.retired = retired;
 	stats.destroyable = destroyable;
-	stats.destroyed = destroyed;
 	stats.blocked_by_retirement = blocked_by_retirement;
 	stats.rejected_full = rejected_full;
+	stats.late_releases = late_releases;
 	stats.late_use = late_use;
 	stats.invalid_serials = invalid_serials;
 	stats.resident_bytes = resident_bytes;

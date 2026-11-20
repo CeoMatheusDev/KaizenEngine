@@ -7835,7 +7835,7 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
 	if (_kaizen_pipeline_lifetime_enabled()) {
 		const Kaizen::PipelineStats stats = kaizen_pipeline_registry->get_stats();
 		print_line("[Kaizen][Pipelines] retired=" + String::num_uint64(stats.retired) +
-				" destroyed=" + String::num_uint64(stats.destroyed) +
+				" physical_destroys=" + String::num_uint64(stats.physical_destroys) +
 				" resident=" + String::num_uint64(stats.resident_count) +
 				" retiring=" + String::num_uint64(stats.retiring_count) +
 				" destroyable=" + String::num_uint64(stats.destroyable_count) +

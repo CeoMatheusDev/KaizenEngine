@@ -9529,6 +9529,7 @@ void RenderingDevice::finalize() {
 
 	if (pipeline_cache_registry != nullptr) {
 		pipeline_cache_shutting_down = true;
+		pipeline_cache_registry->set_shutting_down(true);
 		bool retirement_failed = false;
 		{
 			MutexLock lock(pipeline_cache_mutex);
@@ -9633,10 +9634,17 @@ void RenderingDevice::finalize() {
 		pipeline_cache_confirm_all();
 		pipeline_cache_drain();
 		const Kaizen::PipelineStats pcs = pipeline_cache_registry->get_stats();
-		print_line("[Kaizen][PipelineCache] hits=" + String::num_uint64(pcs.hits) +
-				" misses=" + String::num_uint64(pcs.misses) +
+		print_line("[Kaizen][PipelineCache] logical_acquires=" + String::num_uint64(pcs.logical_acquires) +
+				" shared_acquires=" + String::num_uint64(pcs.shared_acquires) +
+				" physical_creates=" + String::num_uint64(pcs.physical_creates) +
+				" releases=" + String::num_uint64(pcs.releases) +
+				" late_releases=" + String::num_uint64(pcs.late_releases) +
+				" retirement_requests=" + String::num_uint64(pcs.retirement_requests) +
+				" physical_destroys=" + String::num_uint64(pcs.physical_destroys) +
 				" resident=" + String::num_uint64(pcs.resident_count) +
-				" evicted=" + String::num_uint64(pcs.destroyed) +
+				" retiring=" + String::num_uint64(pcs.retiring_count) +
+				" destroyable=" + String::num_uint64(pcs.destroyable_count) +
+				" evicted=" + String::num_uint64(pcs.physical_destroys) +
 				" resident_bytes=" + String::num_uint64(pcs.resident_bytes));
 		memdelete(pipeline_cache_registry);
 		pipeline_cache_registry = nullptr;
