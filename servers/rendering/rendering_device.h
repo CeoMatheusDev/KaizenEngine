@@ -1264,6 +1264,7 @@ private:
 	// Separate from the driver-level destruction registry (KAIZEN_PIPELINE_LIFETIME).
 	Kaizen::PipelineRegistry *pipeline_cache_registry = nullptr;
 	HashMap<uint32_t, RID> pipeline_cache_rids; // registry slot -> RID
+	HashMap<uint64_t, Kaizen::PipelineHandle> pipeline_cache_rid_to_handle; // RID id -> registry handle
 	uint64_t pipeline_cache_next_key = 1;
 	size_t pipeline_cache_size = 0;
 	String pipeline_cache_file_path;
@@ -1329,6 +1330,7 @@ public:
 	void update_pipeline_cache(bool p_closing = false);
 
 	_FORCE_INLINE_ bool is_pipeline_cache_enabled() const { return pipeline_cache_enabled; }
+	_FORCE_INLINE_ bool is_pipeline_cache_registry_enabled() const { return pipeline_cache_registry != nullptr; }
 
 	// Kaizen P2.3 pipeline cache API (no-op when disabled).
 	Kaizen::PipelineHandle pipeline_cache_acquire(uint64_t p_key, uint64_t p_bytes);

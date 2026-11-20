@@ -5167,6 +5167,16 @@ RID RenderingDevice::render_pipeline_create(RID p_shader, FramebufferFormatID p_
 		_add_dependency(id, p_shader);
 	}
 
+	// Kaizen P2.3: track the pipeline with the creation-side cache (opt-in).
+	if (pipeline_cache_registry != nullptr) {
+		uint64_t key = id.get_id();
+		Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(key, 0);
+		if (!handle.is_null()) {
+			pipeline_cache_rids[handle.index] = id;
+			pipeline_cache_rid_to_handle[id.get_id()] = handle;
+		}
+	}
+
 	return id;
 }
 
@@ -5228,6 +5238,16 @@ RID RenderingDevice::compute_pipeline_create(RID p_shader, const Vector<Pipeline
 #endif
 		// Now add all the dependencies.
 		_add_dependency(id, p_shader);
+	}
+
+	// Kaizen P2.3: track the pipeline with the creation-side cache (opt-in).
+	if (pipeline_cache_registry != nullptr) {
+		uint64_t key = id.get_id();
+		Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(key, 0);
+		if (!handle.is_null()) {
+			pipeline_cache_rids[handle.index] = id;
+			pipeline_cache_rid_to_handle[id.get_id()] = handle;
+		}
 	}
 
 	return id;
@@ -7882,10 +7902,25 @@ void RenderingDevice::_free_internal(RID p_id) {
 	} else if (render_pipeline_owner.owns(p_id)) {
 		RenderPipeline *pipeline = render_pipeline_owner.get_or_null(p_id);
 		frames[frame].render_pipelines_to_dispose_of.push_back(*pipeline);
+		// Kaizen P2.3: release the creation-side cache reference.
+		if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
+			Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
+			pipeline_cache_registry->release(h);
+			pipeline_cache_registry->retire_now(h);
+			pipeline_cache_rid_to_handle.erase(p_id.get_id());
+			pipeline_cache_rids.erase(h.index);
+		}
 		render_pipeline_owner.free(p_id);
 	} else if (compute_pipeline_owner.owns(p_id)) {
 		ComputePipeline *pipeline = compute_pipeline_owner.get_or_null(p_id);
 		frames[frame].compute_pipelines_to_dispose_of.push_back(*pipeline);
+		if (pipeline_cache_registry != nullptr && pipeline_cache_rid_to_handle.has(p_id.get_id())) {
+			Kaizen::PipelineHandle h = pipeline_cache_rid_to_handle[p_id.get_id()];
+			pipeline_cache_registry->release(h);
+			pipeline_cache_registry->retire_now(h);
+			pipeline_cache_rid_to_handle.erase(p_id.get_id());
+			pipeline_cache_rids.erase(h.index);
+		}
 		compute_pipeline_owner.free(p_id);
 	} else if (acceleration_structure_owner.owns(p_id)) {
 		AccelerationStructure *acceleration_structure = acceleration_structure_owner.get_or_null(p_id);
@@ -9347,9 +9382,16 @@ void RenderingDevice::finalize() {
 	if (pipeline_cache_registry != nullptr) {
 		pipeline_cache_confirm_all();
 		pipeline_cache_drain();
+		const Kaizen::PipelineStats pcs = pipeline_cache_registry->get_stats();
+		print_line("[Kaizen][PipelineCache] hits=" + String::num_uint64(pcs.hits) +
+				" misses=" + String::num_uint64(pcs.misses) +
+				" resident=" + String::num_uint64(pcs.resident_count) +
+				" evicted=" + String::num_uint64(pcs.destroyed) +
+				" resident_bytes=" + String::num_uint64(pcs.resident_bytes));
 		memdelete(pipeline_cache_registry);
 		pipeline_cache_registry = nullptr;
 		pipeline_cache_rids.clear();
+		pipeline_cache_rid_to_handle.clear();
 	}
 
 	if (pipeline_cache_enabled) {
