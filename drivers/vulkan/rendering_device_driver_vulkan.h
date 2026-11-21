@@ -419,6 +419,9 @@ private:
 		VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
 		Framebuffer *active_framebuffer = nullptr;
 		RenderPassInfo *active_render_pass = nullptr;
+		// Kaizen P2.4.3: pipeline handles bound during this recording
+		// Protected by the command pool's submit_mutex (or frame mutex)
+		LocalVector<Kaizen::PipelineHandle> bound_pipelines;
 	};
 
 public:
@@ -849,12 +852,22 @@ private:
 	uint64_t kaizen_next_pipeline_key = 1;
 	uint32_t kaizen_next_submission_queue = 1;
 
+	// Kaizen P2.4.3: VkPipeline -> PipelineHandle mapping for recording reference tracking
+	struct PipelineHandleMapping {
+		HashMap<VkPipeline, Kaizen::PipelineHandle> map;
+		Mutex mutex;  // Protects the map
+	};
+	PipelineHandleMapping *kaizen_pipeline_handle_mapping = nullptr;
+
 	bool _kaizen_pipeline_lifetime_enabled() const { return kaizen_pipeline_registry != nullptr; }
 	uint32_t _kaizen_pipeline_queue_slot(bool p_identify_as_main_queue);
 	void _kaizen_pipeline_confirm(uint32_t p_queue, uint64_t p_serial);
 	void _kaizen_pipeline_confirm_all();
 	void _kaizen_pipeline_drain();
 	void _kaizen_pipeline_retire(VkPipeline p_pipeline, PipelineFreeCallback p_callback = nullptr, void *p_userdata = nullptr);
+
+	// Kaizen P2.4.3: Helper for begin_use tracking in command_bind_*_pipeline
+	void _continue_with_begin_use(const CommandBufferInfo *p_command_buffer, VkPipeline p_vk_pipeline);
 
 	/******************/
 

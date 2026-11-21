@@ -258,6 +258,51 @@ bool PipelineRegistry::end_use(PipelineHandle p_handle, PipelineQueue p_queue, u
 	return true;
 }
 
+bool PipelineRegistry::end_use_with_serial(PipelineHandle p_handle, PipelineQueue p_queue, uint64_t p_submission_serial) {
+	const uint32_t queue = pipeline_queue_index(p_queue);
+	if (queue >= PIPELINE_QUEUE_COUNT || p_submission_serial == 0) {
+		lock.lock();
+		invalid_serials++;
+		lock.unlock();
+		return false;
+	}
+
+	lock.lock();
+
+	Slot *slot = nullptr;
+	if (!_resolve_locked(p_handle, slot)) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->state != PipelineState::Resident && slot->state != PipelineState::EvictionCandidate) {
+		lock.unlock();
+		return false;
+	}
+
+	if (slot->recording_refs == 0) {
+		lock.unlock();
+		return false;
+	}
+
+	// ATOMIC: Both operations happen under the same lock.
+	// mark_use logic (inline):
+	slot->usage.record(p_queue, p_submission_serial);
+
+	// end_use logic:
+	slot->recording_refs--;
+
+	// If this was an EvictionCandidate with no remaining references, retire it.
+	// This is safe because we hold the lock and both operations are complete.
+	if (slot->host_refs == 0 && slot->recording_refs == 0 &&
+			slot->state == PipelineState::EvictionCandidate) {
+		_retire_locked(p_handle.index);
+	}
+
+	lock.unlock();
+	return true;
+}
+
 bool PipelineRegistry::abort_use(PipelineHandle p_handle) {
 	lock.lock();
 

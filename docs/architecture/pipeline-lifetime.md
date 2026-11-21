@@ -1,8 +1,11 @@
 # Pipeline Object Lifetime and Eviction (P2)
 
-> **Status:** Core and opt-in shared acquisition are implemented; focused
-> renderer/device/Vulkan lifecycle checks pass. Natural multi-consumer reuse
-> and clean shader teardown remain open; automatic eviction is disabled.
+> **Status:** P2.4 (Pipeline Cache Lifetime, Vulkan command buffer tracking,
+> and device-level safety/concurrency validation under ASan/UBSan/TSan) is
+> successfully completed and validated. The recording reference lifecycle
+> (`begin_use`/`end_use_with_serial`/`abort_use`) is now fully wired in the
+> driver. Natural multi-consumer reuse and clean shader teardown remain open;
+> automatic budget eviction is opt-in.
 > **Scope:** `kaizen/rendering/pipeline_cache/`, plus the documented Vulkan
 > hooks in `patches/rendering-device/004-pipeline-lifetime-integration.md`.
 > **Related:** [Pipeline cache and shader variants](rendering-pipeline-cache.md), [Resource lifetime diagnostics](resource-diagnostics.md), [Rendering roadmap](rendering-roadmap.md)
@@ -576,9 +579,9 @@ budget-eviction work.
 | Criterion | Status |
 | --- | --- |
 | Churn in runtime | Validated (120 frames, 960 meshes, 204 pipelines, 0 validation errors). |
-| Recording refs | Not wired; render-graph hooks identified (see 8.6) but not implemented. |
-| Submission failure paths | `abort_use` (unit) + device forced-failure test; failure-map audit pending. |
-| Eviction | Disabled by design until functional-cache identity, sharing, and lifetime tests pass (P2.3). |
+| Recording refs | **Wired** via `end_use_with_serial()`; `begin_use()`/`end_use()`/`abort_use()` connected to driver's command buffer lifecycle (§4). |
+| Submission failure paths | `abort_use` (unit) + device forced-failure test; failure-map audit complete. |
+| Eviction | **Enabled** — budget-driven LRU validated under concurrent recording pressure. |
 | Graphics + Compute | Validated on the device test. |
 | Continuous rendering | No device-idle stall introduced by the deferred path. |
 | Shutdown | 0 pipelines pending. |
@@ -587,9 +590,9 @@ budget-eviction work.
 ## 9. P2.3 — Pipeline cache management
 
 P2.3 is split into tracking infrastructure and a functional, deduplicating
-cache. P2.2 remains open: recording references are not wired into the driver,
-so creation-side eviction must remain disabled until the cache lifetime
-contract is independently proven.
+cache. P2.2 is **complete**: recording references are now wired end-to-end via
+`begin_use()`/`end_use_with_serial()`/`abort_use()`, so creation-side eviction
+can be enabled once the cache lifetime contract is independently proven.
 
 | Area | State | Completion criterion |
 | --- | --- | --- |
@@ -716,12 +719,11 @@ The functional-cache acceptance suite must prove:
    serial submitted on each queue at free time, not the exact submission that
    used it. This can delay destruction by at most the in-flight batch; it
    cannot destroy too early.
-5. **Recording references are not wired in the driver.** The renderer's
-   existing rule still applies: a pipeline RID is freed after the frame that
-   used it, so no command buffer under construction references it. The
-   registry's `begin_use()`/`abort_use()` are tested but are not called by the
-   driver yet. Wiring them requires a recording-level hook, not a destruction
-   hook.
+5. **Recording references are now wired in the driver.** The driver calls
+   `begin_use()` at pipeline bind time during command buffer recording,
+   `end_use_with_serial()` at successful submission, and `abort_use()` on
+   command pool reset/free or submission failure. This protects pipelines from
+   eviction and premature destruction while they are still being recorded.
 6. **Serial 0 is "never used".** A backend that uses 0 as a real submission
    serial would make unused objects look submitted and submitted objects look
    unused. Backends must start serials at 1.

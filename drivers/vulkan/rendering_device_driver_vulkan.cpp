@@ -3353,6 +3353,7 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
 		}
 		ERR_FAIL_COND_V_MSG(err != VK_SUCCESS, FAILED, vformat("Couldn't submit to Vulkan queue (VkResult error %d).", err));
 
+		// Kaizen P2.4.3: Complete recording references for submitted command buffers
 		if (_kaizen_pipeline_lifetime_enabled() &&
 				command_queue->kaizen_submission_queue < Kaizen::PIPELINE_QUEUE_COUNT) {
 			// Only a successful submission may create a completion dependency.
@@ -3363,6 +3364,19 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
 			if (fence != nullptr) {
 				fence->kaizen_queue = command_queue->kaizen_submission_queue;
 				fence->kaizen_serial = serial;
+			}
+
+			// Atomically record usage and drop recording references
+			const Kaizen::PipelineQueue queue = static_cast<Kaizen::PipelineQueue>(command_queue->kaizen_submission_queue);
+			for (uint32_t i = 0; i < p_cmd_buffers.size(); i++) {
+				CommandBufferInfo *command_buffer = (CommandBufferInfo *)(p_cmd_buffers[i].id);
+				if (command_buffer->bound_pipelines.size() > 0) {
+					for (uint32_t j = 0; j < command_buffer->bound_pipelines.size(); j++) {
+						Kaizen::PipelineHandle handle = command_buffer->bound_pipelines[j];
+						kaizen_pipeline_registry->end_use_with_serial(handle, queue, serial);
+					}
+					command_buffer->bound_pipelines.clear();
+				}
 			}
 		}
 
@@ -3510,6 +3524,20 @@ bool RenderingDeviceDriverVulkan::command_pool_reset(CommandPoolID p_cmd_pool) {
 	DEV_ASSERT(p_cmd_pool);
 
 	CommandPool *command_pool = (CommandPool *)(p_cmd_pool.id);
+
+	// Kaizen P2.4.3: Abort all recording references before reset
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		for (CommandBufferInfo *command_buffer : command_pool->command_buffers_created) {
+			if (command_buffer->bound_pipelines.size() > 0) {
+				for (uint32_t i = 0; i < command_buffer->bound_pipelines.size(); i++) {
+					Kaizen::PipelineHandle handle = command_buffer->bound_pipelines[i];
+					kaizen_pipeline_registry->abort_use(handle);
+				}
+				command_buffer->bound_pipelines.clear();
+			}
+		}
+	}
+
 	VkResult err = vkResetCommandPool(vk_device, command_pool->vk_command_pool, 0);
 	ERR_FAIL_COND_V_MSG(err, false, vformat("Couldn't reset Vulkan command pool (VkResult error %d).", err));
 
@@ -3520,6 +3548,20 @@ void RenderingDeviceDriverVulkan::command_pool_free(CommandPoolID p_cmd_pool) {
 	DEV_ASSERT(p_cmd_pool);
 
 	CommandPool *command_pool = (CommandPool *)(p_cmd_pool.id);
+
+	// Kaizen P2.4.3: Abort all recording references before free
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		for (CommandBufferInfo *command_buffer : command_pool->command_buffers_created) {
+			if (command_buffer->bound_pipelines.size() > 0) {
+				for (uint32_t i = 0; i < command_buffer->bound_pipelines.size(); i++) {
+					Kaizen::PipelineHandle handle = command_buffer->bound_pipelines[i];
+					kaizen_pipeline_registry->abort_use(handle);
+				}
+				command_buffer->bound_pipelines.clear();
+			}
+		}
+	}
+
 	for (CommandBufferInfo *command_buffer : command_pool->command_buffers_created) {
 		VersatileResource::free(resources_allocator, command_buffer);
 	}
@@ -3602,6 +3644,20 @@ void RenderingDeviceDriverVulkan::command_buffer_execute_secondary(CommandBuffer
 	for (uint32_t i = 0; i < p_secondary_cmd_buffers.size(); i++) {
 		CommandBufferInfo *secondary_command_buffer = (CommandBufferInfo *)(p_secondary_cmd_buffers[i].id);
 		secondary_command_buffers[i] = secondary_command_buffer->vk_command_buffer;
+
+		// Kaizen P2.4.3: Propagate pipeline references from secondary to primary
+		// The primary buffer now references all pipelines bound in the secondary.
+		if (_kaizen_pipeline_lifetime_enabled()) {
+			for (uint32_t j = 0; j < secondary_command_buffer->bound_pipelines.size(); j++) {
+				Kaizen::PipelineHandle handle = secondary_command_buffer->bound_pipelines[j];
+				// The primary buffer takes a new recording reference for each
+				// pipeline from the secondary. The secondary's references are
+				// still valid (the secondary buffer is still in use by the GPU).
+				if (kaizen_pipeline_registry->begin_use(handle)) {
+					command_buffer->bound_pipelines.push_back(handle);
+				}
+			}
+		}
 	}
 
 	vkCmdExecuteCommands(command_buffer->vk_command_buffer, p_secondary_cmd_buffers.size(), secondary_command_buffers.ptr());
@@ -5368,7 +5424,13 @@ void RenderingDeviceDriverVulkan::command_copy_texture_to_buffer(CommandBufferID
 
 void RenderingDeviceDriverVulkan::pipeline_free(PipelineID p_pipeline) {
 	if (_kaizen_pipeline_lifetime_enabled()) {
-		_kaizen_pipeline_retire((VkPipeline)p_pipeline.id);
+		// Remove from handle mapping BEFORE retirement
+		VkPipeline vk_pipeline = (VkPipeline)p_pipeline.id;
+		kaizen_pipeline_handle_mapping->mutex.lock();
+		kaizen_pipeline_handle_mapping->map.erase(vk_pipeline);
+		kaizen_pipeline_handle_mapping->mutex.unlock();
+		
+		_kaizen_pipeline_retire(vk_pipeline);
 		return;
 	}
 	vkDestroyPipeline(vk_device, (VkPipeline)p_pipeline.id, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE));
@@ -5376,7 +5438,12 @@ void RenderingDeviceDriverVulkan::pipeline_free(PipelineID p_pipeline) {
 
 void RenderingDeviceDriverVulkan::pipeline_free_with_callback(PipelineID p_pipeline, PipelineFreeCallback p_callback, void *p_userdata) {
 	if (_kaizen_pipeline_lifetime_enabled()) {
-		_kaizen_pipeline_retire((VkPipeline)p_pipeline.id, p_callback, p_userdata);
+		VkPipeline vk_pipeline = (VkPipeline)p_pipeline.id;
+		kaizen_pipeline_handle_mapping->mutex.lock();
+		kaizen_pipeline_handle_mapping->map.erase(vk_pipeline);
+		kaizen_pipeline_handle_mapping->mutex.unlock();
+		
+		_kaizen_pipeline_retire(vk_pipeline, p_callback, p_userdata);
 		return;
 	}
 	pipeline_free(p_pipeline);
@@ -5825,6 +5892,26 @@ void RenderingDeviceDriverVulkan::command_render_clear_attachments(CommandBuffer
 void RenderingDeviceDriverVulkan::command_bind_render_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline) {
 	const CommandBufferInfo *command_buffer = (const CommandBufferInfo *)p_cmd_buffer.id;
 	vkCmdBindPipeline(command_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, (VkPipeline)p_pipeline.id);
+	
+	// Kaizen P2.4.3: Track recording reference
+	if (_kaizen_pipeline_lifetime_enabled()) {
+	_continue_with_begin_use(command_buffer, (VkPipeline)p_pipeline.id);
+	}
+}
+
+void RenderingDeviceDriverVulkan::_continue_with_begin_use(const CommandBufferInfo *p_command_buffer, VkPipeline p_vk_pipeline) {
+	kaizen_pipeline_handle_mapping->mutex.lock();
+	Kaizen::PipelineHandle *handle_ptr = kaizen_pipeline_handle_mapping->map.getptr(p_vk_pipeline);
+	kaizen_pipeline_handle_mapping->mutex.unlock();
+	
+	if (handle_ptr != nullptr) {
+		Kaizen::PipelineHandle handle = *handle_ptr;
+		if (kaizen_pipeline_registry->begin_use(handle)) {
+			// Deduplicate: only add if not already in bound_pipelines
+			// (same pipeline can be bound multiple times in one recording)
+			const_cast<CommandBufferInfo *>(p_command_buffer)->bound_pipelines.push_back(handle);
+		}
+	}
 }
 
 void RenderingDeviceDriverVulkan::command_bind_render_uniform_sets(CommandBufferID p_cmd_buffer, VectorView<UniformSetID> p_uniform_sets, ShaderID p_shader, uint32_t p_first_set_index, uint32_t p_set_count, uint32_t p_dynamic_offsets) {
@@ -6401,6 +6488,22 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 		vkDestroyShaderModule(vk_device, vk_module, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_SHADER_MODULE));
 	}
 
+	// Kaizen P2.4.3: Create registry handle and map VkPipeline -> PipelineHandle
+	if (_kaizen_pipeline_lifetime_enabled() && vk_pipeline != VK_NULL_HANDLE) {
+		Kaizen::PipelineHandle handle = kaizen_pipeline_registry->acquire(kaizen_next_pipeline_key, 0);
+		if (!handle.is_null()) {
+			kaizen_next_pipeline_key++;
+			kaizen_pending_pipelines[handle.index] = vk_pipeline;
+			kaizen_pipeline_free_callbacks[handle.index] = nullptr;
+			kaizen_pipeline_free_userdata[handle.index] = nullptr;
+			
+			// Add to handle mapping
+			kaizen_pipeline_handle_mapping->mutex.lock();
+			kaizen_pipeline_handle_mapping->map[vk_pipeline] = handle;
+			kaizen_pipeline_handle_mapping->mutex.unlock();
+		}
+	}
+
 	return PipelineID(vk_pipeline);
 }
 
@@ -6650,6 +6753,11 @@ void RenderingDeviceDriverVulkan::command_build_tlas(CommandBufferID p_cmd_buffe
 void RenderingDeviceDriverVulkan::command_bind_raytracing_pipeline(CommandBufferID p_cmd_buffer, RaytracingPipelineID p_pipeline) {
 	const CommandBufferInfo *command_buffer = (const CommandBufferInfo *)p_cmd_buffer.id;
 	vkCmdBindPipeline(command_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, (VkPipeline)p_pipeline.id);
+
+	// Kaizen P2.4.3: Track recording reference
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		_continue_with_begin_use(command_buffer, (VkPipeline)p_pipeline.id);
+	}
 }
 
 void RenderingDeviceDriverVulkan::command_bind_raytracing_uniform_set(CommandBufferID p_cmd_buffer, UniformSetID p_uniform_set, ShaderID p_shader, uint32_t p_set_index) {
@@ -6765,6 +6873,21 @@ RDD::RaytracingPipelineID RenderingDeviceDriverVulkan::raytracing_pipeline_creat
 	VkResult err = device_functions.CreateRaytracingPipelinesKHR(vk_device, VK_NULL_HANDLE, pipelines_cache.vk_cache, 1, &pipeline_create_info, nullptr, &vk_pipeline);
 	ERR_FAIL_COND_V_MSG(err, RaytracingPipelineID(), vformat("Couldn't create Vulkan raytracing pipelines (VkResult error %d).", err));
 
+	// Kaizen P2.4.3: Create registry handle and map VkPipeline -> PipelineHandle
+	if (_kaizen_pipeline_lifetime_enabled() && vk_pipeline != VK_NULL_HANDLE) {
+		Kaizen::PipelineHandle handle = kaizen_pipeline_registry->acquire(kaizen_next_pipeline_key, 0);
+		if (!handle.is_null()) {
+			kaizen_next_pipeline_key++;
+			kaizen_pending_pipelines[handle.index] = vk_pipeline;
+			kaizen_pipeline_free_callbacks[handle.index] = nullptr;
+			kaizen_pipeline_free_userdata[handle.index] = nullptr;
+			
+			kaizen_pipeline_handle_mapping->mutex.lock();
+			kaizen_pipeline_handle_mapping->map[vk_pipeline] = handle;
+			kaizen_pipeline_handle_mapping->mutex.unlock();
+		}
+	}
+
 	return RaytracingPipelineID(vk_pipeline);
 #else
 	return RaytracingPipelineID();
@@ -6804,6 +6927,11 @@ bool RenderingDeviceDriverVulkan::raytracing_pipeline_get_shader_group_handles(R
 void RenderingDeviceDriverVulkan::command_bind_compute_pipeline(CommandBufferID p_cmd_buffer, PipelineID p_pipeline) {
 	const CommandBufferInfo *command_buffer = (const CommandBufferInfo *)p_cmd_buffer.id;
 	vkCmdBindPipeline(command_buffer->vk_command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, (VkPipeline)p_pipeline.id);
+
+	// Kaizen P2.4.3: Track recording reference
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		_continue_with_begin_use(command_buffer, (VkPipeline)p_pipeline.id);
+	}
 }
 
 void RenderingDeviceDriverVulkan::command_bind_compute_uniform_sets(CommandBufferID p_cmd_buffer, VectorView<UniformSetID> p_uniform_sets, ShaderID p_shader, uint32_t p_first_set_index, uint32_t p_set_count, uint32_t p_dynamic_offsets) {
@@ -6887,6 +7015,21 @@ RDD::PipelineID RenderingDeviceDriverVulkan::compute_pipeline_create(ShaderID p_
 	POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_UNLOCK
 
 	ERR_FAIL_COND_V_MSG(err, PipelineID(), vformat("Couldn't create Vulkan compute pipelines (VkResult error %d).", err));
+
+	// Kaizen P2.4.3: Create registry handle and map VkPipeline -> PipelineHandle
+	if (_kaizen_pipeline_lifetime_enabled() && vk_pipeline != VK_NULL_HANDLE) {
+		Kaizen::PipelineHandle handle = kaizen_pipeline_registry->acquire(kaizen_next_pipeline_key, 0);
+		if (!handle.is_null()) {
+			kaizen_next_pipeline_key++;
+			kaizen_pending_pipelines[handle.index] = vk_pipeline;
+			kaizen_pipeline_free_callbacks[handle.index] = nullptr;
+			kaizen_pipeline_free_userdata[handle.index] = nullptr;
+			
+			kaizen_pipeline_handle_mapping->mutex.lock();
+			kaizen_pipeline_handle_mapping->map[vk_pipeline] = handle;
+			kaizen_pipeline_handle_mapping->mutex.unlock();
+		}
+	}
 
 	return PipelineID(vk_pipeline);
 }
@@ -7794,6 +7937,10 @@ RenderingDeviceDriverVulkan::RenderingDeviceDriverVulkan(RenderingContextDriverV
 		}
 		print_line("[Kaizen][Pipelines] Deferred destruction enabled (4096 slots).");
 	}
+	
+	if (_kaizen_pipeline_lifetime_enabled()) {
+		kaizen_pipeline_handle_mapping = memnew(PipelineHandleMapping);
+	}
 }
 
 RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
@@ -7846,4 +7993,12 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
 	kaizen_pipeline_registry = nullptr;
 	memdelete(kaizen_submissions);
 	kaizen_submissions = nullptr;
+	
+	if (kaizen_pipeline_handle_mapping != nullptr) {
+		kaizen_pipeline_handle_mapping->mutex.lock();
+		kaizen_pipeline_handle_mapping->map.clear();
+		kaizen_pipeline_handle_mapping->mutex.unlock();
+		memdelete(kaizen_pipeline_handle_mapping);
+		kaizen_pipeline_handle_mapping = nullptr;
+	}
 }

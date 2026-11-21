@@ -133,6 +133,12 @@ public:
 	// non-zero and monotonic for that queue).
 	bool end_use(PipelineHandle p_handle, PipelineQueue p_queue, uint64_t p_submission_serial);
 
+	// Atomically records a submission use and drops the recording reference.
+	// This is the ONLY safe way to transition from recording reference to
+	// GPU in-flight reference. It prevents eviction from seeing zero
+	// recording references between mark_use and end_use.
+	bool end_use_with_serial(PipelineHandle p_handle, PipelineQueue p_queue, uint64_t p_submission_serial);
+
 	// Failed submission: drops the recording reference without recording a
 	// use, because no GPU work was executed. The object remains alive if it is
 	// a candidate; a later eviction retires it normally.
