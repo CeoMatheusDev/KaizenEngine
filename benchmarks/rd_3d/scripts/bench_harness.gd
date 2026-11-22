@@ -12,11 +12,13 @@ extends Node
 ## invalid.
 ##
 ## CLI (after the engine's `--` separator):
-##   --bench-scene <S1-S4|S6>    Scene to load and report label (default S1)
+##   --bench-scene <S1-S4|S6|S8> Scene to load and report label (default S1)
 ##   --bench-count <n>           Forwarded to the scene as its content count
 ##   --bench-variant <a|b|...>   Forwarded to the scene as its variant label
 ##   --bench-spots <n>           S4 spot-light count
 ##   --bench-omnis <n>           S4 omni-light count
+##   --bench-occlusion <0|1>     S8: request Viewport.use_occlusion_culling
+##   --bench-rays <n>            S8: override occlusion_rays_per_thread
 ##   --bench-preset <Q0|Q1>      Label written to the report (default Q0)
 ##   --bench-config <label>      Configuration label written to the report (D1, M1, ...)
 ##   --bench-frames <n>          Sampled frames, multiple of 300 (default 3600)
@@ -63,6 +65,7 @@ const SCENES := {
 	"S3": "res://scenes/s3_materials.tscn",
 	"S4": "res://scenes/s4_lighting.tscn",
 	"S6": "res://scenes/s6_post.tscn",
+	"S8": "res://scenes/s8_culling.tscn",
 }
 
 var config := {
@@ -71,6 +74,8 @@ var config := {
 	"variant": "",
 	"spots": -1,
 	"omnis": -1,
+	"occlusion": -1,
+	"rays": -1,
 	"preset": "Q0",
 	"config": "",
 	"frames": DEFAULT_SAMPLE_FRAMES,
@@ -156,6 +161,14 @@ func _parse_args() -> void:
 				if i + 1 < args.size():
 					i += 1
 					config.omnis = int(args[i])
+			"--bench-occlusion":
+				if i + 1 < args.size():
+					i += 1
+					config.occlusion = int(args[i])
+			"--bench-rays":
+				if i + 1 < args.size():
+					i += 1
+					config.rays = int(args[i])
 			"--bench-preset":
 				if i + 1 < args.size():
 					i += 1

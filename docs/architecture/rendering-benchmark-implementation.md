@@ -27,6 +27,10 @@ The implementation report describes authored code and recorded engineering decis
 | Performance measurements | Twenty-eight D1 + D2 + D3 | S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells on D1; S2, S3a, S3b, S4 and S6 P0 on Mobile; S2, S3a, S3b, S4 and S6 P0+P2 on Compatibility; the rest remain unmeasured |
 
 “Implemented” means the scene and harness source were authored; the S1–S4 and S6 paths have since been executed end to end in a template build.
+S8 is the exception: it is authored and **has never been executed** — this repository's
+sandbox has no engine build, no GPU, and no Godot binary to parse GDScript. Its report
+rules are unit-tested in `benchmarks/tools/test_check_report.py`, which is the only part
+of it that has run here.
 
 ## 2. Change history
 
@@ -46,7 +50,7 @@ The aggregate change over this range is 22 files under `benchmarks/` and `docs/`
 
 ## 3. Project architecture
 
-S1–S4 and S6 share one Godot-style project because they use the same renderer and project settings. The harness selects the requested scene through `--bench-scene` and a scene registry near the top of `bench_harness.gd`.
+S1–S4, S6 and S8 share one Godot-style project because they use the same renderer and project settings. The harness selects the requested scene through `--bench-scene` and a scene registry near the top of `bench_harness.gd`.
 
 ```text
 benchmarks/rd_3d/

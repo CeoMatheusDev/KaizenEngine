@@ -204,6 +204,8 @@ def _check_report(report):
         _check_s2(fail, warn, frames)
     elif scene_id == "S6":
         _check_s6(fail, warn, report, frames, parameters)
+    elif scene_id == "S8":
+        _check_s8(fail, warn, info, frames, parameters)
     elif scene_id not in ("S3", "S4", "S7"):
         info("unknown scene id %r; only the generic checks were applied" % scene_id)
 
@@ -249,6 +251,102 @@ def _check_s2(fail, warn, frames):
     if isinstance(primitives, list) and primitives:
         if _relative_spread(primitives) > TOLERANCE:
             warn("S2 primitives vary by %.2f%% within the run" % (100.0 * _relative_spread(primitives)))
+
+
+def _check_s8(fail, warn, info, frames, parameters):
+    """S8 is the only cell that turns occlusion culling on. Two things can make it
+    meaningless without changing a single number: the engine ignoring the request,
+    and a culler that is present but culls nothing."""
+    requested = parameters.get("occlusion_requested")
+    effective = parameters.get("occlusion_effective")
+    if requested is None or effective is None:
+        warn("S8 parameters do not record occlusion_requested/occlusion_effective")
+    elif bool(requested) != bool(effective):
+        fail("occlusion culling requested=%s but the viewport reports %s; the cell does not "
+             "measure what its label says" % (bool(requested), bool(effective)))
+
+    primitives = frames.get("primitives")
+    if not isinstance(primitives, list) or not primitives:
+        fail("S8 has no primitives array")
+    elif _median(primitives) <= 0:
+        fail("S8 primitives median is 0; the scene culled everything away and timed an empty frame")
+
+    buffer_size = parameters.get("occlusion_buffer")
+    if isinstance(buffer_size, (list, tuple)) and len(buffer_size) == 2:
+        texels = int(buffer_size[0]) * int(buffer_size[1])
+        info("occlusion HZB base level %dx%d from %s rays/thread x %s threads (%d pyramid texels); "
+             "a ray budget, not the screen" % (int(buffer_size[0]), int(buffer_size[1]),
+                                               parameters.get("rays_per_thread"),
+                                               parameters.get("processor_count"), texels))
+
+
+def _cell_parameters(key):
+    try:
+        return json.loads(key[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _s8_pair_signature(key):
+    """Everything that must match for two S8 cells to be one A/B pair, or None.
+    key is (scene, parameters, preset, configuration, method, driver, adapter,
+    content hash). The parameters and the content hash deliberately stay out of
+    the signature: the hash covers scene_parameters(), which is where the
+    occlusion flag is recorded, so demanding it match would guarantee no pair is
+    ever found. Everything that is *not* the setting under test must match."""
+    if key[0] != "S8":
+        return None
+    parameters = _cell_parameters(key)
+    if not parameters or parameters.get("variant") != "closed":
+        return None
+    # The ray budget has to match as well: it sizes the HZB, so a pair taken at two
+    # different budgets changes two things at once and proves nothing.
+    return key[2:7] + (parameters.get("instance_count"), parameters.get("rays_per_thread"))
+
+
+def _check_s8_pairs(grouped, per_cell, failure_count):
+    """Compare each closed-variant pair (occlusion off vs on) and report what culling
+    removed. Only cells with repeated runs are paired, matching the published
+    protocol; the verdict is attached to the occlusion-on cell, which is the one
+    that either delivers the win or does not."""
+    signatures = {}
+    for key, reports in grouped.items():
+        signature = _s8_pair_signature(key)
+        if signature is None or len(reports) < 2:
+            continue
+        parameters = _cell_parameters(key) or {}
+        signatures.setdefault(signature, {})[bool(parameters.get("occlusion_requested"))] = (key, reports)
+
+    issues_by_key = {key: issues for key, _count, issues in per_cell}
+    for sides in signatures.values():
+        if set(sides) != {False, True}:
+            continue
+
+        def median_primitives(reports):
+            values = []
+            for report in reports:
+                values.extend(((report.get("frames") or {}).get("primitives")) or [])
+            return _median(values) if values else 0
+
+        off = median_primitives(sides[False][1])
+        on = median_primitives(sides[True][1])
+        if off <= 0 or on <= 0:
+            continue
+        ratio = float(on) / float(off)
+        if ratio > 0.995:
+            level, message = FAIL, (
+                "closed variant: %d primitives with occlusion on vs %d off (%.1f%%); occlusion culled "
+                "nothing, so the culler is inactive in this build or nothing occludes the field"
+                % (on, off, 100.0 * ratio))
+            failure_count += 1
+        else:
+            level, message = INFO, (
+                "closed variant: occlusion culling removed %.1f%% of the primitives (%d -> %d)"
+                % (100.0 * (1.0 - ratio), off, on))
+        issues = issues_by_key.get(sides[True][0])
+        if issues is not None:
+            issues.append((level, message))
+    return failure_count
 
 
 def _check_s6(fail, warn, report, frames, parameters):
@@ -374,6 +472,8 @@ def run(paths):
         issues = _check_cell(reports)
         per_cell.append((key, len(reports), issues))
         failure_count += sum(1 for level, _ in issues if level == FAIL)
+
+    failure_count = _check_s8_pairs(grouped, per_cell, failure_count)
 
     return per_report, per_cell, failure_count
 
