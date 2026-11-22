@@ -16,6 +16,19 @@ for file in sys.argv[1:]:
     with open(file.strip(), "rt", encoding="utf-8", newline="\n") as f:
         lines = f.readlines()
 
+    # Two classes of file are not this tool's to align, and both were being rewritten before
+    # the skip below. (1) Generated files say so: the seventeen *-so_wrap.h dynload wrappers
+    # are produced by generate-wrapper.py in .h/.c pairs, so replacing their #ifndef guard
+    # edits one half of a pair and the next generation run puts it back. (2) Anything under a
+    # thirdparty/ directory is vendored with its own licence and guard style, and this fork's
+    # rule is that vendor files are not touched; four headers under
+    # modules/mono/thirdparty/ were picking up a "#pragma once" line that upstream does not
+    # have, which is a diff against provenance for no benefit.
+    if "/thirdparty/" in file.replace("\\", "/") or file.rstrip("/").endswith("thirdparty"):
+        continue
+    if any("This file is generated. Do not edit!" in line for line in lines[:6]):
+        continue
+
     for idx, line in enumerate(lines):
         sline = line.strip()
 

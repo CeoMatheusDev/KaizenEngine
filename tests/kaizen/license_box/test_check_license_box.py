@@ -186,8 +186,15 @@ class TestRepoAgreement(Fixture):
     """The invariants only the real tree can show."""
 
     def copy(self, relative):
+        """Mirror the repository path inside the temp dir.
+
+        The path is part of the input for these tools (vendored files are recognised by their
+        `thirdparty/` component), so a flat basename would test something the repository never
+        does - and two files sharing a basename would collide.
+        """
         source = os.path.join(REPO_ROOT, relative)
-        target = os.path.join(self.dir, os.path.basename(relative))
+        target = os.path.join(self.dir, relative)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copyfile(source, target)
         return source, target
 
@@ -220,6 +227,24 @@ class TestRepoAgreement(Fixture):
         result = self.run_script("header_guards.py", *[target for _s, target in copied])
         self.assertNotIn("REQUIRES MANUAL CHANGES", result.stdout)
         self.assertNotIn("FIXED:", result.stdout)
+        for source, target in copied:
+            self.assertEqual(self.read(target), self.read(source), f"{target} was rewritten")
+
+    def test_header_guards_leaves_generated_files_alone(self):
+        # The seventeen *-so_wrap.h dynload wrappers declare "This file is generated. Do not
+        # edit!" and are produced in .h/.c pairs. The tool's own rewrite used to convert their
+        # guard to #pragma once and drop the matching #endif: 17 tracked files corrupted, and
+        # undone by the next generation run.
+        copied = []
+        # coreclr_delegates.h has no banner at all and no generated-marker, so it needs the
+        # thirdparty half of the rule rather than the generated half.
+        for relative in ("drivers/alsa/asound-so_wrap.h", "drivers/pulseaudio/pulse-so_wrap.h",
+                         "modules/mono/thirdparty/coreclr_delegates.h"):
+            source, target = self.copy(relative)
+            copied.append((source, target))
+        result = self.run_script("header_guards.py", *[target for _s, target in copied])
+        self.assertNotIn("FIXED:", result.stdout)
+        self.assertNotIn("REQUIRES MANUAL CHANGES", result.stdout)
         for source, target in copied:
             self.assertEqual(self.read(target), self.read(source), f"{target} was rewritten")
 

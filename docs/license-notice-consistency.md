@@ -178,6 +178,7 @@ a quality pass; `git show 0f541294` is the source of the current wording.
 | The generator template matches the tree | `test_generator_is_a_noop_on_a_box_file` |
 | The generator leaves Style B alone | `test_generator_does_not_touch_slash_banner_files` |
 | `header_guards.py` understands both banner shapes | `test_header_guards_accepts_both_banner_styles` |
+| `header_guards.py` leaves generated and vendored headers alone | `test_header_guards_leaves_generated_files_alone` |
 | The template has exactly one over-wide row, and it is the contributors line | `test_template_box_is_rectangular_except_the_licence_line` |
 
 Rows are classified by whether padding can reach them, not by row index, so a file that
