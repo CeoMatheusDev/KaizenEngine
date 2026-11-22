@@ -1,11 +1,11 @@
 /**************************************************************************/
 /*  pipeline_budget.h                                                     */
-/*  Budget and accounting infrastructure for P2.4.1–P2.4.2.              */
+/*  Budget and accounting infrastructure for P2.4.1–P2.4.2.             */
 /*                                                                        */
 /*  Responsibilities:                                                     */
 /*   - Track resident_bytes, pending_bytes, peak_resident_bytes           */
-/*   - Provide high/low watermark thresholds for pressure detection         */
-/*   - Expose budget enforcement decisions to PipelineRegistry              */
+/*   - Provide high/low watermark thresholds for pressure detection       */
+/*   - Expose budget enforcement decisions to PipelineRegistry            */
 /*                                                                        */
 /*  PipelineBudget does NOT own slot state; Registry retains authority.   */
 /*  Budget merely interprets the numbers Registry already produces.       */

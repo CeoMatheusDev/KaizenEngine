@@ -3,20 +3,20 @@
 /**************************************************************************/
 /*  Unit tests for the pipeline lifetime report helpers.                  */
 /*                                                                        */
-/*  These run with no Vulkan loader, no device and no validation layer -   */
+/*  These run with no Vulkan loader, no device and no validation layer -  */
 /*  that is the point. The test they guard (pipeline_lifetime_vulkan.cpp) */
 /*  skips on a machine without a device, so before this file the report an */
-/*  operator reads was checked by nobody: it was only ever seen by hand,   */
-/*  on a machine that had a GPU attached, after a run whose exit code      */
-/*  already disagreed with it.                                             */
+/*  operator reads was checked by nobody: it was only ever seen by hand,  */
+/*  on a machine that had a GPU attached, after a run whose exit code     */
+/*  already disagreed with it.                                            */
 /*                                                                        */
 /*  Build twice to cover both sides of the sanitizer question:            */
 /*    g++ -std=c++17 test_pipeline_lifetime_report.cpp -o t && ./t        */
-/*    g++ -std=c++17 -DKAIZEN_TEST_SANITIZERS=\"address,undefined\" ...    */
+/*    g++ -std=c++17 -DKAIZEN_TEST_SANITIZERS=\"address,undefined\" ...   */
 /*                                                                        */
-/*  Copyright (c) 2014-present Godot Engine contributors.                  */
-/*  Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                    */
-/*  See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md.             */
+/*  Copyright (c) 2014-present Godot Engine contributors.                 */
+/*  Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                   */
+/*  See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md.            */
 /**************************************************************************/
 
 #include "pipeline_lifetime_report.h"

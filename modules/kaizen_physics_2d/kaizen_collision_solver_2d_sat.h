@@ -1,8 +1,8 @@
 /**************************************************************************/
-/*  kaizen_collision_solver_2d_sat.h                                       */
+/*  kaizen_collision_solver_2d_sat.h                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

@@ -1,10 +1,10 @@
 /**************************************************************************/
-/*  resource_tracker.h                                                     */
+/*  resource_tracker.h                                                    */
 /**************************************************************************/
-/*  Kaizen Engine — Resource Lifetime Diagnostics                          */
+/*  Kaizen Engine — Resource Lifetime Diagnostics                       */
 /*                                                                        */
 /*  Engine-facing wrapper around Kaizen::ResourceRegistry. The tracker is */
-/*  disabled by default and is enabled with the KAIZEN_DIAGNOSTICS         */
+/*  disabled by default and is enabled with the KAIZEN_DIAGNOSTICS        */
 /*  environment variable (basic, detailed or validation). When disabled,  */
 /*  every notify_* call returns after a single mode check.                */
 /*                                                                        */

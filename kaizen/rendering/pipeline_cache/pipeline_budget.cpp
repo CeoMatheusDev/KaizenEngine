@@ -1,6 +1,6 @@
 /**************************************************************************/
 /*  pipeline_budget.cpp                                                   */
-/*  Budget and accounting infrastructure for P2.4.1–P2.4.2.              */
+/*  Budget and accounting infrastructure for P2.4.1–P2.4.2.             */
 /*                                                                        */
 /*  PipelineBudget does NOT own slot state; Registry retains authority.   */
 /*  Budget merely interprets the numbers Registry already produces.       */

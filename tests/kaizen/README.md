@@ -288,6 +288,23 @@ because the two states print different words and both have to be checked. Neithe
 two builds links a sanitizer; only `run_vulkan_tests.sh` with `KAIZEN_SANITIZERS` does
 that, and it is the only place the "built with address" line may ever appear.
 
+## `license_box/` - licence banner geometry
+
+`check_license_box.py` reads the banner at the head of every code file and asks one
+question of it: is each row the width that the file's own `/****/` border declares? A row
+that is off width *and* still has padding is a violation (`--fix` moves the spaces and
+nothing else; it re-reads and compares before writing, so it cannot change a non-space byte
+by construction). A row that is off width with no padding left to move is `PENDING`: closing
+it means editing licence words, which is a maintainer's decision, recorded in
+`docs/license-notice-consistency.md`. `--max-pending` ratchets that debt.
+
+The suite also runs the repository's own two header tools over copies of real files, which
+is where the two defects it guards were found: `misc/scripts/copyright_headers.py` must be a
+byte-exact no-op on a `/* */` file (template and tree agree) and must refuse a `//`-banner
+file (regenerating one from the box template deleted its derivation and AGPL notice), and
+`misc/scripts/header_guards.py` must accept both banner shapes instead of reporting 744
+headers as needing manual changes. Neither tool has a `--dry-run`, so the tests copy.
+
 ## In-engine pipeline destruction (opt-in)
 
 The Vulkan driver defers `vkDestroyPipeline` through the registry only when

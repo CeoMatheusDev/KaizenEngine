@@ -1,9 +1,9 @@
 //************************************************************************//
 //  engine_update_label.cpp                                               //
 //************************************************************************//
-// This file is part of:                                              //
-// KaizenEngine                                                       //
-// https://github.com/CeoMatheusDev/KaizenEngine                      //
+// This file is part of:                                                  //
+// KaizenEngine                                                           //
+// https://github.com/CeoMatheusDev/KaizenEngine                          //
 //************************************************************************//
 // Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  //
 // Copyright (c) 2014-present Godot Engine contributors.                  //
@@ -18,7 +18,7 @@
 // General Public License v3.0 (AGPL-3.0).                                //
 // See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md for details. //
 //                                                                        //
-// [full text of the MIT license, unchanged]                             //
+// [full text of the MIT license, unchanged]                              //
 //************************************************************************//
 
 #include "engine_update_label.h"

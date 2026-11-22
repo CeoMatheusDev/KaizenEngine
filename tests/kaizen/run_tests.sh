@@ -65,6 +65,14 @@ python3 "${SCRIPT_DIR}/hzb_occlusion/extract_source_bodies.py" \
 python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
 python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | tail -3
 
+# Licence banner geometry: the box rows are padding-held, and a rebrand that lengthens a
+# row without moving a space is invisible to the tool that writes them - its template was
+# ragged too. The budget is the recorded debt of rows that cannot be padded back without
+# touching licence text; lowering it is the point, raising it needs a sentence in
+# docs/license-notice-consistency.md.
+python3 "${SCRIPT_DIR}/license_box/check_license_box.py" --repo-root "${REPO_ROOT}" --max-pending 2469
+python3 -m unittest discover -s "${SCRIPT_DIR}/license_box" -p 'test_*.py' 2>&1 | tail -3
+
 "${REPORT_BIN}" "$@"
 "${REPORT_BIN}_sanmarked" "$@"
 "${RESOURCE_BIN}" "$@"

@@ -1,8 +1,8 @@
 /**************************************************************************/
-/*  kaizen_mbedtls_config.h                                                */
+/*  kaizen_mbedtls_config.h                                               */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

@@ -5,7 +5,7 @@
 /*                                                                        */
 /*  This subsystem owns live pipeline objects, their reference counts and */
 /*  their safe-destruction bookkeeping. It is independent from the        */
-/*  resource tracker (which observes buffers/textures) and from            */
+/*  resource tracker (which observes buffers/textures) and from           */
 /*  VkPipelineCache (which stores driver-side creation data).             */
 /*                                                                        */
 /*  States:                                                               */
@@ -26,7 +26,7 @@
 /*  A single global submission counter is not sufficient: work on the     */
 /*  graphics queue completing does not imply that compute has finished.   */
 /*                                                                        */
-/*  Key lookup uses an open-addressing hash table over slot indices:     */
+/*  Key lookup uses an open-addressing hash table over slot indices:      */
 /*  no per-entry heap allocation, no pointer chasing on the hit path,     */
 /*  and the full canonical identity (stored in the slot) is compared      */
 /*  byte for byte, so hash collisions can never merge distinct keys.      */

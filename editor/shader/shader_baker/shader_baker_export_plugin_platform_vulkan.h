@@ -2,7 +2,7 @@
 /*  shader_baker_export_plugin_platform_vulkan.h                          */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

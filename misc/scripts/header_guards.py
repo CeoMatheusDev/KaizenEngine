@@ -23,13 +23,13 @@ for file in sys.argv[1:]:
             if sline == "":  # Skip empty lines at the top.
                 continue
 
-            if sline.startswith("/**********"):  # Kaizen header starts this way.
+            if sline.startswith("/**********") or sline.startswith("//**********"):  # Kaizen header starts this way.
                 header_start = idx
             else:
                 header_end = 0  # There is no Kaizen header.
                 break
         else:
-            if not sline.startswith(("*", "/*")):  # Not in the Kaizen header anymore.
+            if not sline.startswith(("*", "/*", "//")):  # Not in the Kaizen header anymore.
                 header_end = idx + 1  # The guard should be two lines below the Kaizen header.
                 break
 

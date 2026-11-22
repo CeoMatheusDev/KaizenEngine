@@ -1,8 +1,8 @@
 /**************************************************************************/
-/*  kaizen_app_delegate_service_apple_embedded.h                           */
+/*  kaizen_app_delegate_service_apple_embedded.h                          */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

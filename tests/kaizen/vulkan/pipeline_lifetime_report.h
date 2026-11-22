@@ -5,19 +5,19 @@
 /*                                                                        */
 /*  Deliberately free of Vulkan types and of any engine header, so the    */
 /*  rules below can be unit-tested without a device or a loader: see      */
-/*  test_pipeline_lifetime_report.cpp, which runs in ./run_tests.sh.       */
+/*  test_pipeline_lifetime_report.cpp, which runs in ./run_tests.sh.      */
 /*                                                                        */
-/*  This file exists because the report used to be written inline in       */
-/*  pipeline_lifetime_vulkan.cpp with four lines that hardcoded "PASS",    */
-/*  three that hardcoded "CLEAN" for sanitizers the build never enabled,   */
-/*  six that printed "(validated in phases)" instead of a number, and an   */
+/*  This file exists because the report used to be written inline in      */
+/*  pipeline_lifetime_vulkan.cpp with four lines that hardcoded "PASS",   */
+/*  three that hardcoded "CLEAN" for sanitizers the build never enabled,  */
+/*  six that printed "(validated in phases)" instead of a number, and an  */
 /*  exit code that ignored the validation-error count the summary above it */
-/*  had just reported as a failure. A report that manufactures its own     */
-/*  evidence is worse than no report, and none of it was checkable.        */
+/*  had just reported as a failure. A report that manufactures its own    */
+/*  evidence is worse than no report, and none of it was checkable.       */
 /*                                                                        */
-/*  Copyright (c) 2014-present Godot Engine contributors.                  */
-/*  Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                    */
-/*  See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md.             */
+/*  Copyright (c) 2014-present Godot Engine contributors.                 */
+/*  Copyright (c) 2026 Matheus A. Santos, Hardion Labs.                   */
+/*  See the files LICENSE.txt and LICENSE-ADDITIONAL-TERMS.md.            */
 /**************************************************************************/
 
 #pragma once

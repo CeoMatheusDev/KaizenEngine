@@ -1,8 +1,8 @@
 /**************************************************************************/
-/*  kaizen_view_apple_embedded.mm                                          */
+/*  kaizen_view_apple_embedded.mm                                         */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

@@ -8,7 +8,7 @@ header = """\
 /*  $filename                                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
@@ -41,6 +41,14 @@ if len(sys.argv) < 2:
 
 for f in sys.argv[1:]:
     fname = f
+
+    # This template is the /* */ box. The repository also uses a // banner, which carries
+    # the derivation and AGPL notice the box does not have (see
+    # docs/license-notice-consistency.md). Regenerating such a file from this template would
+    # delete those lines, and the script has no --dry-run, so the file is left alone instead.
+    with open(fname.strip(), "r", encoding="utf-8") as fileread:
+        if fileread.readline().startswith("//***"):
+            continue
 
     # Handle replacing $filename with actual filename and keep alignment
     fsingle = os.path.basename(fname.strip())
