@@ -1,19 +1,36 @@
-# Patch 001 — Vulkan Image Buffer Support
-#
-# Status: IMPLEMENTED (2026-11-19)
-# Priority: P0 (Functional safety)
-# Target: drivers/vulkan/rendering_device_driver_vulkan.cpp
-#
-# Changes:
-# 1. Layout binding (line ~4373): added descriptorCount = uniform.length
-#    (was missing, defaulted to 0)
-# 2. Uniform set creation (line ~4881): implemented UNIFORM_TYPE_IMAGE_BUFFER
-#    case using VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER with VkBufferView
-#    (same pattern as UNIFORM_TYPE_TEXTURE_BUFFER)
-#
-# Verification:
-# - Build succeeds (template_release, linuxbsd, x86_64)
-# - Smoke test passes (S1, 400 boxes, Forward+, 1920x1080, 381 FPS)
-# - No crash on normal rendering path
-#
-# Remaining: dedicated test for image buffer uniform creation and binding
+diff --git a/drivers/vulkan/rendering_device_driver_vulkan.cpp b/drivers/vulkan/rendering_device_driver_vulkan.cpp
+index 6abb07de..7020aca4 100644
+--- a/drivers/vulkan/rendering_device_driver_vulkan.cpp
++++ b/drivers/vulkan/rendering_device_driver_vulkan.cpp
+@@ -4372,6 +4372,7 @@ RDD::ShaderID RenderingDeviceDriverVulkan::shader_create_from_container(const Re
+ 				} break;
+ 				case UNIFORM_TYPE_IMAGE_BUFFER: {
+ 					layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
++					layout_binding.descriptorCount = uniform.length;
+ 				} break;
+ 				case UNIFORM_TYPE_UNIFORM_BUFFER: {
+ 					layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+@@ -4878,7 +4879,22 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
+ 				vk_writes[writes_amount].pTexelBufferView = vk_buf_views;
+ 			} break;
+ 			case UNIFORM_TYPE_IMAGE_BUFFER: {
+-				CRASH_NOW_MSG("Unimplemented!"); // TODO.
++				num_descriptors = uniform.ids.size();
++				VkDescriptorBufferInfo *vk_buf_infos = ALLOCA_ARRAY(VkDescriptorBufferInfo, num_descriptors);
++				VkBufferView *vk_buf_views = ALLOCA_ARRAY(VkBufferView, num_descriptors);
++
++				for (uint32_t j = 0; j < num_descriptors; j++) {
++					const BufferInfo *buf_info = (const BufferInfo *)uniform.ids[j].id;
++					vk_buf_infos[j] = {};
++					vk_buf_infos[j].buffer = buf_info->vk_buffer;
++					vk_buf_infos[j].range = buf_info->size;
++
++					vk_buf_views[j] = buf_info->vk_view;
++				}
++
++				vk_writes[writes_amount].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
++				vk_writes[writes_amount].pBufferInfo = vk_buf_infos;
++				vk_writes[writes_amount].pTexelBufferView = vk_buf_views;
+ 			} break;
+ 			case UNIFORM_TYPE_UNIFORM_BUFFER: {
+ 				const BufferInfo *buf_info = (const BufferInfo *)uniform.ids[0].id;

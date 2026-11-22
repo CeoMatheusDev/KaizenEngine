@@ -675,6 +675,7 @@ Output (one JSON document per run, abbreviated here; the implementation in `benc
     "adapter_name": "...",
     "adapter_vendor": "...",
     "api_version": "...",
+    "audio_driver": "Dummy",
     "window_size": [1920, 1080]
   },
   "timing": {
@@ -742,6 +743,24 @@ over the JSON reports, including the S6 image-difference rule and equality of
 `frame_hash` across repeated runs of one cell. The remaining checks — vsync
 forced by the driver, thermal throttling, wrong content on screen — stay manual.
 
+**Audio state is part of the measurement basis.** Every audio driver runs the mix
+on its own thread next to the render thread, so `runtime.audio_driver` records
+which one was live, and `--audio-driver Dummy` is the value a published cell must
+show. Dummy is not "no audio work": `AudioDriverDummy::thread_func` still wakes
+every `buffer_frames / mix_rate` (about 10.7 ms at the default 512 samples at
+48 kHz) and mixes under the driver mutex. What it removes is the *device*: with a
+real backend the period comes from audio hardware, the thread priority from the
+backend, and an underrun becomes a burst of mixing — host state the benchmark
+does not set and the report did not record.
+
+The field is read from the running engine (`AudioServer.get_driver_name()`)
+rather than from the invocation, because `Main::setup` consumes recognised engine
+switches and only forwards unrecognised arguments to `main_args`, which is what
+`OS.get_cmdline_args()` and therefore `build.flags` return. That is also why the
+`--headless` entry below can only ever see the switch when it was placed after
+`--`; the effective signals (`runtime.display_server`, `runtime.vsync_mode`) are
+what actually catch a bypassed presentation.
+
 A windowed run on a desktop smaller than the pinned size loses client height to
 the window manager (measured 1920×1052 at 1080p with decorations). Run
 fullscreen on an output that can show the pinned size, or record the decision to
@@ -756,6 +775,23 @@ A cell is **invalid** and must be re-run if any of these is true:
 - A post-effect cell that is supposed to run produces no image difference from P0. Backends that cannot provide the effect are classified as "not applicable" through the harness's unsupported-request reason, not by accepting a zero difference.
 - The device thermally throttled during the run (visible as a monotonic frame-time rise; mobile runs must report cold/warm state).
 - The backend reported "GPU time not available" and the report instead shows a CPU-derived GPU estimate.
+
+Pairing is refused on audio grounds as well, because a pair is a causal claim
+while a cell is just a number:
+
+- Two S8 cells whose `runtime.audio_driver` differs are not compared. A known
+  difference (say `ALSA` against `Dummy`) is a **failure**; a pair where one side
+  predates the field is a **warning**, since the checker can say it cannot tell,
+  not that the conditions differed. A report without the field also warns on its
+  own, and audio state is part of the cell key, so runs that differ only in it are
+  no longer treated as repeats of one measurement — comparing their spread would
+  blame the p95 for a host difference.
+- All 228 reports published under `benchmarks/results/` predate the field
+  (`runtime.audio_driver` absent, `build.flags` empty in every one of them), so
+  each carries that warning today. Re-running the checker over them with this
+  change produces the same verdicts as before it, plus the warning: the audio
+  state those cells were measured under is not recoverable, and `--headless`
+  would not have been a valid substitute anyway, since it bypasses presentation.
 
 ## 8. Open items
 

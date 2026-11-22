@@ -13,6 +13,8 @@
 
 #include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
 
+#include "pipeline_lifetime_report.h"
+
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
@@ -801,47 +803,65 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	bool ok = true;
-	ok = run_multi_queue_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_idle_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_failed_submission_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_key_reuse_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_repeated_bind_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_secondary_command_buffer_phase(spirv.data(), spirv.size()) && ok;
-	ok = run_concurrent_eviction_phase(spirv.data(), spirv.size()) && ok;
+	kaizen_report::Phase multi_queue = { "Multi-queue submissions", true, run_multi_queue_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase idle = { "Idle (no in-flight use)", true, run_idle_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase failed_submit = { "Submission failure", true, run_failed_submission_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase key_reuse = { "Key reuse after destroy", true, run_key_reuse_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase repeated_bind = { "Repeated binds", true, run_repeated_bind_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase secondary = { "Secondary command buffers", true, run_secondary_command_buffer_phase(spirv.data(), spirv.size()) };
+	kaizen_report::Phase eviction = { "Concurrent eviction", true, run_concurrent_eviction_phase(spirv.data(), spirv.size()) };
 
+	// The device goes away here, so anything that wants to observe the registries has
+	// to have asserted it inside its own phase. Nothing below this line can.
 	destroy_context();
 
-	const char *result_str = (ok && failures == 0 && validation_errors == 0) ? "PASS" : "FAIL";
+	const kaizen_report::Phase phases[] = { multi_queue, idle, failed_submit, key_reuse,
+			repeated_bind, secondary, eviction };
 
+	// Claims the harness does not test. Each one names what would be needed, so the
+	// line cannot be read as a pass by someone skimming the output.
+	const kaizen_report::Uncovered uncovered[] = {
+		{ "Command buffer reuse", "no command buffer is re-recorded here" },
+		{ "Simultaneous submissions", "one submit per queue; Godot uses ONE_TIME_SUBMIT" },
+		{ "Reset and discard", "vkResetCommandBuffer is never called" },
+		{ "Shutdown", "teardown is not observable after destroy_context()" },
+	};
+
+	kaizen_report::Summary summary;
+	summary.checks = checks;
+	summary.failures = failures;
+	summary.validation_errors = validation_errors;
+	for (const kaizen_report::Phase &p : phases) {
+		kaizen_report::count_phase(summary, p);
+	}
+
+	char line[kaizen_report::MAX_LINE];
 	std::printf("\nPipeline Lifetime Validation\n");
 	std::printf("----------------------------\n");
-	std::printf("Repeated binds:            %s\n", ok ? "PASS" : "FAIL");
-	std::printf("Command buffer reuse:      PASS\n"); // Implicitly covered by churn and reuse phases
-	std::printf("Simultaneous submissions:  PASS\n"); // Godot uses ONE_TIME_SUBMIT
-	std::printf("Secondary command buffers: %s\n", ok ? "PASS" : "FAIL");
-	std::printf("Multi-queue submissions:   %s\n", ok ? "PASS" : "FAIL");
-	std::printf("Submission failure:        %s\n", ok ? "PASS" : "FAIL");
-	std::printf("Reset and discard:         PASS\n"); // Implicitly covered by re-recording in tests
-	std::printf("Concurrent eviction:       %s\n", ok ? "PASS" : "FAIL");
-	std::printf("Shutdown:                  PASS\n");
+	for (const kaizen_report::Phase &p : phases) {
+		kaizen_report::format_phase_line(line, sizeof(line), p);
+		std::printf("%s\n", line);
+	}
+	for (const kaizen_report::Uncovered &u : uncovered) {
+		kaizen_report::format_uncovered_line(line, sizeof(line), u);
+		std::printf("%s\n", line);
+	}
 	std::printf("\n");
-	std::printf("ASan:                      CLEAN\n");
-	std::printf("UBSan:                     CLEAN\n");
-	std::printf("TSan:                      CLEAN\n");
-	std::printf("Vulkan Validation:         %d errors\n", validation_errors);
+	for (const char *name : { "address", "undefined", "thread" }) {
+		kaizen_report::format_sanitizer_line(line, sizeof(line), kaizen_report::sanitizers(), name);
+		std::printf("%s\n", line);
+	}
+	std::printf("%-27s %d error(s)\n", "Vulkan Validation", validation_errors);
 	std::printf("\n");
-	// Note: These stats are from the last phase executed or collective.
-	// In a real run, we'd collect them across all phases.
-	std::printf("Physical creates:          (validated in phases)\n");
-	std::printf("Physical destroys:         (validated in phases)\n");
-	std::printf("Resident bytes:            (validated in phases)\n");
-	std::printf("Pending bytes:             (validated in phases)\n");
-	std::printf("Recording references:      (validated in phases)\n");
-	std::printf("Pending GPU uses:          (validated in phases)\n");
+	std::printf("Registry counters are asserted per phase with CHECK_EQ on get_stats();\n");
+	std::printf("this harness runs one registry per phase and does not aggregate them.\n");
 	std::printf("\n");
-	std::printf("Result: %s\n", result_str);
+	std::printf("Result: %s\n", kaizen_report::run_succeeded(summary) ? "PASS" : "FAIL");
+	if (summary.phases_not_run > 0) {
+		std::printf("Note: %d phase(s) did not run - reported, not counted as a failure.\n",
+				summary.phases_not_run);
+	}
 
 	std::printf("\n%d checks, %d failure(s), %d validation error(s)\n", checks, failures, validation_errors);
-	return (ok && failures == 0) ? 0 : 1;
+	return kaizen_report::run_succeeded(summary) ? 0 : 1;
 }

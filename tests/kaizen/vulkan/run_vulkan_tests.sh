@@ -23,7 +23,48 @@ skip() {
 	exit 77
 }
 
-CXX="${CXX:-clang++}"
+# clang++ first because the sanitizers and the Vulkan validation build are usually
+# exercised with it, but this is a standalone test: g++ builds it too, and a machine
+# that only has g++ should still run it rather than skip.
+if [ -z "${CXX:-}" ]; then
+	for candidate in clang++ g++ c++; do
+		if command -v "${candidate}" >/dev/null 2>&1; then
+			CXX="${candidate}"
+			break
+		fi
+	done
+fi
+[ -n "${CXX}" ] || skip "no C++ compiler found"
+
+# The engine vendors the Vulkan headers; the system ones are the fallback, not the
+# requirement. Without this line the build fails on a machine that has a loader but no
+# vulkan-headers package, which reads as "test broken" instead of "headers elsewhere".
+VK_INCLUDE=""
+for candidate in "${REPO_ROOT}/thirdparty/vulkan/include" /usr/include /usr/local/include; do
+	if [ -e "${candidate}/vulkan/vulkan.h" ]; then
+		VK_INCLUDE="${candidate}"
+		break
+	fi
+done
+[ -n "${VK_INCLUDE}" ] || skip "no vulkan/vulkan.h (thirdparty/vulkan/include missing and none on the system)"
+
+# KAIZEN_SANITIZERS=address,undefined builds the test under those sanitizers and tells the
+# report so. The report is only allowed to say "built with X" when this flag was passed:
+# it used to print "ASan/UBSan/TSan: CLEAN" unconditionally, from a build that never
+# enabled any of them.
+SAN_FLAGS=()
+if [ -n "${KAIZEN_SANITIZERS:-}" ]; then
+	SAN_FLAGS=(-fsanitize="${KAIZEN_SANITIZERS}" -fno-omit-frame-pointer -g
+		-DKAIZEN_TEST_SANITIZERS="\"${KAIZEN_SANITIZERS}\"")
+fi
+
+# The report helpers are checked first and need no device, so a machine that is about to
+# skip everything below still verifies the thing that lies on its own.
+"${CXX}" -std=c++17 -O2 -Wall -Wextra "${SAN_FLAGS[@]}" \
+	"${SCRIPT_DIR}/test_pipeline_lifetime_report.cpp" \
+	-o "${OUT_DIR}/test_pipeline_lifetime_report"
+"${OUT_DIR}/test_pipeline_lifetime_report"
+
 SPIRV_AS="${SPIRV_AS:-$(command -v spirv-as || true)}"
 
 [ -n "${SPIRV_AS}" ] || skip "spirv-as (SPIRV-Tools) is not installed"
@@ -47,7 +88,8 @@ fi
 "${SPIRV_AS}" --target-env vulkan1.2 \
 	-o "${OUT_DIR}/simple.spv" "${SCRIPT_DIR}/simple.comp.spvasm"
 
-"${CXX}" -std=c++17 -O1 -g -Wall -Wextra -I"${REPO_ROOT}" \
+"${CXX}" -std=c++17 -O1 -g -Wall -Wextra -I"${REPO_ROOT}" -I"${VK_INCLUDE}" \
+	"${SAN_FLAGS[@]}" \
 	"${SCRIPT_DIR}/pipeline_lifetime_vulkan.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_lru.cpp" \
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_registry.cpp" \

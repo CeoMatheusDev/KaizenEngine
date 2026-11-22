@@ -6309,6 +6309,18 @@
 		<constant name="RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION" value="10" enum="RenderingInfo">
 			Number of pipeline compilations that were triggered to optimize the current scene. These compilations are done in the background and should not cause any stutters whatsoever.
 		</constant>
+		<constant name="RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES" value="11" enum="RenderingInfo">
+			Total number of pipeline cache acquires that succeeded since startup, counting both hits and misses. Unlike the pipeline compilation constants above, this is a cumulative counter, not a per-frame value.
+		</constant>
+		<constant name="RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES" value="12" enum="RenderingInfo">
+			Total number of pipeline cache acquires since startup that reused a pipeline that was already resident, i.e. cache hits. Dividing this by [constant RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES] gives the hit rate.
+		</constant>
+		<constant name="RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES" value="13" enum="RenderingInfo">
+			Total number of pipeline objects actually created in the graphics driver since startup. This is the count that costs real time and driver memory: with a shared pipeline cache it stays below the number of distinct pipelines the scene requests, and every unit of the difference between it and [constant RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES] is a request answered from a cache hit.
+		</constant>
+		<constant name="RENDERING_INFO_PIPELINE_CACHE_RELEASES" value="14" enum="RenderingInfo">
+			Total number of pipeline references released back to the cache since startup. A release does not destroy anything by itself: the cache decides when a released pipeline becomes evictable.
+		</constant>
 		<constant name="PIPELINE_SOURCE_CANVAS" value="0" enum="PipelineSource">
 			Pipeline compilation that was triggered by the 2D canvas renderer.
 		</constant>

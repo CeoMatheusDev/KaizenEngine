@@ -1,16 +1,17 @@
-# Patch 002 — Texture Buffer in Callbacks
-#
-# Status: IMPLEMENTED (2026-11-19)
-# Priority: P1 (Functionality)
-# Target: servers/rendering/rendering_device.cpp
-#
-# Changes:
-# 1. _get_buffer_from_owner (line ~924): replaced DEV_ASSERT(false && "FIXME: Broken.")
-#    with proper null-checked buffer retrieval from texture_buffer_owner
-#
-# Verification:
-# - Build succeeds (template_release, linuxbsd, x86_64)
-# - Smoke test passes (S1, 400 boxes, Forward+, 1920x1080, 381 FPS)
-# - No crash on normal rendering path
-#
-# Remaining: dedicated test for texture buffer in compute callbacks
+diff --git a/servers/rendering/rendering_device.cpp b/servers/rendering/rendering_device.cpp
+index 16a5a830..e789a064 100644
+--- a/servers/rendering/rendering_device.cpp
++++ b/servers/rendering/rendering_device.cpp
+@@ -921,8 +921,10 @@ RenderingDevice::Buffer *RenderingDevice::_get_buffer_from_owner(RID p_buffer) {
+ 	} else if (uniform_buffer_owner.owns(p_buffer)) {
+ 		buffer = uniform_buffer_owner.get_or_null(p_buffer);
+ 	} else if (texture_buffer_owner.owns(p_buffer)) {
+-		DEV_ASSERT(false && "FIXME: Broken.");
+-		//buffer = texture_buffer_owner.get_or_null(p_buffer)->buffer;
++		Buffer *texture_buffer = texture_buffer_owner.get_or_null(p_buffer);
++		if (texture_buffer != nullptr) {
++			buffer = texture_buffer;
++		}
+ 	} else if (storage_buffer_owner.owns(p_buffer)) {
+ 		buffer = storage_buffer_owner.get_or_null(p_buffer);
+ 	}

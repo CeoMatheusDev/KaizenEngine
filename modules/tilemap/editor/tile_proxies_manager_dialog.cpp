@@ -2,7 +2,7 @@
 /*  tile_proxies_manager_dialog.cpp                                       */
 /**************************************************************************/
 /*                         This file is part of:                          */
-/*                             KAIZEN ENGINE                               */
+/*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */

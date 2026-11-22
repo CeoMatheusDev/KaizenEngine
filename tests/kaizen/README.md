@@ -234,6 +234,77 @@ the S1 benchmark renders correctly, and no tracked resource leaks. That is
 sufficient to prove the normal path still works, not to prove the new paths are
 exercised.
 
+`run_vulkan_tests.sh` now builds against the vendored `thirdparty/vulkan/include`
+(falling back to system headers), falls back from `clang++` to `g++`/`c++` instead of
+requiring the former, and accepts `KAIZEN_SANITIZERS=address,undefined` to build the test
+under sanitizers and tell the report so. Without that variable the report says the
+sanitizers were not built; it can no longer claim otherwise.
+
+## C# glue and class-reference consistency
+
+`api_glue/check_api_glue.py` compares four sources that have to agree for every enum the
+fork extends: the C++ declaration order (which is the value), the `BIND_ENUM_CONSTANT`
+list (which is what ClassDB exposes), `doc/classes/<Class>.xml` (which is the
+documentation), and the generated C# enum in `modules/mono/glue/.../Generated/`. It exists
+because `087edfa7` added four `RenderingInfo` counters, hand-edited the generated C# enum
+to match, and added no doc XML and no `<summary>` blocks - a state in which C# callers get
+four undocumented values and the next regeneration deletes them. Running the checker
+against that state reports 8 failures; against the tree as it is now it reports none.
+
+`test_check_api_glue.py` (18 tests) drives the checker over a synthetic four-file tree
+with one source broken at a time, so a checker that passes for the wrong reason shows up
+here: a doc value that no longer matches the C++ position, an entry inserted in the middle
+without renumbering, a glue entry with nothing bound behind it, a glue entry with no
+summary, doc text drifting from the XML, a `[constant X]` reference that was not
+translated to a `<see cref>`, and a doc entry for an enumerator that is not bound (which
+must *not* be reported). `run_tests.sh` runs both the checker and the tests.
+
+The rule it enforces is worth stating, because it is a design constraint on whoever extends
+one of these enums next: the C++ declaration order is the value, and the XML is the doc
+source, so the correct sequence is enumerator -> bind -> XML entry -> regenerate the glue.
+Hand-editing the glue is only acceptable because this fork tracks it, and then only with
+this checker saying the four sources still agree.
+
+## Pipeline lifetime report helpers
+
+`vulkan/pipeline_lifetime_report.h` holds the summary printing for the device-level
+Vulkan test, and `vulkan/test_pipeline_lifetime_report.cpp` unit-tests it with no loader,
+no device and no `spirv-as` - which is the only way that logic can be checked here, since
+the test it serves skips (exit 77) on any machine without a GPU.
+
+It was extracted for a reason: the report used to print `PASS` for four things the harness
+does not test (`Command buffer reuse`, `Simultaneous submissions`, `Reset and discard`,
+`Shutdown`), `CLEAN` for ASan/UBSan/TSan that `run_vulkan_tests.sh` never enables, and
+`(validated in phases)` where six numeric counters should have been - while its exit code
+was computed without the `validation_errors` count that the line above it used. So a run
+printing `Result: FAIL` exited 0. The helpers make each line come from its own
+`Phase {label, ran, passed}`, render untested claims as `NOT COVERED (<reason>)`, derive
+the sanitizer state from `-DKAIZEN_TEST_SANITIZERS` (which `KAIZEN_SANITIZERS` now passes
+along with the matching `-fsanitize`), and compute the verdict and the exit code from the
+same `run_succeeded()`.
+
+`run_tests.sh` builds the report test twice - plain, and with `-DKAIZEN_TEST_SANITIZERS` -
+because the two states print different words and both have to be checked. Neither of those
+two builds links a sanitizer; only `run_vulkan_tests.sh` with `KAIZEN_SANITIZERS` does
+that, and it is the only place the "built with address" line may ever appear.
+
+## `license_box/` - licence banner geometry
+
+`check_license_box.py` reads the banner at the head of every code file and asks one
+question of it: is each row the width that the file's own `/****/` border declares? A row
+that is off width *and* still has padding is a violation (`--fix` moves the spaces and
+nothing else; it re-reads and compares before writing, so it cannot change a non-space byte
+by construction). A row that is off width with no padding left to move is `PENDING`: closing
+it means editing licence words, which is a maintainer's decision, recorded in
+`docs/license-notice-consistency.md`. `--max-pending` ratchets that debt.
+
+The suite also runs the repository's own two header tools over copies of real files, which
+is where the two defects it guards were found: `misc/scripts/copyright_headers.py` must be a
+byte-exact no-op on a `/* */` file (template and tree agree) and must refuse a `//`-banner
+file (regenerating one from the box template deleted its derivation and AGPL notice), and
+`misc/scripts/header_guards.py` must accept both banner shapes instead of reporting 744
+headers as needing manual changes. Neither tool has a `--dry-run`, so the tests copy.
+
 ## In-engine pipeline destruction (opt-in)
 
 The Vulkan driver defers `vkDestroyPipeline` through the registry only when
@@ -286,3 +357,33 @@ the threading that splits the ray loop across workers, the GPU side of
 `Viewport.use_occlusion_culling`, and anything that depends on real engine types rather
 than on the shimmed members. Timing claims still come from the offline harnesses
 described in the patch notes, not from this test - `run_tests.sh` measures nothing.
+
+## Shadow filter quality
+
+`shadow_filter/` measures the penumbra blocker search instead of describing it.
+`extract_source_bodies.py` lifts `get_vogel_disk()` verbatim out of
+`servers/rendering/renderer_rd/renderer_scene_render_rd.cpp` and parses the facts the test would
+otherwise restate - the sample counts each quality setting uploads, the `vec4 …_shadow_kernel[32]`
+array size in `scene_data_inc.glsl`, and the `> 4 ? 2u : 1u` stride rule in
+`scene_forward_lights_inc.glsl` - into a generated header. The test then sweeps three
+receiver/occluder configurations against every setting and reports, for each tap-selection
+strategy, how wide a footprint the search actually probes and how far the penumbra width it
+reports drifts from the continuous filter's.
+
+Run the sweep with its own flags for the full table:
+
+    python3 tests/kaizen/shadow_filter/extract_source_bodies.py --repo-root . \
+        --out /tmp/shadow_filter_extracted.inc
+    g++ -std=c++17 -O2 -I/tmp tests/kaizen/shadow_filter/test_shadow_filter.cpp -o /tmp/sf && /tmp/sf --report
+
+Two properties are asserted rather than printed: the shipped stride keeps at least 0.93 of the
+kernel's footprint (measured floor 0.9354) and stays under 3x the full disk's penumbra error
+(measured worst 2.48x at 16 taps, and 4.99x for anyone tempted to halve it again), and the
+first-half alternative the change was argued against really does collapse to 0.7071 and miss
+the penumbra edge in every case. The extractor is a gate too: it refuses to generate when a
+setting uploads more samples than the UBO array holds, or when the kernel function moves - and
+`Ultra` is currently at capacity (32 of 32), so that check is live, not decorative.
+
+It measures no time: there is no GPU and no shader compiler here, and the trade it prices is
+GPU work. What the change is worth on hardware is the outstanding item in
+`patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.md`.

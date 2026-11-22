@@ -57,10 +57,15 @@ Adding a scene means adding its `.tscn`, its script, and one entry in the
 ## Running
 
 Export the project with the preset for the target platform, then run the
-template binary:
+template binary. Every command below carries `--audio-driver Dummy`, and it has to
+stay: the audio mix runs on its own thread in every driver, so a cell measured with a
+live output device is measured next to a thread whose period and priority are set by
+the sound card and the backend, not by the benchmark. Dummy removes the device, not
+the mixing. Engine switches such as this one must come **before** `--`, because
+everything after it is a user argument the engine does not parse.
 
 ```text
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S1 --bench-count 400 --bench-preset Q0 --bench-config D1 \
     --bench-frames 3600 --bench-warmup 900 \
     --bench-out /absolute/path/S1_D1_Q0.json
@@ -73,12 +78,12 @@ S3 has two variants selected with `--bench-variant`:
 
 ```text
 # S3a: uniform variety only. material_count sweep: 1, 16, 64.
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S3 --bench-variant a --bench-count 64 \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S3a_D1_Q0.json
 
 # S3b: eight shader-feature combinations instead.
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S3 --bench-variant b \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S3b_D1_Q0.json
 ```
@@ -89,7 +94,7 @@ S4 takes the light counts directly; the specification's sweep is
 (0,0), (8,0), (0,32), (8,32), (32,64) spots/omnis:
 
 ```text
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S4 --bench-spots 8 --bench-omnis 0 \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S4_8_0_D1_Q0.json
 ```
@@ -101,13 +106,13 @@ count. Capture a P0 reference, then diff each other preset against it:
 
 ```text
 # P0 reference image
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S6 --bench-count 4 --bench-preset P0 --bench-config D1 \
     --bench-screenshot /absolute/path/S6_P0.png \
     --bench-out /absolute/path/S6_P0_D1.json
 
 # P2 records its difference from P0 in image_diff.mean_abs_diff
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S6 --bench-count 4 --bench-preset P2 --bench-config D1 \
     --bench-reference /absolute/path/S6_P0.png \
     --bench-out /absolute/path/S6_P2_D1.json
@@ -130,15 +135,15 @@ where the field sits inside a sealed box and the camera orbits outside it.
 
 ```text
 # Baseline: nothing to cull, culling off.
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S8 --bench-count 2400 --bench-variant open \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_open_off_D1.json
 
 # The pair that matters: same scene behind the box, culling off then on.
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S8 --bench-count 2400 --bench-variant closed --bench-occlusion 0 \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_closed_off_D1.json
-<kaizen-template> --path benchmarks/rd_3d -- \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d -- \
     --bench-scene S8 --bench-count 2400 --bench-variant closed --bench-occlusion 1 \
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_closed_on_D1.json
 ```
@@ -243,14 +248,19 @@ rendered at another resolution.
 The project pins Forward+, but the CLI overrides it per run:
 
 ```text
-<kaizen-template> --path benchmarks/rd_3d --rendering-method mobile \
+<kaizen-template> --audio-driver Dummy --path benchmarks/rd_3d --rendering-method mobile \
     --rendering-driver metal -- --bench-scene S1 --bench-count 400 ...
 ```
 
 The report records the **effective** method, driver, display server, vsync
 setting, viewport MSAA/TAA/3D scaling, adapter name, adapter vendor, and API
-version as reported by `RenderingServer`, `DisplayServer`, and `Viewport`, so a
-run started with an override cannot be mistaken for the project setting.
+version as reported by `RenderingServer`, `DisplayServer`, and `Viewport`, and the
+audio driver as reported by `AudioServer.get_driver_name()`, so a run started with an
+override cannot be mistaken for the project setting. The audio driver is deliberately
+read back from the engine rather than parsed out of the command line: `Main::setup`
+consumes recognised switches before filling `main_args`, which is what
+`OS.get_cmdline_args()` returns, so `build.flags` shows `[]` for a run that used
+`--audio-driver Dummy` just as it does for one that did not.
 `window_get_vsync_mode` reports what the display server believes it is using; it
 cannot prove the driver is not forcing a swap interval, which is why the
 specification still treats a flat frame-time histogram pinned to the refresh

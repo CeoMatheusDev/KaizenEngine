@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*  resource_registry.h                                                   */
 /**************************************************************************/
-/*  Kaizen Engine — Resource Lifetime Diagnostics                          */
+/*  Kaizen Engine — Resource Lifetime Diagnostics                       */
 /*                                                                        */
 /*  Self-contained resource registry with:                                */
 /*  - generation-tagged handles (index + generation + kind),              */
