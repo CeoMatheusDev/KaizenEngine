@@ -96,12 +96,12 @@ change that has to live inside the fragment loop is a patch, not a new
 
 ### Banner re-padding (tree-wide, no patch file)
 
-Re-padded 2710 licence-banner rows in 2483 files so each row matches the width of its own
+Re-padded 2714 licence-banner rows in 2492 files so each row matches the width of its own
 file's `/****/` border: the brand line grew by one column when `GODOT ENGINE` became
 `KAIZEN ENGINE`, the contributors line when `Godot` became `Kaizen`, and the filename line
 in 191 files when a module directory was renamed (`godot_view.h` to `kaizen_view.h`). Pure
-trailing-space changes, provable on the commit: `git diff -w <commit>^ <commit>` is empty
-for every one of those 2483 files. No `.patch` file, on purpose: a 2710-hunk whitespace diff
+trailing-space changes, provable on the commit: `git diff -w --numstat <commit>^ <commit>`
+lists 12 files and none of them is one of the 2492. No `.patch` file, on purpose: a 2710-hunk whitespace diff
 stored in `patches/` would conflict with the first upstream merge that touches a banner and
 would buy nothing that git does not already record, and the invariant is enforced
 mechanically instead by `tests/kaizen/license_box/check_license_box.py` (`--fix` re-applies

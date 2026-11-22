@@ -104,12 +104,11 @@ the closing `*/`, so one can be removed. Row 7 has none - the upstream line fill
 exactly, and the fork's longer replacement text is 77 columns of text, so the row cannot
 be brought to 76 without editing words.
 
-Total re-padded in this pass: **2710 rows across 2483 files** (2681 by the first sweep,
-29 more by `--fix`, which found short rows inside Style B brand blocks, the four
-`.compat.inc` cases, and two rows in this repository's own test files). The generator
-template `misc/scripts/copyright_headers.py` got the same fix, which is what made the
-defect invisible: its own template carried it, so generator and tree agreed on being
-ragged, and no tool ever complained.
+**Total re-padded in this pass: 2714 rows across 2492 files** - by git's own definition, the
+commit touches 2504 files, of which 2492 have a whitespace-only diff
+(`git diff -w --numstat <commit>^ <commit>` lists the other 12, which are the docs, the two
+`misc/scripts` tools, the two `patches/` entries and the four `tests/kaizen` files). That
+command is the whole proof that no licence word moved, and it is cheap to re-run
 
 **2469 rows are left ragged on purpose** - the contributors line in Style A files (and the
 equivalent line at row 8 of the seven `.kt` files, whose box is 75). Padding cannot reach
