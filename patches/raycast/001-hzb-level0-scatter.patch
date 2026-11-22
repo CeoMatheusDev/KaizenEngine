@@ -1,0 +1,50 @@
+diff --git a/modules/raycast/raycast_occlusion_cull.cpp b/modules/raycast/raycast_occlusion_cull.cpp
+index 4b69febe..4d36b37d 100644
+--- a/modules/raycast/raycast_occlusion_cull.cpp
++++ b/modules/raycast/raycast_occlusion_cull.cpp
+@@ -164,20 +164,34 @@ void RaycastOcclusionCull::RaycastHZBuffer::sort_rays(const Vector3 &p_camera_di
+ 	ERR_FAIL_COND(is_empty());
+ 
+ 	Size2i buffer_size = sizes[0];
++
++	// Every index below except x and y is invariant across the TILE_SIZE rows and
++	// columns inside one tile, so it is computed once per tile or per row instead of
++	// once per texel. Out-of-range texels only ever occur as trailing columns of the
++	// rightmost tile and trailing rows of the bottommost one, so the per-texel bounds
++	// test becomes a clamp of the loop counts, and the tiles fully past the buffer
++	// break out instead of being visited. The same texels are written from the same
++	// sources; only how the addresses are derived changed.
+ 	for (int i = 0; i < tile_grid_size.y; i++) {
++		const int y0 = i * TILE_SIZE;
++		const int rows = MIN(TILE_SIZE, buffer_size.y - y0);
++		if (rows <= 0) {
++			break;
++		}
+ 		for (int j = 0; j < tile_grid_size.x; j++) {
+-			for (int tile_i = 0; tile_i < TILE_SIZE; tile_i++) {
+-				for (int tile_j = 0; tile_j < TILE_SIZE; tile_j++) {
+-					int x = j * TILE_SIZE + tile_j;
+-					int y = i * TILE_SIZE + tile_i;
+-					if (x >= buffer_size.x || y >= buffer_size.y) {
+-						continue;
+-					}
+-					int k = tile_i * TILE_SIZE + tile_j;
+-					int tile_index = i * tile_grid_size.x + j;
+-
+-					mips[0][y * buffer_size.x + x] = camera_rays[tile_index].ray.tfar[k];
++			const int x0 = j * TILE_SIZE;
++			const int cols = MIN(TILE_SIZE, buffer_size.x - x0);
++			if (cols <= 0) {
++				break;
++			}
++			const CameraRayTile *tile = &camera_rays[i * tile_grid_size.x + j];
++			float *dst = mips[0] + y0 * buffer_size.x + x0;
++			for (int tile_i = 0; tile_i < rows; tile_i++) {
++				const float *src = &tile->ray.tfar[tile_i * TILE_SIZE];
++				for (int tile_j = 0; tile_j < cols; tile_j++) {
++					dst[tile_j] = src[tile_j];
+ 				}
++				dst += buffer_size.x;
+ 			}
+ 		}
+ 	}

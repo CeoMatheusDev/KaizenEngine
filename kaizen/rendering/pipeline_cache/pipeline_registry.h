@@ -25,6 +25,11 @@
 /*  fence wait associated with the exact submission that used the object. */
 /*  A single global submission counter is not sufficient: work on the     */
 /*  graphics queue completing does not imply that compute has finished.   */
+/*                                                                        */
+/*  Key lookup uses an open-addressing hash table over slot indices:     */
+/*  no per-entry heap allocation, no pointer chasing on the hit path,     */
+/*  and the full canonical identity (stored in the slot) is compared      */
+/*  byte for byte, so hash collisions can never merge distinct keys.      */
 /**************************************************************************/
 
 #pragma once
@@ -38,8 +43,11 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
-#include <unordered_map>
 #include <vector>
+
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <immintrin.h>
+#endif
 
 namespace Kaizen {
 
@@ -120,6 +128,11 @@ public:
 	PipelineHandle acquire(uint64_t p_key, uint64_t p_bytes);
 	// Compares the complete canonical key; its hash is never used as identity.
 	PipelineHandle acquire(const PipelineKey &p_key, uint64_t p_bytes);
+	// Same as above, but reuses a hash the caller already computed
+	// (pipeline_key_hash(p_key)). The caller must pass the exact hash of
+	// `p_key`; a wrong hash only degrades bucket distribution, never
+	// correctness, because identity is always compared in full.
+	PipelineHandle acquire(const PipelineKey &p_key, uint64_t p_precomputed_hash, uint64_t p_bytes);
 
 	// Drops a host reference. A Candidate that reaches zero refs is retired.
 	bool release(PipelineHandle p_handle);
@@ -194,6 +207,13 @@ private:
 	public:
 		void lock() {
 			while (flag.test_and_set(std::memory_order_acquire)) {
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+				_mm_pause();
+#elif defined(__x86_64__) || defined(__i386__)
+				__builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+				__asm__ __volatile__("yield" ::: "memory");
+#endif
 			}
 		}
 		void unlock() { flag.clear(std::memory_order_release); }
@@ -213,8 +233,19 @@ private:
 		PipelineState state = PipelineState::Free;
 	};
 
+	// Key table buckets: KEY_EMPTY (never used), KEY_DELETED (tombstone),
+	// or slot index + 1. The table size is always a power of two.
+	static constexpr uint32_t KEY_EMPTY = 0;
+	static constexpr uint32_t KEY_DELETED = UINT32_MAX;
+
+	// Probes for `p_prefix` + `p_payload`. Returns the slot index on a hit,
+	// or UINT32_MAX and sets `r_insert_pos` to the first reusable bucket.
+	uint32_t _key_probe(uint64_t p_hash, uint8_t p_prefix, const uint8_t *p_payload, size_t p_payload_size, uint32_t &r_insert_pos) const;
+	void _key_insert_at(uint32_t p_pos, uint32_t p_index);
+	void _key_rehash(uint32_t p_new_size);
+
 	PipelineHandle _make_handle_locked(uint32_t p_index) const;
-	PipelineHandle _acquire(const std::string &p_key_identity, uint64_t p_report_key, uint64_t p_bytes);
+	PipelineHandle _acquire(uint8_t p_prefix, const uint8_t *p_payload, size_t p_payload_size, uint64_t p_hash, uint64_t p_report_key, uint64_t p_bytes);
 	bool _resolve_locked(PipelineHandle p_handle, Slot *&r_slot) const;
 	bool _is_ready_locked(const Slot &p_slot) const;
 	void _mark_candidate_locked(uint32_t p_index);
@@ -250,7 +281,12 @@ private:
 
 	std::vector<Slot> slots;
 	std::vector<uint32_t> free_indices;
-	std::unordered_map<std::string, uint32_t> key_to_index;
+
+	// Open-addressing key table (see KEY_EMPTY/KEY_DELETED above).
+	std::vector<uint32_t> key_buckets;
+	uint32_t key_mask = 0;
+	uint32_t key_count = 0;
+	uint32_t key_tombstones = 0;
 
 	PipelineLRU lru;
 	PipelineRetirementQueue retirement;

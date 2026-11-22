@@ -1,6 +1,6 @@
 # Benchmark Scene Specification (R0 follow-up)
 
-> **Status:** Specification — **S1–S6 authored; S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells validated and published on D1; D2 (Mobile) and D3 (Compatibility) template batches published; S5 authored in `benchmarks/rd_2d/`; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
+> **Status:** Specification — **S1–S6 and S8 authored (S8 not yet run); S1, S2, S3a, S3b, six S4 light cells and eighteen S6 post cells validated and published on D1; D2 (Mobile) and D3 (Compatibility) template batches published; S5 authored in `benchmarks/rd_2d/`; S7 is a manual procedure** (see the [run log](rendering-benchmark-run-log.md) and the [published cells](../../benchmarks/results/README.md))
 > **Verified against revision:** `f67b0df` (2026-11-18)
 > **Related:** [Benchmark methodology](rendering-benchmarks.md), [Rendering audit (R0)](rendering-audit.md), [Rendering roadmap](rendering-roadmap.md), [Web export runtime](rendering-web-runtime.md), [Metal rendering driver](rendering-metal-driver.md)
 
@@ -10,7 +10,7 @@ The goal is comparability. A result is only meaningful if the frame content, res
 
 ## 1. Global rules
 
-1. **One project per scene group.** S1–S4 and S6 share a 3D project; S5 is a 2D project; S7 reuses the 3D project in the editor. Each project pins every rendering setting in `project.kaizen`; nothing may depend on engine defaults, because defaults change between commits.
+1. **One project per scene group.** S1–S4, S6 and S8 share a 3D project; S5 is a 2D project; S7 reuses the 3D project in the editor. Each project pins every rendering setting in `project.kaizen`; nothing may depend on engine defaults, because defaults change between commits.
 2. **Content is generated, not imported.** Meshes and textures are produced at startup by a deterministic generator (fixed seed, integer hashing, no `randf()`), so the repository stays asset-free and the same content is used on every backend. Generation cost is first-frame only and excluded from sampling (§5).
 3. **Animation is frame-indexed, not time-indexed.** Camera and object movement advance by rendered frame index, never by `delta`. A 300-frame loop therefore renders the same 300 images on a 30 FPS run and a 300 FPS run.
 4. **No simulation.** No physics bodies, no navigation, no particles, no animation players, no scripts beyond the camera driver and the measurement harness.
@@ -411,6 +411,159 @@ procedure, not a harness scene: the steps are in
 
 **Non-goals:** scripting editor, importing assets, opening multiple scenes.
 
+### S8 — Culling scale
+
+**Status:** authored, **not yet run**. The GDScript and the scene were written against
+the harness contract, but this sandbox has no engine build, no GPU and no Godot binary to
+even parse scripts, so no cell of this scene has ever executed. Nothing below is a
+measurement.
+
+**Why this scene exists.** S2 is one `MultiMesh`: one draw call and **one** culler test,
+and a MultiMesh cannot be culled per instance. Nothing in the suite therefore exercised
+the per-instance path in `RasterizerSceneCull::_scene_cull()`, and no cell turned on
+occlusion culling at all. Every published cell is GPU-bound, which makes the CPU cost of
+culling invisible to them **by construction** — a culling change cannot be evaluated
+against data that never enters the code path. S8 is the missing shape: one
+`MeshInstance3D` per object, counts high enough that the culler is on the clock, and an
+occluder.
+
+**Content.** N spheres on a square grid with deterministic integer-hash jitter, one
+shared procedural material, one directional sun, one procedural sky. Grid spacing is
+derived from the count so the field always fills the same fraction of the container:
+density changes with N, the container's size on screen does not. Camera orbits at
+`2.2 × ROOM_HALF` looking at the origin, 300-frame loop, identical path in both variants,
+driven from `apply_frame()`.
+
+**Variants.**
+
+| Variant | Geometry | Purpose |
+|---|---|---|
+| `open` | field only | the culler with nothing to win: per-instance frustum test, HZB test and occlusion buffer update, everything survives |
+| `closed` | field inside a sealed box (four walls + floor + ceiling), camera outside | a correct occlusion culler must drop the entire field |
+
+The closed variant is a **closed convex shell**, not "a wall in front of the field",
+deliberately: for a convex container every ray from an outside camera to an inside point
+crosses the shell first, so complete occlusion is a property of the geometry rather than a
+parameter to tune. The ceiling is load-bearing — without it a camera above the wall line
+looks straight down into the field, and the cell would measure nothing while still
+carrying the occlusion label.
+
+**Sweep and the A/B that matters.** `--bench-count` 100 / 1000 / 2400 / 10000, each in
+`open` and `closed`, and each `closed` cell twice: `--bench-occlusion 0` and `1`.
+
+| Comparison | Reading |
+|---|---|
+| `open` across counts | slope of CPU time per instance per frame = the per-instance culler cost |
+| `closed` off vs on | what occlusion culling saves on the GPU minus what it costs on the CPU |
+| `open` off vs on | the price of leaving it enabled where it cannot help |
+
+**Occlusion state is requested, then read back.** `--bench-occlusion 1` sets
+`Viewport.use_occlusion_culling` on the root viewport; `scene_parameters()` records both
+`occlusion_requested` and `occlusion_effective` (read back from `is_using_occlusion_culling()`),
+plus `rays_per_thread`, `jitter_projection` and `processor_count`. A cell whose request
+the engine ignored must not carry the occlusion label, and `check_report.py` FAILs the
+mismatch instead of trusting the label.
+
+**`--bench-rays <n>` overrides the budget at runtime.**
+`rendering/occlusion_culling/occlusion_rays_per_thread` is a startup-only project setting,
+but `RenderingServer.viewport_set_occlusion_rays_per_thread()` exists and marks every active
+viewport's buffer dirty, so the new size applies on the next frame — inside the sampling
+window. S8 is the only scene that mutates a rendering setting at runtime, and only when the
+flag is passed; the value lands in `scene_parameters()` (`rays_per_thread`, `rays_requested`,
+`rays_per_thread_project`) and therefore in the content hash, and the checker refuses to pair
+cells taken at different budgets.
+
+Note what the budget actually scales, because it is not only the pyramid. `rays x threads`
+sizes the base level, and the per-frame work is then: **one camera ray generated per base-level
+texel** (a normalise each: a sqrt and three divisions, plus the `u`/`v` divisions), the Embree
+traversal itself, the level-0 scatter (one texel per ray) and the mip build (about a third of
+the base). At the default 147x83 on the reference machine the measured split of the CPU terms
+is ~130 us for ray generation, ~5 us for the scatter and ~7 us for the mip build
+(`patches/raycast/002-camera-ray-generation-cost.md`, `patches/raycast/001-hzb-level0-scatter.md`,
+`patches/rendering-scene/001-hzb-occlusion-cpu-cost.md`) - so `--bench-rays` mostly multiplies
+the *ray generation* cost, and reading a raised-budget cell as "pyramid-build cost" would be
+off by a factor of twenty. The loop is also threaded over tiles, which the cell cannot
+separate: `viewport_cpu_ms` is the aggregate, and the single-threaded terms are the scatter
+and the mip build.
+
+**Report the HZB size; do not assume it is the screen.** `RendererViewport::_draw_3d()`
+sizes the base level from `rendering/occlusion_culling/occlusion_rays_per_thread` (default
+512) times the worker thread count, clamped between one depth texel per 32×32 screen
+region and one per 2×2 region. On the 24-thread reference machine that is **147×83** —
+about 16k texels for the whole pyramid, roughly 170× smaller than a 1920×1080 screen. Two
+consequences worth stating before anyone reads a number off this scene: the CPU cost of
+building the pyramid is microseconds per frame, so the per-instance test is the part that
+scales; and a buffer that coarse cannot produce exact per-object visibility, which is why
+the closed variant expects a large removal rather than exactly 100 %. The scene publishes
+its own `occlusion_buffer` size in the report so the number a reader reasons about is the
+number the run used.
+
+| Cell | Parameters | Expected outcome |
+|---|---|---|
+| S8/{100,1000,2400,10000}/open | `--bench-count` | linear CPU cost per instance; draw calls grow with the count (one per caster, plus its shadow pass) |
+| S8/n/closed/off | `--bench-variant closed` | naive path: everything behind the shell still drawn |
+| S8/n/closed/on | `--bench-variant closed --bench-occlusion 1` | primitives and GPU time fall, CPU time rises by the HZB update and per-instance test |
+
+**Build gate: who actually provides the HZB.** The engine's own `RendererSceneOcclusionCull`
+is a no-op — `buffer_update()` is an empty virtual and `buffer_get_ptr()` returns `nullptr`,
+which makes the `OCCLUSION_CULLED` test short-circuit before any per-instance work. The real
+provider is `modules/raycast` (Embree): it fills the base level by casting rays and calls
+`update_mips()`, the pyramid's only caller in the tree. The module is skipped on Web
+(`platform/web/detect.py:85`) and architecture-gated (`modules/raycast/config.py`).
+
+Two consequences for anyone reading an S8 cell:
+
+- A zero-delta closed pair on a build without the module is **the expected result**, not a
+  regression — the FAIL message says so, because the alternative is debugging a culler that
+  was never installed.
+- "Leaving occlusion culling on costs something even when it cannot help" is false in such
+  builds: with a null buffer pointer the per-instance test never runs. The `open` arm of
+  this scene only measures anything in module builds.
+
+There is no GDScript-visible probe for this: the module registers no classes and no
+singletons (it only constructs the subclass, which claims the static singleton), so no
+`ClassDB.class_exists()` or `Engine.has_singleton()` query can answer it, and
+`Viewport.use_occlusion_culling` reads back as `true` either way. The pair evidence is the
+only honest signal, which is why the checker compares off/on instead of trusting the label.
+
+**Validity conditions**
+
+- `occlusion_requested == occlusion_effective`, else the cell FAILs.
+- Non-zero primitive median, else the cell timed an empty frame.
+- A closed pair must actually remove something. `check_report.py` compares the median
+  `primitives` of the off/on pair and FAILs the occlusion-on cell when the ratio exceeds
+  0.995, because "culling on, nothing culled" means the mechanism is inactive in that
+  build — the result a reader most needs and the one a per-cell check would miss. Pairing
+  ignores `content_hash` on purpose: it covers `scene_parameters()`, where the occlusion
+  flag lives, so requiring it to match would mean no pair is ever found.
+
+**Acceptance criteria**
+
+- [ ] `S8` resolves through `SCENES` and both variants load with a scripted camera.
+- [ ] `open` scales linearly in CPU time and draw calls with the instance count.
+- [ ] A D1 closed pair (occlusion off, occlusion on) with `--run-label` repeated, so the
+      frame-hash and draw-call comparisons prove determinism of both sides.
+- [ ] The pair verdict printed by `check_report.py`; the FAIL branch observed firing on a
+      build where culling is disabled, and silent on one where it works.
+- [ ] `Q1` cells marked not applicable until the depth prepass is pinned per cell (the
+      `rendering/occlusion_culling/*` settings are not in `project.kaizen` and the harness
+      refuses a preset label the scene does not echo).
+
+**Known limitations**
+
+- Never executed (see Status). `check_report.py` has unit tests for the S8 rules; the
+  scene itself has none, because a GDScript test needs an engine.
+- The closed variant is a *hard* occlusion case: one wall-sized occluder, no partial
+  coverage, no moving occluders. It measures whether the mechanism works and what it
+  costs; it does not represent marginal occluders in a real open-world, where leakage and
+  hysteresis dominate.
+- Hysteresis keeps objects visible for nine frames when
+  `rendering/occlusion_culling/jitter_projection` is on (its default), so the first frames
+  of each orbit contain a transient the 300-frame window averages out rather than fixes.
+- `primitives` is a `RenderingServer` statistic read on the main thread. If a future build
+  stops counting culled objects, the pair check degrades to "no evidence" — it will not
+  invent a verdict.
+
 ## 4. Cell matrix
 
 Each cell is one (scene, parameters, configuration, preset) combination. Minimum set for a first baseline:
@@ -425,6 +578,7 @@ Each cell is one (scene, parameters, configuration, preset) combination. Minimum
 | S5 | 3×2×2 combinations | Q0 | D1, D3, A1, B1 | 48 |
 | S6 | 3 overdraw × 6 presets | — | D1, D2**, M1, W2 | 60 |
 | S7 | 2 layouts | Q0 | D1, M1 | 4 |
+| S8 | 4 counts × 2 variants, occlusion off/on on the closed variant | Q0 | D1, D2 | 24 |
 
 ** S6 adds six cells on D2, the Mobile backend, with P0 and P1 only. That
 backend stubs SSAO and SSIL and reports no volumetric support, so P2–P5 there

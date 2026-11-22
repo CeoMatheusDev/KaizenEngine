@@ -117,45 +117,78 @@ void RaycastOcclusionCull::RaycastHZBuffer::_camera_rays_threaded(uint32_t p_thr
 void RaycastOcclusionCull::RaycastHZBuffer::_generate_camera_rays(const CameraRayThreadData *p_data, int p_from, int p_to) {
 	const Size2i &buffer_size = sizes[0];
 
+	// Everything taken from p_data is invariant across the loop, but the writes below
+	// go to camera_rays, and nothing tells the compiler those two do not alias - so it
+	// has to reload each of these fields for every ray of every tile. Copying them out
+	// once states what is actually true.
+	const Vector3 pixel_corner = p_data->pixel_corner;
+	const Vector3 pixel_u_interp = p_data->pixel_u_interp;
+	const Vector3 pixel_v_interp = p_data->pixel_v_interp;
+	const Vector3 camera_pos = p_data->camera_pos;
+	const Vector3 camera_dir = p_data->camera_dir;
+	const float z_near = p_data->z_near;
+	const float z_far = p_data->z_far;
+	const bool camera_orthogonal = p_data->camera_orthogonal;
+	const int buffer_width = buffer_size.x;
+	const int buffer_height = buffer_size.y;
+	const int tiles_per_row = tile_grid_size.x;
+
 	for (int i = p_from; i < p_to; i++) {
 		CameraRayTile &tile = camera_rays[i];
-		int tile_x = (i % tile_grid_size.x) * TILE_SIZE;
-		int tile_y = (i / tile_grid_size.x) * TILE_SIZE;
+		const int tile_x = (i % tiles_per_row) * TILE_SIZE;
+		const int tile_y = (i / tiles_per_row) * TILE_SIZE;
 
-		for (int j = 0; j < TILE_RAYS; j++) {
-			int x = tile_x + j % TILE_SIZE;
-			int y = tile_y + j / TILE_SIZE;
+		// u depends only on the column inside the tile and v only on the row, so each
+		// division is done TILE_SIZE times per axis instead of once per ray. A
+		// tabulated value is the same division with the same operands as the value it
+		// replaces, so the bits are unchanged - and that is also why they are not
+		// computed incrementally down the tile: adding a step is not the same rounding
+		// as dividing the next numerator.
+		float u_of_column[TILE_SIZE];
+		float v_of_row[TILE_SIZE];
+		for (int k = 0; k < TILE_SIZE; k++) {
+			u_of_column[k] = (float(tile_x + k) + 0.5f) / buffer_width;
+			v_of_row[k] = (float(tile_y + k) + 0.5f) / buffer_height;
+		}
 
-			float u = (float(x) + 0.5f) / buffer_size.x;
-			float v = (float(y) + 0.5f) / buffer_size.y;
-			Vector3 pixel_pos = p_data->pixel_corner + u * p_data->pixel_u_interp + v * p_data->pixel_v_interp;
+		// j == row * TILE_SIZE + column visits the same indices as the flat loop, and
+		// since TILE_RAYS is TILE_SIZE * TILE_SIZE, j % TILE_SIZE and j / TILE_SIZE are
+		// exactly column and row.
+		for (int row = 0; row < TILE_SIZE; row++) {
+			const float v = v_of_row[row];
+			for (int column = 0; column < TILE_SIZE; column++) {
+				const int j = row * TILE_SIZE + column;
 
-			tile.ray.tnear[j] = p_data->z_near;
+				const float u = u_of_column[column];
+				Vector3 pixel_pos = pixel_corner + u * pixel_u_interp + v * pixel_v_interp;
 
-			Vector3 dir;
-			if (p_data->camera_orthogonal) {
-				dir = p_data->camera_dir;
-				tile.ray.org_x[j] = pixel_pos.x - dir.x * p_data->z_near;
-				tile.ray.org_y[j] = pixel_pos.y - dir.y * p_data->z_near;
-				tile.ray.org_z[j] = pixel_pos.z - dir.z * p_data->z_near;
-			} else {
-				dir = (pixel_pos - p_data->camera_pos).normalized();
-				tile.ray.org_x[j] = p_data->camera_pos.x;
-				tile.ray.org_y[j] = p_data->camera_pos.y;
-				tile.ray.org_z[j] = p_data->camera_pos.z;
-				tile.ray.tnear[j] /= dir.dot(p_data->camera_dir);
+				tile.ray.tnear[j] = z_near;
+
+				Vector3 dir;
+				if (camera_orthogonal) {
+					dir = camera_dir;
+					tile.ray.org_x[j] = pixel_pos.x - dir.x * z_near;
+					tile.ray.org_y[j] = pixel_pos.y - dir.y * z_near;
+					tile.ray.org_z[j] = pixel_pos.z - dir.z * z_near;
+				} else {
+					dir = (pixel_pos - camera_pos).normalized();
+					tile.ray.org_x[j] = camera_pos.x;
+					tile.ray.org_y[j] = camera_pos.y;
+					tile.ray.org_z[j] = camera_pos.z;
+					tile.ray.tnear[j] /= dir.dot(camera_dir);
+				}
+
+				tile.ray.dir_x[j] = dir.x;
+				tile.ray.dir_y[j] = dir.y;
+				tile.ray.dir_z[j] = dir.z;
+
+				tile.ray.tfar[j] = z_far;
+				tile.ray.time[j] = 0.0f;
+
+				tile.ray.flags[j] = 0;
+				tile.ray.mask[j] = ~0U;
+				tile.hit.geomID[j] = RTC_INVALID_GEOMETRY_ID;
 			}
-
-			tile.ray.dir_x[j] = dir.x;
-			tile.ray.dir_y[j] = dir.y;
-			tile.ray.dir_z[j] = dir.z;
-
-			tile.ray.tfar[j] = p_data->z_far;
-			tile.ray.time[j] = 0.0f;
-
-			tile.ray.flags[j] = 0;
-			tile.ray.mask[j] = ~0U;
-			tile.hit.geomID[j] = RTC_INVALID_GEOMETRY_ID;
 		}
 	}
 }
@@ -164,20 +197,34 @@ void RaycastOcclusionCull::RaycastHZBuffer::sort_rays(const Vector3 &p_camera_di
 	ERR_FAIL_COND(is_empty());
 
 	Size2i buffer_size = sizes[0];
-	for (int i = 0; i < tile_grid_size.y; i++) {
-		for (int j = 0; j < tile_grid_size.x; j++) {
-			for (int tile_i = 0; tile_i < TILE_SIZE; tile_i++) {
-				for (int tile_j = 0; tile_j < TILE_SIZE; tile_j++) {
-					int x = j * TILE_SIZE + tile_j;
-					int y = i * TILE_SIZE + tile_i;
-					if (x >= buffer_size.x || y >= buffer_size.y) {
-						continue;
-					}
-					int k = tile_i * TILE_SIZE + tile_j;
-					int tile_index = i * tile_grid_size.x + j;
 
-					mips[0][y * buffer_size.x + x] = camera_rays[tile_index].ray.tfar[k];
+	// Every index below except x and y is invariant across the TILE_SIZE rows and
+	// columns inside one tile, so it is computed once per tile or per row instead of
+	// once per texel. Out-of-range texels only ever occur as trailing columns of the
+	// rightmost tile and trailing rows of the bottommost one, so the per-texel bounds
+	// test becomes a clamp of the loop counts, and the tiles fully past the buffer
+	// break out instead of being visited. The same texels are written from the same
+	// sources; only how the addresses are derived changed.
+	for (int i = 0; i < tile_grid_size.y; i++) {
+		const int y0 = i * TILE_SIZE;
+		const int rows = MIN(TILE_SIZE, buffer_size.y - y0);
+		if (rows <= 0) {
+			break;
+		}
+		for (int j = 0; j < tile_grid_size.x; j++) {
+			const int x0 = j * TILE_SIZE;
+			const int cols = MIN(TILE_SIZE, buffer_size.x - x0);
+			if (cols <= 0) {
+				break;
+			}
+			const CameraRayTile *tile = &camera_rays[i * tile_grid_size.x + j];
+			float *dst = mips[0] + y0 * buffer_size.x + x0;
+			for (int tile_i = 0; tile_i < rows; tile_i++) {
+				const float *src = &tile->ray.tfar[tile_i * TILE_SIZE];
+				for (int tile_j = 0; tile_j < cols; tile_j++) {
+					dst[tile_j] = src[tile_j];
 				}
+				dst += buffer_size.x;
 			}
 		}
 	}

@@ -8,13 +8,14 @@ engineering corrections, and current validation status are recorded in the
 [benchmark implementation report](../docs/architecture/rendering-benchmark-implementation.md).
 
 > **Status:** scenes **S1–S4 and S6 are authored in `rd_3d/`; S5 is authored in
-> `rd_2d/`; S7 is a manual editor procedure**. D1, D2 and D3 template cells
+> `rd_2d/`; S7 is a manual editor procedure; S8 is authored but has never been run**
+> (no cell of it is valid until executed on hardware). D1, D2 and D3 template cells
 > are published in [`results/`](results/README.md). See the
 > [run log](../docs/architecture/rendering-benchmark-run-log.md).
 
 ## Layout
 
-S1–S4 and S6 share one project, because they use the same renderer settings and
+S1–S4, S6 and S8 share one project, because they use the same renderer settings and
 differ only in scene content. `--bench-scene` selects which scene the harness
 loads.
 
@@ -30,6 +31,7 @@ benchmarks/
     scenes/s3_materials.tscn       S3: 64 meshes with separate materials
     scenes/s4_lighting.tscn        S4: boxes, a shadowed sun, spot/omni lights
     scenes/s6_post.tscn            S6: transparent quads and post presets P0-P5
+    scenes/s8_culling.tscn         S8: per-instance field, open or inside a sealed box
     scripts/bench_harness.gd       autoload: scene registry, sampling, JSON report
     scripts/bench_scene_common.gd  shared deterministic material/light/environment
     scripts/scene_s1.gd            S1 content and frame-indexed camera
@@ -37,6 +39,7 @@ benchmarks/
     scripts/scene_s3.gd            S3 content, variants, and camera
     scripts/scene_s4.gd            S4 content, light rings, shadow variant, camera
     scripts/scene_s6.gd            S6 content, post presets, screenshot camera
+    scripts/scene_s8.gd            S8 content, occlusion request, HZB budget reporting
 ```
 
 Adding a scene means adding its `.tscn`, its script, and one entry in the
@@ -120,6 +123,52 @@ The comparison runs once after sampling and reads every RGBA byte, so it can
 take several seconds on a 1920×1080 frame; that cost is outside the sampled
 window.
 
+S8 is the culling scene: one `MeshInstance3D` per object (a MultiMesh cannot be
+culled per instance, so no other scene reaches the per-instance culler), swept by
+count, in two variants — `open`, where nothing occludes anything, and `closed`,
+where the field sits inside a sealed box and the camera orbits outside it.
+
+```text
+# Baseline: nothing to cull, culling off.
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S8 --bench-count 2400 --bench-variant open \
+    --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_open_off_D1.json
+
+# The pair that matters: same scene behind the box, culling off then on.
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S8 --bench-count 2400 --bench-variant closed --bench-occlusion 0 \
+    --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_closed_off_D1.json
+<kaizen-template> --path benchmarks/rd_3d -- \
+    --bench-scene S8 --bench-count 2400 --bench-variant closed --bench-occlusion 1 \
+    --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_closed_on_D1.json
+```
+
+Both cells only measure something in a build with `modules/raycast` enabled (Embree): the
+base occlusion culler in `servers/rendering` is a no-op whose buffer pointer is null, so
+the per-instance test never runs and nothing is culled, at no cost. Web export templates
+skip that module by default, so an identical off/on pair there is the expected outcome, not
+a regression — the checker's message says so. There is no way to query this from GDScript
+(the module registers no classes or singletons), which is why the pair is the evidence.
+
+Run the two closed cells together and `check_report.py` compares them: it FAILs the
+occlusion-on cell when the primitive median barely moves, because "culling enabled,
+nothing culled" means the mechanism is inactive in that build. It also FAILs when the
+engine ignored the request, which `scene_parameters().occlusion_effective` records
+separately from `occlusion_requested`.
+
+`--bench-rays <n>` overrides `rendering/occlusion_culling/occlusion_rays_per_thread`
+at runtime (the project setting is read once at startup). This is the only lever on
+the size of the occlusion pyramid, and it exists because the pyramid is **not** the
+screen, and because the budget sizes *three* per-frame costs, not one: the base level
+is one generated camera ray per texel (the dominant term), then the level-0 scatter,
+then the mip build. A cell run at a raised budget is mostly a measurement of ray
+generation; see the split recorded in
+`docs/architecture/rendering-benchmark-scenes.md` before attributing a delta to the
+pyramid: the base level is `rays × threads` clamped between one texel per 32×32 and
+one per 2×2 screen region, which at the 512 default on a 24-thread machine is
+147×83. Raising it makes the cost of building the pyramid visible; pairs taken at
+different budgets are not a pair, and the checker refuses to pair them.
+
 ### S7 — editor viewport (manual)
 
 S7 measures the editor's own viewport, so the runtime harness cannot drive it.
@@ -158,11 +207,13 @@ a run labelled Q1 matches the Q1 definition.
 
 | Argument | Default | Meaning |
 |---|---|---|
-| `--bench-scene` | `S1` | Scene to load and report label: `S1`–`S4` or `S6` |
+| `--bench-scene` | `S1` | Scene to load and report label: `S1`–`S4`, `S6` or `S8` |
 | `--bench-count` | scene default (400 for S1, 4096 for S2, 64 for S3) | Forwarded to the scene as its content count |
 | `--bench-variant` | scene default (`a` for S3) | Forwarded to the scene as its variant label |
 | `--bench-spots` | scene default (8 for S4) | S4 spot-light count |
 | `--bench-omnis` | scene default (0 for S4) | S4 omni-light count |
+| `--bench-occlusion` | scene default (off for S8) | S8: request `Viewport.use_occlusion_culling` on the root viewport; the report records whether it took |
+| `--bench-rays` | project setting | S8: runtime override of `occlusion_rays_per_thread`, which sizes the HZB |
 | `--bench-preset` | `Q0` | `Q0`/`Q1` are report labels only (presets are project settings); on S6 it selects the post preset `P0`–`P5` |
 | `--bench-config` | empty | Configuration label recorded in the report (`D1`, `M1`, ...) |
 | `--bench-frames` | `3600` | Sampled frames, rounded up to a multiple of 300 |

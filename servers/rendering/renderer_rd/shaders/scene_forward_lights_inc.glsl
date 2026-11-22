@@ -326,11 +326,16 @@ half sample_directional_pcf_shadow(texture2D shadow, vec2 shadow_pixel_size, vec
 		disk_rotation = mat2(vec2(cr, -sr), vec2(sr, cr));
 	}
 
+	// At High/Ultra (more than 8 taps) widen the kernel so the extra samples buy a
+	// visibly softer penumbra instead of just less noise over the same radius. Low and
+	// Medium keep the upstream kernel radius, so existing baselines stay comparable.
+	const float kernel_scale = 1.0 + float(sc_directional_soft_shadow_samples() > 8 ? 1 : 0);
+
 	float avg = 0.0;
 
 	SPEC_CONSTANT_LOOP_ANNOTATION
 	for (uint i = 0; i < sc_directional_soft_shadow_samples(); i++) {
-		avg += textureProj(sampler2DShadow(shadow, shadow_sampler), vec4(pos + shadow_pixel_size * (disk_rotation * scene_data_block.data.directional_soft_shadow_kernel[i].xy), depth, 1.0));
+		avg += textureProj(sampler2DShadow(shadow, shadow_sampler), vec4(pos + shadow_pixel_size * kernel_scale * (disk_rotation * scene_data_block.data.directional_soft_shadow_kernel[i].xy), depth, 1.0));
 	}
 
 	return half(avg * (1.0 / float(sc_directional_soft_shadow_samples())));
@@ -353,11 +358,14 @@ half sample_pcf_shadow(texture2D shadow, vec2 shadow_pixel_size, vec3 coord, flo
 		disk_rotation = mat2(vec2(cr, -sr), vec2(sr, cr));
 	}
 
+	// Same widening as the directional path: only High/Ultra pay for a larger radius.
+	const float kernel_scale = 1.0 + float(sc_soft_shadow_samples() > 8 ? 1 : 0);
+
 	float avg = 0.0;
 
 	SPEC_CONSTANT_LOOP_ANNOTATION
 	for (uint i = 0; i < sc_soft_shadow_samples(); i++) {
-		avg += textureProj(sampler2DShadow(shadow, shadow_sampler), vec4(pos + shadow_pixel_size * (disk_rotation * scene_data_block.data.soft_shadow_kernel[i].xy), depth, 1.0));
+		avg += textureProj(sampler2DShadow(shadow, shadow_sampler), vec4(pos + shadow_pixel_size * kernel_scale * (disk_rotation * scene_data_block.data.soft_shadow_kernel[i].xy), depth, 1.0));
 	}
 
 	return half(avg * (1.0 / float(sc_soft_shadow_samples())));
@@ -380,7 +388,9 @@ half sample_omni_pcf_shadow(texture2D shadow, float blur_scale, vec2 coord, vec4
 	}
 
 	float avg = 0.0;
-	vec2 offset_scale = blur_scale * 2.0 * scene_data_block.data.shadow_atlas_pixel_size / uv_rect.zw;
+	// Same widening as the directional path: only High/Ultra pay for a larger radius.
+	const float softening = 1.0 + float(sc_soft_shadow_samples() > 8 ? 1 : 0);
+	vec2 offset_scale = blur_scale * softening * 2.0 * scene_data_block.data.shadow_atlas_pixel_size / uv_rect.zw;
 
 	SPEC_CONSTANT_LOOP_ANNOTATION
 	for (uint i = 0; i < sc_soft_shadow_samples(); i++) {
@@ -420,9 +430,17 @@ half sample_directional_soft_shadow(texture2D shadow, vec3 pssm_coord, vec2 tex_
 		disk_rotation = mat2(vec2(cr, -sr), vec2(sr, cr));
 	}
 
+	// The blocker search only needs an approximate average depth, unlike the
+	// final penumbra filtering, so run it with half the samples when the
+	// quality setting gives us room. Striding over the Vogel disk keeps the
+	// whole disk covered instead of only its inner half.
+	const uint directional_penumbra_samples = sc_directional_penumbra_shadow_samples();
+	const uint blocker_stride = directional_penumbra_samples > 4 ? 2u : 1u;
+	const uint blocker_samples = directional_penumbra_samples / blocker_stride;
+
 	SPEC_CONSTANT_LOOP_ANNOTATION
-	for (uint i = 0; i < sc_directional_penumbra_shadow_samples(); i++) {
-		vec2 suv = pssm_coord.xy + (disk_rotation * scene_data_block.data.directional_penumbra_shadow_kernel[i].xy) * tex_scale;
+	for (uint i = 0; i < blocker_samples; i++) {
+		vec2 suv = pssm_coord.xy + (disk_rotation * scene_data_block.data.directional_penumbra_shadow_kernel[i * blocker_stride].xy) * tex_scale;
 		float d = textureLod(sampler2D(shadow, SAMPLER_LINEAR_CLAMP), suv, 0.0).r;
 		if (d > pssm_coord.z) {
 			blocker_average += d;
@@ -542,9 +560,17 @@ void light_process_omni(uint idx, vec3 vertex, hvec3 eye_vec, hvec3 normal, vec3
 			tangent *= omni_lights.data[idx].soft_shadow_size * omni_lights.data[idx].soft_shadow_scale;
 			bitangent *= omni_lights.data[idx].soft_shadow_size * omni_lights.data[idx].soft_shadow_scale;
 
+			// The blocker search only needs an approximate average depth, unlike the
+			// final penumbra filtering, so run it with half the samples when the
+			// quality setting gives us room. Striding over the Vogel disk keeps the
+			// whole disk covered instead of only its inner half.
+			const uint penumbra_samples = sc_penumbra_shadow_samples();
+			const uint blocker_stride = penumbra_samples > 4 ? 2u : 1u;
+			const uint blocker_samples = penumbra_samples / blocker_stride;
+
 			SPEC_CONSTANT_LOOP_ANNOTATION
-			for (uint i = 0; i < sc_penumbra_shadow_samples(); i++) {
-				vec2 disk = disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i].xy;
+			for (uint i = 0; i < blocker_samples; i++) {
+				vec2 disk = disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i * blocker_stride].xy;
 
 				vec3 pos = local_vert + tangent * disk.x + bitangent * disk.y;
 
@@ -841,9 +867,17 @@ void light_process_spot(uint idx, vec3 vertex, hvec3 eye_vec, hvec3 normal, vec3
 			float uv_size = spot_lights.data[idx].soft_shadow_size * z_norm * spot_lights.data[idx].soft_shadow_scale;
 			vec2 clamp_max = spot_lights.data[idx].atlas_rect.xy + spot_lights.data[idx].atlas_rect.zw;
 
+			// The blocker search only needs an approximate average depth, unlike the
+			// final penumbra filtering, so run it with half the samples when the
+			// quality setting gives us room. Striding over the Vogel disk keeps the
+			// whole disk covered instead of only its inner half.
+			const uint penumbra_samples = sc_penumbra_shadow_samples();
+			const uint blocker_stride = penumbra_samples > 4 ? 2u : 1u;
+			const uint blocker_samples = penumbra_samples / blocker_stride;
+
 			SPEC_CONSTANT_LOOP_ANNOTATION
-			for (uint i = 0; i < sc_penumbra_shadow_samples(); i++) {
-				vec2 suv = shadow_uv + (disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i].xy) * uv_size;
+			for (uint i = 0; i < blocker_samples; i++) {
+				vec2 suv = shadow_uv + (disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i * blocker_stride].xy) * uv_size;
 				suv = clamp(suv, spot_lights.data[idx].atlas_rect.xy, clamp_max);
 				float d = textureLod(sampler2D(shadow_atlas, SAMPLER_LINEAR_CLAMP), suv, 0.0).r;
 				if (d > splane.z) {
@@ -1049,9 +1083,17 @@ void light_process_area(uint idx, vec3 vertex, hvec3 eye_vec, hvec3 normal, vec3
 			tangent *= area_lights.data[idx].soft_shadow_size * area_lights.data[idx].soft_shadow_scale;
 			bitangent *= area_lights.data[idx].soft_shadow_size * area_lights.data[idx].soft_shadow_scale;
 
+			// The blocker search only needs an approximate average depth, unlike the
+			// final penumbra filtering, so run it with half the samples when the
+			// quality setting gives us room. Striding over the Vogel disk keeps the
+			// whole disk covered instead of only its inner half.
+			const uint penumbra_samples = sc_penumbra_shadow_samples();
+			const uint blocker_stride = penumbra_samples > 4 ? 2u : 1u;
+			const uint blocker_samples = penumbra_samples / blocker_stride;
+
 			SPEC_CONSTANT_LOOP_ANNOTATION
-			for (uint i = 0; i < sc_penumbra_shadow_samples(); i++) {
-				vec2 disk = disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i].xy;
+			for (uint i = 0; i < blocker_samples; i++) {
+				vec2 disk = disk_rotation * scene_data_block.data.penumbra_shadow_kernel[i * blocker_stride].xy;
 
 				vec3 pos = local_vert + tangent * disk.x + bitangent * disk.y;
 

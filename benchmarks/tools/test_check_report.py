@@ -357,6 +357,79 @@ class CheckReportTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(check_report.main([path]), 0)
 
+    # S8: the only scene that turns occlusion culling on.
+    #
+    # The pair tests build four reports - two runs of the cell with occlusion off and
+    # two of the same cell with it on - because that A/B is what the scene exists to
+    # measure. A pairing that silently finds nothing (content_hash covers
+    # scene_parameters(), so the two cells never share a full key) would leave the
+    # defect invisible, which is exactly what these tests guard.
+
+    def s8_reports(self, primitives_off, primitives_on, effective=True):
+        common = {
+            "id": "S8",
+            "parameters": {
+                "instance_count": 2400,
+                "variant": "closed",
+                "occlusion_requested": True,
+                "occlusion_effective": effective,
+                "rays_per_thread": 512,
+                "processor_count": 24,
+                "occlusion_buffer": [147, 83],
+            },
+            "content_hash": "s8-on",
+        }
+        on = make_report(scene=common, frames={"primitives": [primitives_on] * SAMPLED})
+        off_parameters = dict(common["parameters"])
+        off_parameters.update({"occlusion_requested": False, "occlusion_effective": False})
+        off = make_report(
+            scene={"id": "S8", "parameters": off_parameters, "content_hash": "s8-off"},
+            frames={"primitives": [primitives_off] * SAMPLED},
+        )
+        return off, on
+
+    def test_s8_ignored_occlusion_request_fails(self):
+        _off, on = self.s8_reports(90000, 90000, effective=False)
+        self.assertGreater(self.check(on), 0)
+
+    def test_s8_pair_with_nothing_culled_fails(self):
+        off, on = self.s8_reports(90000, 89900)
+        self.assertGreater(self.check(off, off, on, on), 0)
+
+    def test_s8_pair_with_culling_passes(self):
+        off, on = self.s8_reports(90000, 20000)
+        self.assertEqual(self.check(off, off, on, on), 0)
+
+    def test_s8_pair_needs_both_sides(self):
+        # One-sided evidence must not be reported as a verdict in either direction.
+        _off, on = self.s8_reports(90000, 20000)
+        self.assertEqual(self.check(on, on), 0)
+
+    def test_s8_invalid_side_skips_the_pair_verdict(self):
+        # The "on" cell is already invalid (the harness said so). The pair check must
+        # not add a second, differently-worded failure that points at the culler; it
+        # reports the skip instead. Counting failures would not show the difference -
+        # both reports are counted - so assert on the messages.
+        off, on = self.s8_reports(90000, 89900)
+        on.update({"valid": False, "invalid_reason": "occlusion culling is not provided by this build"})
+        paths = [self.write("pair_%d.json" % i, r) for i, r in enumerate([off, off, on, on])]
+        _per_report, per_cell, _failures = check_report.run(paths)
+        issues = [issue for _key, _count, cell in per_cell for issue in cell]
+        self.assertFalse([m for level, m in issues if level == check_report.FAIL and "nothing was culled" in m])
+        self.assertTrue([m for level, m in issues if "pair not compared" in m])
+
+    def test_s8_zero_primitives_fails(self):
+        _off, on = self.s8_reports(90000, 0)
+        self.assertGreater(self.check(on), 0)
+
+    def test_s8_different_ray_budgets_do_not_pair(self):
+        off, on = self.s8_reports(90000, 89900)
+        on["scene"]["parameters"]["rays_per_thread"] = 2048
+        off["scene"]["parameters"]["rays_per_thread"] = 512
+        # Nothing was culled, but these are not one experiment, so no verdict -
+        # pairing them anyway would blame the scene for a budget difference.
+        self.assertEqual(self.check(off, off, on, on), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

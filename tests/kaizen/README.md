@@ -80,6 +80,38 @@ Shared-registry throughput (one hot key, maximum contention, machine not idle):
 76 B/slot (4.75 MiB at 65 536 slots). The suite is also clean under ASan+UBSan and TSan; sanitizers are not
 part of the default script.
 
+### Optimization pass (2026-11-22)
+
+Key lookup moved from `std::unordered_map<std::string, uint32_t>` to an
+open-addressing table over slot indices (no per-entry heap allocation, no
+pointer chasing on hits), the canonical-key hit path no longer copies the
+whole key identity on every acquire, `PipelineKey` uses a compact field
+encoding with a word-at-a-time hash, the LRU touch has a most-recently-used
+fast path, and the spinlock pauses while spinning. A telemetry bug where
+`release()` inflated `shared_acquires` was also fixed.
+
+Measured before/after on the same sandbox machine (GCC, `-O2`; one
+representative run each, approximately ±15 % run-to-run):
+
+| Operation | Before | After | Δ |
+| --- | --- | --- | --- |
+| Hit: `acquire` + `release` | 63.5 ns | 37.2 ns | −41 % |
+| Hit, near capacity | 85.2 ns | 45.0 ns | −47 % |
+| Miss: new slot + `release` | 1206 ns | 485 ns | −60 % |
+| Evict → retire → destroy | 326 ns | 136 ns | −58 % |
+| Full lifetime | 285 ns | 177 ns | −38 % |
+| Multi-queue lifetime | 303 ns | 294 ns | −3 % |
+| Throughput, 8 threads (shared) | 1.30 Mops/s | 1.82–2.95 Mops/s | +40–127 % |
+
+New benchmarks cover the canonical `PipelineKey` path used by
+`PipelineCacheRD`: a realistic multi-field key hits at ~161 ns
+(acquire+release, dominated by hashing and comparing ~700 B of identity)
+and a unique-key miss at ~4.3 µs including key construction. The suite
+grew to 1 747 checks (including a key-table churn/rehash test) and stays
+clean under ASan+UBSan and TSan. Fixed cost is now 116 B/slot including
+the key table (96 B slot + 4 B free-list + 8 B LRU + 8 B key table, worst
+case), replacing the previous 108 B/slot plus an unaccounted hash map.
+
 These numbers exclude Vulkan pipeline creation; a "miss" only allocates a
 registry slot and inserts a key. Acceptance criteria covered:
 
@@ -105,6 +137,9 @@ registry slot and inserts a key. Acceptance criteria covered:
   zero at shutdown.
 - Statistics match the observed lifecycle (hits, misses, candidates, retired,
   destroyed, resident/pending bytes).
+- Key-table churn: filling the registry, destroying half the entries
+  (tombstones) and re-acquiring them yields new generations without merging
+  identities, for both numeric and canonical keys.
 
 ## End-to-end churn test (requires the engine)
 
@@ -206,3 +241,48 @@ The Vulkan driver defers `vkDestroyPipeline` through the registry only when
 the upstream immediate call. The hooks are documented in
 `patches/rendering-device/004-pipeline-lifetime-integration.md`; the model and
 the remaining work are in `docs/architecture/pipeline-lifetime.md`.
+
+## HZB occlusion CPU invariants
+
+`hzb_occlusion/` covers the three CPU terms the occlusion patches touch: the pyramid
+build in `servers/rendering/renderer_scene_occlusion_cull.cpp`, and the level-0 scatter
+and the camera-ray generation in `modules/raycast/raycast_occlusion_cull.cpp`.
+
+Those two translation units cannot be compiled here at all - they include
+`platform_config.h` and the `*.gen.h` headers that only exist after a SCons build, which
+is exactly what this suite is written to avoid. So `extract_source_bodies.py` lifts the
+five function bodies out of the engine sources verbatim at build time, and the test
+supplies the shims they need (`LocalVector`, `RID`, `Ref`, the `Engine`/`RenderingServer`
+singletons, a `Vector3` that mirrors `core/math/vector3.h`). The bodies are unmodified;
+they compile warning-free under the same `-Wall -Wextra -std=c++17` the other two suites
+use, which is checked on every run rather than asserted here.
+
+Each case compares the extracted function against a reference written in the naive
+pre-patch form - max over the 2x2 block with a clamp per sampled offset, a scatter with
+a bounds test per texel, one division and one field reload per ray - and the comparison is
+bit-exact, because bit-exactness is the claim being protected. Destinations are poisoned
+with values the inputs cannot produce, so a texel or a ray slot that stops being written
+is a failure rather than an accident of allocation. `update_mips()` is checked against a
+hand-computed 4x4 pyramid too, so a reference that is wrong the same way twice cannot pass.
+
+Two things this buys beyond the obvious:
+
+- It catches the specific shortcut someone will be tempted to repeat. Replacing the
+  per-ray `(float(x) + 0.5f) / width` with a multiply by a hoisted reciprocal fails 17 of
+  the 114 cases: the values are not equal in float, and a texel that changes by one ULP can
+  flip which instances survive the cull. Dropping the `odd_w` gate in the mip build fails 30.
+- It fails loudly when the engine moves. `extract_source_bodies.py` requires each
+  definition to match exactly once, so a rename or a signature change stops the build with
+  instructions instead of silently testing nothing. Update its table and the matching
+  `patches/*/*.md` note together.
+
+The suite is built by `run_tests.sh` and is deliberately not registered in
+`tests/meson.build`: it needs the extraction step as a codegen target, and meson remains
+unvalidated for Kaizen changes. Adding a plain entry for the `.cpp` there would break the
+configure step, since `hzb_extracted.inc` is generated into the build directory.
+
+Not covered, and not coverable here: the Embree traversal between generation and scatter,
+the threading that splits the ray loop across workers, the GPU side of
+`Viewport.use_occlusion_culling`, and anything that depends on real engine types rather
+than on the shimmed members. Timing claims still come from the offline harnesses
+described in the patch notes, not from this test - `run_tests.sh` measures nothing.

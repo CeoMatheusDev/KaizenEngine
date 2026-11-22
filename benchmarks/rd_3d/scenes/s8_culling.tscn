@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_s8.gd" id="1_s8"]
+
+[node name="S8Culling" type="Node3D"]
+script = ExtResource("1_s8")
+instance_count = 2400
+variant = "open"
+occlusion_requested = false

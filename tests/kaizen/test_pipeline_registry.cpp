@@ -829,6 +829,77 @@ TEST_BEGIN(retirement_queue_basics)
 	CHECK(queue.is_empty());
 TEST_END()
 
+TEST_BEGIN(key_table_survives_churn_and_rehash)
+	// Fill the registry, destroy every other entry (tombstones), then
+	// re-acquire the destroyed keys: the table must find the survivors,
+	// reuse tombstones, and hand out new generations for the destroyed
+	// keys without ever merging two identities.
+	const uint32_t capacity = 256;
+	PipelineRegistry registry(capacity, 0);
+
+	std::vector<PipelineHandle> handles;
+	for (uint32_t i = 0; i < capacity; i++) {
+		PipelineHandle handle = registry.acquire(i + 1, KIB);
+		CHECK(!handle.is_null());
+		handles.push_back(handle);
+	}
+	// Full: one more key is rejected in a controlled way.
+	CHECK(registry.acquire(capacity + 1, KIB).is_null());
+	CHECK_EQ(registry.get_stats().rejected_full, (uint64_t)1);
+
+	// Destroy the even-indexed entries, leaving tombstones behind.
+	for (uint32_t i = 0; i < capacity; i += 2) {
+		CHECK(registry.release(handles[i]));
+		CHECK(registry.retire_now(handles[i]));
+	}
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), capacity / 2);
+	CHECK_EQ(drain_destroyable(registry), capacity / 2);
+
+	// Survivors are still found and shared.
+	for (uint32_t i = 1; i < capacity; i += 2) {
+		CHECK_EQ(registry.acquire(i + 1, KIB), handles[i]);
+	}
+
+	// Destroyed keys come back with a new generation; stale handles die.
+	for (uint32_t i = 0; i < capacity; i += 2) {
+		PipelineHandle recreated = registry.acquire(i + 1, KIB);
+		CHECK(!recreated.is_null());
+		CHECK(recreated != handles[i]);
+		CHECK(!registry.is_valid(handles[i]));
+		CHECK(registry.is_valid(recreated));
+	}
+
+	// Typed keys churn through the same table without merging.
+	PipelineRegistry typed(64, 0);
+	std::vector<PipelineKey> keys;
+	for (uint32_t i = 0; i < 64; i++) {
+		PipelineKey key;
+		key.add_u32(2);
+		key.add_u64(1000 + i);
+		key.add_bool(i % 3 == 0);
+		keys.push_back(key);
+	}
+	std::vector<PipelineHandle> typed_handles;
+	for (const PipelineKey &key : keys) {
+		typed_handles.push_back(typed.acquire(key, KIB));
+	}
+	for (uint32_t i = 0; i < 64; i += 2) {
+		CHECK(typed.release(typed_handles[i]));
+		CHECK(typed.retire_now(typed_handles[i]));
+	}
+	typed.set_completed_serial(PipelineQueue::Graphics, 0);
+	CHECK_EQ(drain_destroyable(typed), (uint32_t)32);
+	for (uint32_t i = 0; i < 64; i++) {
+		PipelineHandle again = typed.acquire(keys[i], KIB);
+		CHECK(!again.is_null());
+		if (i % 2 == 0) {
+			CHECK(again != typed_handles[i]);
+		} else {
+			CHECK_EQ(again, typed_handles[i]);
+		}
+	}
+TEST_END()
+
 // ---------------------------------------------------------------------------
 // Concurrency
 
@@ -1111,14 +1182,62 @@ void run_benchmark() {
 		}));
 	}
 
+	{
+		// Canonical PipelineKey hit: the shape used by PipelineCacheRD,
+		// with a realistic multi-field key. The key is built once and
+		// reused, as in the engine's version cache.
+		PipelineRegistry registry(64, 64 * KIB);
+		PipelineKey key;
+		key.reserve(1024);
+		key.add_u32(2);
+		key.add_u64(0x123456789abcdef0ULL);
+		key.add_u64(7);
+		key.add_u64(11);
+		key.add_u32(3);
+		key.add_u32(0);
+		key.add_u32(0);
+		key.add_u32(0);
+		for (uint32_t i = 0; i < 40; i++) {
+			key.add_u32(i * 2654435761u);
+			key.add_bool(i % 2 == 0);
+			key.add_float(0.25f * (float)i);
+		}
+		PipelineHandle handle = registry.acquire(key, KIB);
+		bench::print("typed hit (acquire+release)", bench::measure(ops, 64, [&](uint32_t) {
+			PipelineHandle h = registry.acquire(key, KIB);
+			registry.release(h);
+		}));
+		registry.release(handle);
+	}
+
+	{
+		// Canonical PipelineKey miss: unique keys, budget high enough to
+		// keep them. Exercises identity storage and table insertion.
+		PipelineRegistry registry(ops + 2, (uint64_t)(ops + 2) * KIB);
+		bench::print("typed miss (build+acquire+release)", bench::measure(ops, 64, [&](uint32_t i) {
+			PipelineKey key;
+			key.reserve(1024);
+			key.add_u32(2);
+			key.add_u64(0x123456789abcdef0ULL);
+			key.add_u64(i + 1);
+			for (uint32_t j = 0; j < 40; j++) {
+				key.add_u32(j * 2654435761u);
+				key.add_bool(j % 2 == 0);
+				key.add_float(0.25f * (float)j);
+			}
+			PipelineHandle h = registry.acquire(key, KIB);
+			registry.release(h);
+		}));
+	}
+
 	std::printf("bench throughput (acquire+release, shared registry):\n");
 	for (uint32_t threads : { 1u, 2u, 4u, 8u }) {
 		std::printf("bench threads=%u %7.2f Mops/s\n", threads, bench::throughput(threads, 50000));
 	}
 
 	const uint32_t slot_bytes = PipelineRegistry::get_slot_size();
-	std::printf("bench slot footprint: %u B slot + 4 B free-list + 8 B LRU = %u B/slot (hash map excluded)\n",
-			slot_bytes, slot_bytes + 12);
+	std::printf("bench slot footprint: %u B slot + 4 B free-list + 8 B LRU + 8 B key table (worst case) = %u B/slot\n",
+		slot_bytes, slot_bytes + 20);
 }
 
 } // namespace
@@ -1150,6 +1269,7 @@ int main(int argc, char **argv) {
 	retire_now_requires_no_references();
 	retire_now_waits_for_recorded_use();
 	retire_now_from_candidate();
+	key_table_survives_churn_and_rehash();
 	submission_groups_and_fences();
 	lru_basics();
 	retirement_queue_basics();
