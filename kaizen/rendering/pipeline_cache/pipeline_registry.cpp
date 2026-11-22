@@ -12,6 +12,15 @@ PipelineRegistry::PipelineRegistry(uint32_t p_capacity, uint64_t p_budget_bytes,
 		lru(capacity),
 		retirement(capacity),
 		budget(p_budget_bytes, 90, 75, 32) {
+	// Power-of-two key table, at least as large as the slot array so the
+	// common case never needs to grow. Growth is still handled on insert.
+	uint32_t table_size = 64;
+	while ((uint64_t)table_size < capacity && table_size < (1u << 31)) {
+		table_size <<= 1;
+	}
+	key_buckets.assign(table_size, KEY_EMPTY);
+	key_mask = table_size - 1;
+
 	free_indices.reserve(capacity);
 	// Push in reverse so index 0 is handed out first.
 	for (uint32_t i = capacity; i > 0; i--) {
@@ -34,20 +43,68 @@ PipelineHandle PipelineRegistry::_make_handle_locked(uint32_t p_index) const {
 	return handle;
 }
 
-static std::string numeric_pipeline_key_identity(uint64_t p_key) {
-	std::string identity(1, '\0');
-	for (size_t i = 0; i < sizeof(p_key); i++) {
-		identity.push_back(static_cast<char>(p_key >> (i * 8)));
+// Identity layout: one prefix byte (0 = numeric key, 1 = canonical
+// PipelineKey) followed by the payload. The bucket hash is always the
+// identity hash of the payload alone, so it can be recomputed from the
+// stored identity during rehashing and erasure.
+uint32_t PipelineRegistry::_key_probe(uint64_t p_hash, uint8_t p_prefix, const uint8_t *p_payload, size_t p_payload_size, uint32_t &r_insert_pos) const {
+	uint32_t pos = static_cast<uint32_t>(p_hash) & key_mask;
+	uint32_t first_deleted = UINT32_MAX;
+	while (true) {
+		const uint32_t value = key_buckets[pos];
+		if (value == KEY_EMPTY) {
+			r_insert_pos = first_deleted != UINT32_MAX ? first_deleted : pos;
+			return UINT32_MAX;
+		}
+		if (value == KEY_DELETED) {
+			if (first_deleted == UINT32_MAX) {
+				first_deleted = pos;
+			}
+		} else {
+			const uint32_t index = value - 1;
+			const Slot &slot = slots[index];
+			const std::string &identity = slot.key_identity;
+			if (identity.size() == p_payload_size + 1 &&
+					static_cast<uint8_t>(identity[0]) == p_prefix &&
+					(p_payload_size == 0 || std::memcmp(identity.data() + 1, p_payload, p_payload_size) == 0)) {
+				r_insert_pos = pos;
+				return index;
+			}
+		}
+		pos = (pos + 1) & key_mask;
 	}
-	return identity;
 }
 
-static std::string canonical_pipeline_key_identity(const PipelineKey &p_key) {
-	std::string identity(1, '\1');
-	if (!p_key.data.empty()) {
-		identity.append(reinterpret_cast<const char *>(p_key.data.data()), p_key.data.size());
+void PipelineRegistry::_key_insert_at(uint32_t p_pos, uint32_t p_index) {
+	if (key_buckets[p_pos] == KEY_DELETED) {
+		key_tombstones--;
 	}
-	return identity;
+	key_buckets[p_pos] = p_index + 1;
+	key_count++;
+}
+
+void PipelineRegistry::_key_rehash(uint32_t p_new_size) {
+	std::vector<uint32_t> old_buckets = std::move(key_buckets);
+	key_buckets.assign(p_new_size, KEY_EMPTY);
+	key_mask = p_new_size - 1;
+	key_count = 0;
+	key_tombstones = 0;
+	for (uint32_t value : old_buckets) {
+		if (value == KEY_EMPTY || value == KEY_DELETED) {
+			continue;
+		}
+		const uint32_t index = value - 1;
+		const Slot &slot = slots[index];
+		const uint64_t hash = pipeline_identity_hash(
+				reinterpret_cast<const uint8_t *>(slot.key_identity.data()) + 1,
+				slot.key_identity.size() - 1);
+		uint32_t pos = static_cast<uint32_t>(hash) & key_mask;
+		while (key_buckets[pos] != KEY_EMPTY) {
+			pos = (pos + 1) & key_mask;
+		}
+		key_buckets[pos] = index + 1;
+		key_count++;
+	}
 }
 
 bool PipelineRegistry::_resolve_locked(PipelineHandle p_handle, Slot *&r_slot) const {
@@ -72,21 +129,32 @@ bool PipelineRegistry::_is_ready_locked(const Slot &p_slot) const {
 }
 
 PipelineHandle PipelineRegistry::acquire(uint64_t p_key, uint64_t p_bytes) {
-	return _acquire(numeric_pipeline_key_identity(p_key), p_key, p_bytes);
+	uint8_t payload[sizeof(p_key)];
+	for (size_t i = 0; i < sizeof(payload); i++) {
+		payload[i] = static_cast<uint8_t>(p_key >> (i * 8));
+	}
+	const uint64_t hash = pipeline_identity_hash(payload, sizeof(payload));
+	return _acquire(0, payload, sizeof(payload), hash, p_key, p_bytes);
 }
 
 PipelineHandle PipelineRegistry::acquire(const PipelineKey &p_key, uint64_t p_bytes) {
-	return _acquire(canonical_pipeline_key_identity(p_key), pipeline_key_hash(p_key), p_bytes);
+	const uint64_t hash = pipeline_key_hash(p_key);
+	return _acquire(1, p_key.data.data(), p_key.data.size(), hash, hash, p_bytes);
 }
 
-PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uint64_t p_report_key, uint64_t p_bytes) {
+PipelineHandle PipelineRegistry::acquire(const PipelineKey &p_key, uint64_t p_precomputed_hash, uint64_t p_bytes) {
+	return _acquire(1, p_key.data.data(), p_key.data.size(), p_precomputed_hash, p_precomputed_hash, p_bytes);
+}
+
+PipelineHandle PipelineRegistry::_acquire(uint8_t p_prefix, const uint8_t *p_payload, size_t p_payload_size, uint64_t p_hash, uint64_t p_report_key, uint64_t p_bytes) {
 	lock.lock();
 
 	PipelineHandle result;
-	auto existing = key_to_index.find(p_key_identity);
+	uint32_t insert_pos = UINT32_MAX;
+	const uint32_t existing_index = _key_probe(p_hash, p_prefix, p_payload, p_payload_size, insert_pos);
 
-	if (existing != key_to_index.end()) {
-		const uint32_t index = existing->second;
+	if (existing_index != UINT32_MAX) {
+		const uint32_t index = existing_index;
 		Slot &slot = slots[index];
 
 		if (slot.state == PipelineState::EvictionCandidate) {
@@ -131,6 +199,16 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 		return result;
 	}
 
+	// Grow (or clean tombstones) before inserting past the load threshold.
+	// The probe above is only valid for the current table layout.
+	if ((uint64_t)(key_count + key_tombstones + 1) * 10 > (uint64_t)key_buckets.size() * 7) {
+		const uint32_t new_size = (uint64_t)(key_count + 1) * 10 > (uint64_t)key_buckets.size() * 7
+				? key_buckets.size() * 2
+				: (uint32_t)key_buckets.size();
+		_key_rehash(new_size);
+		_key_probe(p_hash, p_prefix, p_payload, p_payload_size, insert_pos);
+	}
+
 	const uint32_t index = free_indices[free_indices.size() - 1];
 	free_indices.pop_back();
 
@@ -143,14 +221,17 @@ PipelineHandle PipelineRegistry::_acquire(const std::string &p_key_identity, uin
 	}
 
 	slot.key = p_report_key;
-	slot.key_identity = p_key_identity;
+	slot.key_identity.assign(1, static_cast<char>(p_prefix));
+	if (p_payload_size != 0) {
+		slot.key_identity.append(reinterpret_cast<const char *>(p_payload), p_payload_size);
+	}
 	slot.bytes = p_bytes;
 	slot.usage = PipelineQueueUsage();
 	slot.host_refs = 1;
 	slot.recording_refs = 0;
 	slot.state = PipelineState::Resident;
 
-	key_to_index[p_key_identity] = index;
+	_key_insert_at(insert_pos, index);
 	lru.touch(index);
 
 	budget.add_resident_bytes(p_bytes);
@@ -186,7 +267,6 @@ bool PipelineRegistry::release(PipelineHandle p_handle) {
 
 	slot->host_refs--;
 	releases++;
-	shared_acquires++;
 
 	if (slot->host_refs == 0 && slot->recording_refs == 0 &&
 			slot->state == PipelineState::EvictionCandidate) {
@@ -468,9 +548,25 @@ bool PipelineRegistry::destroy(PipelineHandle p_handle) {
 	const uint32_t index = p_handle.index;
 
 	// Keep the identity reserved until this physical slot is destroyed.
-	auto existing = key_to_index.find(slot->key_identity);
-	if (existing != key_to_index.end() && existing->second == index) {
-		key_to_index.erase(existing);
+	// Erase it from the key table before the identity is cleared below.
+	{
+		const uint64_t hash = pipeline_identity_hash(
+				reinterpret_cast<const uint8_t *>(slot->key_identity.data()) + 1,
+				slot->key_identity.size() - 1);
+		uint32_t pos = static_cast<uint32_t>(hash) & key_mask;
+		while (true) {
+			const uint32_t value = key_buckets[pos];
+			if (value == KEY_EMPTY) {
+				break;
+			}
+			if (value != KEY_DELETED && value - 1 == index) {
+				key_buckets[pos] = KEY_DELETED;
+				key_count--;
+				key_tombstones++;
+				break;
+			}
+			pos = (pos + 1) & key_mask;
+		}
 	}
 
 	budget.subtract_pending_bytes(slot->bytes);

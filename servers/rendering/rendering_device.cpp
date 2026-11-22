@@ -5204,7 +5204,9 @@ RID RenderingDevice::render_pipeline_create_cached(uint64_t p_key_hash, const Ka
 	}
 
 	MutexLock lock(pipeline_cache_mutex);
-	Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(p_key, 0);
+	// Reuse the hash the caller already computed for this key instead of
+	// hashing the canonical key a second time inside the registry.
+	Kaizen::PipelineHandle handle = pipeline_cache_registry->acquire(p_key, p_key_hash, 0);
 	ERR_FAIL_COND_V_MSG(handle.is_null(), RID(), "Pipeline cache key is retiring or the registry is full.");
 
 	if (pipeline_cache_rids.has(handle.index)) {

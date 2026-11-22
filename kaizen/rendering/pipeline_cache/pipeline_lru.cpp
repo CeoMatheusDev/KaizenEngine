@@ -25,9 +25,13 @@ void PipelineLRU::_link_mru(uint32_t p_index) {
 }
 
 void PipelineLRU::touch(uint32_t p_index) {
-	if (prev[p_index] != NO_INDEX || next[p_index] != NO_INDEX || head == p_index) {
-		remove(p_index);
+	// Fast path: the entry is already most-recently-used (the common case
+	// for repeated acquires of the same pipeline), so there is nothing
+	// to relink.
+	if (head == p_index) {
+		return;
 	}
+	remove(p_index);
 	_link_mru(p_index);
 }
 

@@ -80,6 +80,38 @@ Shared-registry throughput (one hot key, maximum contention, machine not idle):
 76 B/slot (4.75 MiB at 65 536 slots). The suite is also clean under ASan+UBSan and TSan; sanitizers are not
 part of the default script.
 
+### Optimization pass (2026-11-22)
+
+Key lookup moved from `std::unordered_map<std::string, uint32_t>` to an
+open-addressing table over slot indices (no per-entry heap allocation, no
+pointer chasing on hits), the canonical-key hit path no longer copies the
+whole key identity on every acquire, `PipelineKey` uses a compact field
+encoding with a word-at-a-time hash, the LRU touch has a most-recently-used
+fast path, and the spinlock pauses while spinning. A telemetry bug where
+`release()` inflated `shared_acquires` was also fixed.
+
+Measured before/after on the same sandbox machine (GCC, `-O2`; one
+representative run each, approximately ±15 % run-to-run):
+
+| Operation | Before | After | Δ |
+| --- | --- | --- | --- |
+| Hit: `acquire` + `release` | 63.5 ns | 37.2 ns | −41 % |
+| Hit, near capacity | 85.2 ns | 45.0 ns | −47 % |
+| Miss: new slot + `release` | 1206 ns | 485 ns | −60 % |
+| Evict → retire → destroy | 326 ns | 136 ns | −58 % |
+| Full lifetime | 285 ns | 177 ns | −38 % |
+| Multi-queue lifetime | 303 ns | 294 ns | −3 % |
+| Throughput, 8 threads (shared) | 1.30 Mops/s | 1.82–2.95 Mops/s | +40–127 % |
+
+New benchmarks cover the canonical `PipelineKey` path used by
+`PipelineCacheRD`: a realistic multi-field key hits at ~161 ns
+(acquire+release, dominated by hashing and comparing ~700 B of identity)
+and a unique-key miss at ~4.3 µs including key construction. The suite
+grew to 1 747 checks (including a key-table churn/rehash test) and stays
+clean under ASan+UBSan and TSan. Fixed cost is now 116 B/slot including
+the key table (96 B slot + 4 B free-list + 8 B LRU + 8 B key table, worst
+case), replacing the previous 108 B/slot plus an unaccounted hash map.
+
 These numbers exclude Vulkan pipeline creation; a "miss" only allocates a
 registry slot and inserts a key. Acceptance criteria covered:
 
@@ -105,6 +137,9 @@ registry slot and inserts a key. Acceptance criteria covered:
   zero at shutdown.
 - Statistics match the observed lifecycle (hits, misses, candidates, retired,
   destroyed, resident/pending bytes).
+- Key-table churn: filling the registry, destroying half the entries
+  (tombstones) and re-acquiring them yields new generations without merging
+  identities, for both numeric and canonical keys.
 
 ## End-to-end churn test (requires the engine)
 

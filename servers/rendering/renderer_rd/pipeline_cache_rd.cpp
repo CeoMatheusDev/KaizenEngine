@@ -75,7 +75,10 @@ static void _append_specialization_key(Kaizen::PipelineKey &r_key, const Vector<
 
 static Kaizen::PipelineKey _make_pipeline_key(RID p_shader, RD::VertexFormatID p_vertex_format_id, RD::FramebufferFormatID p_framebuffer_format_id, RD::RenderPrimitive p_render_primitive, const RD::PipelineRasterizationState &p_rasterization_state, const RD::PipelineMultisampleState &p_multisample_state, const RD::PipelineDepthStencilState &p_depth_stencil_state, const RD::PipelineColorBlendState &p_blend_state, int p_dynamic_state_flags, uint32_t p_render_pass, uint32_t p_bool_specializations, const Vector<RD::PipelineSpecializationConstant> &p_specialization_constants) {
 	Kaizen::PipelineKey key;
-	key.add_u32(1); // Key schema version.
+	// A full key is roughly 100 fields; reserving once avoids repeated
+	// reallocations while the fields are appended below.
+	key.reserve(1024);
+	key.add_u32(2); // Key schema version (compact field encoding).
 	key.add_u64(p_shader.get_id());
 	key.add_u64(static_cast<uint64_t>(p_vertex_format_id));
 	key.add_u64(static_cast<uint64_t>(p_framebuffer_format_id));
