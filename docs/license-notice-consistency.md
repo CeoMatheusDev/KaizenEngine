@@ -108,7 +108,14 @@ be brought to 76 without editing words.
 commit touches 2504 files, of which 2492 have a whitespace-only diff
 (`git diff -w --numstat <commit>^ <commit>` lists the other 12, which are the docs, the two
 `misc/scripts` tools, the two `patches/` entries and the four `tests/kaizen` files). That
-command is the whole proof that no licence word moved, and it is cheap to re-run
+command is the whole proof that no licence word moved, and it is cheap to re-run.
+
+The composition, read off the diff itself rather than from a tally: the brand row in 2483
+files, the filename row in 193 (the 191 measured above, plus two that the guard found on its
+own sweep), and 38 rows in boxes this repository wrote by hand - the Style B brand blocks, the seven 75-wide `.kt` boxes,
+and 19 rows in `tests/kaizen/vulkan/pipeline_lifetime_report.h` and its `.cpp`, which is to say
+in code this fork added two commits earlier. The guard found that last class on its first run,
+which is the argument for it existing.
 
 **2469 rows are left ragged on purpose** - the contributors line in Style A files (and the
 equivalent line at row 8 of the seven `.kt` files, whose box is 75). Padding cannot reach
