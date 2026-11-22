@@ -357,3 +357,33 @@ the threading that splits the ray loop across workers, the GPU side of
 `Viewport.use_occlusion_culling`, and anything that depends on real engine types rather
 than on the shimmed members. Timing claims still come from the offline harnesses
 described in the patch notes, not from this test - `run_tests.sh` measures nothing.
+
+## Shadow filter quality
+
+`shadow_filter/` measures the penumbra blocker search instead of describing it.
+`extract_source_bodies.py` lifts `get_vogel_disk()` verbatim out of
+`servers/rendering/renderer_rd/renderer_scene_render_rd.cpp` and parses the facts the test would
+otherwise restate - the sample counts each quality setting uploads, the `vec4 …_shadow_kernel[32]`
+array size in `scene_data_inc.glsl`, and the `> 4 ? 2u : 1u` stride rule in
+`scene_forward_lights_inc.glsl` - into a generated header. The test then sweeps three
+receiver/occluder configurations against every setting and reports, for each tap-selection
+strategy, how wide a footprint the search actually probes and how far the penumbra width it
+reports drifts from the continuous filter's.
+
+Run the sweep with its own flags for the full table:
+
+    python3 tests/kaizen/shadow_filter/extract_source_bodies.py --repo-root . \
+        --out /tmp/shadow_filter_extracted.inc
+    g++ -std=c++17 -O2 -I/tmp tests/kaizen/shadow_filter/test_shadow_filter.cpp -o /tmp/sf && /tmp/sf --report
+
+Two properties are asserted rather than printed: the shipped stride keeps at least 0.93 of the
+kernel's footprint (measured floor 0.9354) and stays under 3x the full disk's penumbra error
+(measured worst 2.48x at 16 taps, and 4.99x for anyone tempted to halve it again), and the
+first-half alternative the change was argued against really does collapse to 0.7071 and miss
+the penumbra edge in every case. The extractor is a gate too: it refuses to generate when a
+setting uploads more samples than the UBO array holds, or when the kernel function moves - and
+`Ultra` is currently at capacity (32 of 32), so that check is live, not decorative.
+
+It measures no time: there is no GPU and no shader compiler here, and the trade it prices is
+GPU work. What the change is worth on hardware is the outstanding item in
+`patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.md`.

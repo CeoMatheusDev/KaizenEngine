@@ -18,7 +18,12 @@
 #    gathered with a stride of 2 rather than truncating the array: taking
 #    the first half would cover only r <= 0.707 of the disk and bias the
 #    average blocker depth towards the receiver, collapsing the estimated
-#    penumbra. Striding keeps full disk coverage at the same cost.
+#    penumbra. Striding keeps the disk coverage at the same cost, measured rather than
+#    asserted (tests/kaizen/shadow_filter, 2026-11-22): the strided set probes a footprint
+#    0.9354..1.0000 as wide as the full kernel's, where the first half would probe 0.7071
+#    and the second half 1.2247. It is not literally full coverage - striding over an even
+#    count drops the outermost tap - which is why the 0.93 floor is now a checked number
+#    instead of a sentence.
 #    Gated on penumbra samples > 4, so Hard (4) and Very Low (4) quality
 #    keep the upstream single loop unchanged.
 
@@ -58,6 +63,18 @@
 #   benchmarks/rd_3d S4 is re-run with --bench-variant shadows.
 
 # Verification:
+#   - tests/kaizen/shadow_filter/ (run by ./tests/kaizen/run_tests.sh) measures the claim in
+#     change 1 and the cost of change 1's trade, from the kernel the engine uploads
+#     (get_vogel_disk, extracted verbatim) and the constants parsed out of the three sources.
+#     Worst per-setting penumbra-width error against sampling every tap: 8 taps 1.81x,
+#     12 taps 2.24x, 16 taps 2.48x, 24 taps 2.39x, 32 taps 2.35x, 4 taps 1.00x (the stride
+#     is not applied there). Halving the taps again would cost 4.99x, which is the reason the
+#     gate is set at 3x and the reason it has teeth.
+#   - Two rewrites that look strictly better were measured and rejected. Scaling the probe
+#     radius by 1/0.9354 makes the footprint exact and moves the error by 0.0062 at most -
+#     neutral, so the shader carries no compensation constant. Spreading the same taps over
+#     0..count-1 (index round(i*(n-1)/(m-1)), no constant at all) also makes the footprint
+#     exact and costs 0.0268 of error, which is a bad trade for a search pass.
 #   - Balanced braces/parens and no name collisions checked in the edited
 #     functions; the file is not compiled here (no GPU, no shader build).
 #   - Outstanding: glslangValidator/spirv-clean compile of
@@ -68,6 +85,12 @@
 #     not regress with the wider High/Ultra kernel.
 
 # Known risks:
+#   - The UBO declares vec4 <name>_shadow_kernel[32] and SHADOW_QUALITY_SOFT_ULTRA already
+#     uploads 32 penumbra samples: the array is exactly full. Any future setting above 32
+#     reads past it, so tests/kaizen/shadow_filter/extract_source_bodies.py compares the two
+#     and refuses to generate (verified: with a 40-sample setting hand-inserted it fails with
+#     "uploads 40 samples but ... holds 32"). Rebase onto an upstream that grows either side
+#     needs no action here; one that grows only the C++ side will fail loudly.
 #   - Fewer blocker taps means a noisier average occluder depth on
 #     low-frequency geometry; the rotation is already TAA-jittered, which
 #     hides most of it, but a scene with a single large caster may show

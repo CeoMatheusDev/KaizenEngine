@@ -60,6 +60,21 @@ python3 "${SCRIPT_DIR}/hzb_occlusion/extract_source_bodies.py" \
 	"${SCRIPT_DIR}/hzb_occlusion/test_hzb_occlusion.cpp" \
 	-o "${HZB_BIN}"
 
+# Shadow filter quality: the penumbra blocker search trades taps for footprint coverage, and
+# the trade is the claim in patches/renderer-rd/001. Its numbers are measured here rather than
+# asserted in prose, from the kernel the engine uploads and the constants the shader parses out
+# of. Pure arithmetic: no GPU, no shader compiler, no timing claim.
+SHADOW_INC="${OUT_DIR}/shadow_filter_extracted.inc"
+SHADOW_BIN="${OUT_DIR}/test_shadow_filter"
+
+python3 "${SCRIPT_DIR}/shadow_filter/extract_source_bodies.py" \
+	--repo-root "${REPO_ROOT}" \
+	--out "${SHADOW_INC}"
+
+"${CXX}" "${CXXFLAGS[@]}" -I"${OUT_DIR}" \
+	"${SCRIPT_DIR}/shadow_filter/test_shadow_filter.cpp" \
+	-o "${SHADOW_BIN}"
+
 # C# glue consistency: the generated bindings are tracked in-tree and maintained by
 # hand, so the four sources that have to agree are compared instead of trusted.
 python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
@@ -78,3 +93,4 @@ python3 -m unittest discover -s "${SCRIPT_DIR}/license_box" -p 'test_*.py' 2>&1 
 "${RESOURCE_BIN}" "$@"
 "${PIPELINE_BIN}" "$@"
 "${HZB_BIN}" "$@"
+"${SHADOW_BIN}" "$@"

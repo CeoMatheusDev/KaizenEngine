@@ -108,6 +108,20 @@ mechanically instead by `tests/kaizen/license_box/check_license_box.py` (`--fix`
 it; the budget catches regressions). 2469 rows stay deliberately ragged - see
 [licence notice consistency](license-notice-consistency.md), section 4.
 
+### Shadow filter quality harness (no patch file)
+
+`tests/kaizen/shadow_filter/` prices the trade made by the PCSS entry above: it measures the
+footprint the blocker search actually probes and the penumbra-width error it reports, per
+quality setting, from the engine's own kernel and parsed constants. Measured 2026-11-22: the
+strided search keeps 0.9354..1.0000 of the kernel footprint and costs 1.81x..2.48x the
+penumbra-width error of sampling every tap (1.00x at 4 taps, where the stride is not applied);
+halving it again would cost 4.99x, which is why the suite asserts a 3x ceiling. Two variants
+that look strictly better - radius compensation, and spreading the taps over the whole kernel -
+were measured and rejected, the first as neutral, the second as a bad trade for a search pass.
+No timing claim: no GPU, no shader compiler here. See the note in
+`patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.md` and
+`tests/kaizen/README.md`.
+
 Neither of the last two entries has an in-engine measurement: they were written
 in a sandbox with no GPU and no scons install, so no S4 A/B and no full build
 exist yet. The HZB entry is backed by an offline harness that proves the output
