@@ -16,6 +16,10 @@ run_ninja_env.bat
 /gdextension_interface.json
 extension_api.json
 logs/
+# A boot trace left at the repository root by hand. Run evidence belongs under
+# benchmarks/results/<run>/, where the .log files there are tracked on purpose - so this
+# is anchored to the root path instead of a global *.log, which would fight that.
+/pipeline_run.log
 tests/data/*.translation
 tests/data/crypto/out*
 
