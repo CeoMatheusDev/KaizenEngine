@@ -53,7 +53,10 @@
 #    server is constructed (main/main.cpp:794 vs :774).
 #    Within that reachable path, buffer_update() is Embree ray casting over the
 #    scenario (scenario.raycast + sort_rays) plus this mip build, so update_mips() is
-#    one term of it, not the whole. The percentages below are of that term.
+#    one term of it, not the whole. The percentages below are of that term. The term
+#    beside it - the level-0 scatter that fills the buffer these mips are built from -
+#    is patched separately in patches/raycast/001-hzb-level0-scatter.md, and it
+#    touches about three times as many texels per frame as update_mips() does.
 #
 # 2. HZBuffer::_is_occluded(): test the near plane before projecting the corner.
 #    The corner was run through p_cam_projection and the result thrown away when

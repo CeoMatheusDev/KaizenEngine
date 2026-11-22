@@ -64,6 +64,7 @@ change that has to live inside the fragment loop is a patch, not a new
 | `patches/rendering-device/002-texture-buffer-callback.patch` | `servers/rendering/rendering_device.cpp` | none (bug fix) | Implemented, verified |
 | `patches/rendering-device/003-resource-tracker-integration.md` | `servers/rendering/rendering_device.cpp` | diagnostics opt-in | Implemented, verified |
 | `patches/rendering-device/004-pipeline-lifetime-integration.patch` | `drivers/vulkan/rendering_device_driver_vulkan.cpp/.h` | `KAIZEN_PIPELINE_LIFETIME=on` | Implemented, verified |
+| `patches/raycast/001-hzb-level0-scatter.patch` | `modules/raycast/raycast_occlusion_cull.cpp` | none (output is bit-identical) | Applied; −46 % on the level-0 scatter at the default ray budget in an offline harness (≈2.4 µs per viewport per frame at 147×83, `-O3`); only reachable in builds with `modules/raycast` |
 | `patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.patch` | `servers/rendering/renderer_rd/shaders/scene_forward_lights_inc.glsl` | existing `ShadowQuality` setting | Applied, GPU cost unmeasured |
 | `patches/rendering-scene/001-hzb-occlusion-cpu-cost.patch` | `servers/rendering/renderer_scene_occlusion_cull.{h,cpp}` | none (output is bit-identical) | Applied; −31 % to −44 % on the mip build in an offline harness, ≈3 µs/frame in engine because the pyramid is ray-budget sized, not screen sized |
 
