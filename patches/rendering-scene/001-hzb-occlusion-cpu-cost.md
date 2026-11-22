@@ -12,23 +12,34 @@
 # RasterizerSceneCull::_scene_cull().
 
 # 1. HZBuffer::update_mips(): hoist the loop-invariant work out of the texel loop.
-#    The upstream body re-reads sizes[mip - 1].width/.height, recomputes the two
-#    parity tests and re-indexes mips[mip - 1] for every single texel, and runs
-#    two MIN() per sampled offset to clamp against the previous level's edge.
-#    Only the last row and the last column can read past that edge, so the clamps
-#    are now hoisted to a per-row and per-column branch and the inner loop works
-#    with three row pointers. The pyramid covers 4/3 of the buffer area, i.e.
-#    2.76M texels per frame for a 1920x1080 occlusion buffer, so this is 2.76M
-#    x (4 loads + 2 divisions + 8 MIN) removed, and the simpler body lets the
-#    compiler vectorize the max reduction.
-
-#    The restructure is bit-identical, not an approximation: for an even previous
-#    dimension the level is w = prev_w / 2, so an interior texel's largest offset
-#    is 2 * (w - 2) + 2 = prev_w - 2; for an odd one prev_w = 2 * w + 1 and the
-#    offset is prev_w - 4. Both stay inside the row, so MIN() there is a no-op and
-#    the fast path returns the same value. The +2 offsets are still read only when
-#    the corresponding dimension is odd, exactly as before.
-
+#    The upstream body re-read sizes[mip - 1].width/.height, recomputed the two
+#    parity tests and re-indexed mips[mip - 1] for every single texel, and ran two
+#    MIN() per sampled offset to clamp against the previous level's edge. Only the
+#    last row and column can read past that edge, so the clamps move to a per-row
+#    and per-column branch and the inner loop walks three row pointers.
+#
+#    Sizing decides what this is worth, and the buffer is NOT screen sized:
+#    RendererViewport::_draw_3d() picks the base level as
+#    rendering/occlusion_culling/occlusion_rays_per_thread (512) times the worker
+#    thread count, then clamps it to one depth texel per 32x32 screen region at the
+#    low end and per 2x2 region at the high end. Three cases at 1920x1080 on the
+#    24-thread reference machine, cost scaled linearly in texels from the table
+#    below (the pyramid is 4/3 of its base level):
+#
+#      setting            base level   pyramid     upstream   this change   saved
+#      512 (default)      147x83       ~16k        ~7.5 us    ~4.2 us       ~3 us
+#      2048 (slider max)  295x166      ~65k        ~30 us     ~17 us        ~13 us
+#      unbounded          960x540      ~691k       ~320 us    ~180 us       ~140 us
+#
+#    The unbounded row is the ceiling the engine will not cross, and only reachable
+#    through RenderingServer.viewport_set_occlusion_rays_per_thread(): the project
+#    setting hint stops at 2048. So the honest in-engine range is single-digit
+#    microseconds per viewport per frame at defaults, low tens at the slider
+#    maximum, and a fraction of a millisecond if a project deliberately pays for a
+#    near-screen pyramid. Quoting the 1920x1080 row as an engine cost would overstate
+#    the default case by about two orders of magnitude; benchmarks/rd_3d S8 exists to
+#    replace these estimates with measurements.
+#
 # 2. HZBuffer::_is_occluded(): test the near plane before projecting the corner.
 #    The corner was run through p_cam_projection and the result thrown away when
 #    -view.z < 0.0 breaks out of the 8-corner loop. Moving the projection after
@@ -43,13 +54,17 @@
 #    (no GPU, no engine build), 1920x1080 pyramid, best of 5 blocks x 30 frames:
 #      -O2: 1.274 ms -> 0.720 ms per frame  (-43.5 %, 1.77x)
 #      -O3: 1.284 ms -> 0.882 ms per frame  (-31.3 %, 1.45x)
+#    The 1920x1080 size is a worst case for the function, not a configuration the
+#    engine can reach (see the ceiling row in item 1); it is reported because it
+#    isolates the per-texel win. Scale it down by the texel ratio for in-engine use.
 #    Output compared bit-for-bit against the upstream body over 15 fixed sizes
 #    (1x1, 2x2, 3x3, 5x7, 1x1080, 1920x1, 1023x1023, 127x255, odd and even
 #    chains) plus 40 random sizes up to 2048x2048 with random depth values
 #    including FLT_MAX: identical in all 55 cases.
 #    These are harness numbers, not in-engine numbers: the engine adds the
 #    per-instance test, the raycast module's traversal and the readback around
-#    it. Treat the percentage as the size of the win on update_mips() alone.
+#    it. Treat the percentage as the win on update_mips() alone and read the sizing
+#    note in item 1 before quoting any per-frame number.
 
 # Deliberately NOT done:
 #    ceil(log2(size)) for the starting LOD in _is_occluded() is a libm call per

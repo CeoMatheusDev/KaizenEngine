@@ -65,7 +65,7 @@ change that has to live inside the fragment loop is a patch, not a new
 | `patches/rendering-device/003-resource-tracker-integration.md` | `servers/rendering/rendering_device.cpp` | diagnostics opt-in | Implemented, verified |
 | `patches/rendering-device/004-pipeline-lifetime-integration.patch` | `drivers/vulkan/rendering_device_driver_vulkan.cpp/.h` | `KAIZEN_PIPELINE_LIFETIME=on` | Implemented, verified |
 | `patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.patch` | `servers/rendering/renderer_rd/shaders/scene_forward_lights_inc.glsl` | existing `ShadowQuality` setting | Applied, GPU cost unmeasured |
-| `patches/rendering-scene/001-hzb-occlusion-cpu-cost.patch` | `servers/rendering/renderer_scene_occlusion_cull.{h,cpp}` | none (output is bit-identical) | Applied, −31 % to −44 % on the HZB mip build in an offline harness |
+| `patches/rendering-scene/001-hzb-occlusion-cpu-cost.patch` | `servers/rendering/renderer_scene_occlusion_cull.{h,cpp}` | none (output is bit-identical) | Applied; −31 % to −44 % on the mip build in an offline harness, ≈3 µs/frame in engine because the pyramid is ray-budget sized, not screen sized |
 
 Neither of the last two entries has an in-engine measurement: they were written
 in a sandbox with no GPU and no scons install, so no S4 A/B and no full build

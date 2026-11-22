@@ -134,11 +134,13 @@ void RendererSceneOcclusionCull::HZBuffer::update_mips() {
 	}
 
 	// The whole pyramid is rebuilt every frame per viewport, so this loop runs over
-	// about 4/3 of the occlusion buffer's texels (2.7M for a 1920x1080 buffer). The
-	// previous level's dimensions, their parity and the level pointers do not depend
-	// on the texel being written, and clamping an offset to the previous level's edge
-	// only ever changes the result on the last row or column, so all of it is hoisted
-	// out of the inner loop.
+	// about 4/3 of the occlusion buffer's texels. That buffer is a ray budget and not
+	// the screen: RendererViewport::_draw_3d() sizes it from
+	// rendering/occlusion_culling/occlusion_rays_per_thread times the thread count,
+	// clamped to at most one texel per 2x2 screen region. The previous level's
+	// dimensions, their parity and the level pointers do not depend on the texel being
+	// written, and clamping an offset to the previous level's edge only ever changes
+	// the result on the last row or column, so all of it is hoisted out of the loop.
 	for (uint32_t mip = 1; mip < mips.size(); mip++) {
 		const int prev_w = sizes[mip - 1].width;
 		const int prev_h = sizes[mip - 1].height;
