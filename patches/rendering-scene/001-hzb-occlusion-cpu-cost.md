@@ -56,7 +56,11 @@
 #    one term of it, not the whole. The percentages below are of that term. The term
 #    beside it - the level-0 scatter that fills the buffer these mips are built from -
 #    is patched separately in patches/raycast/001-hzb-level0-scatter.md, and it
-#    touches about three times as many texels per frame as update_mips() does.
+#    touches about three times as many texels per frame as update_mips() does. The
+#    third term, generating the rays, is patched in patches/raycast/002-...: at the
+#    default budget it saves about 43 us, against the ~3 us here and the ~2.4 us
+#    there, so this patch is the smallest of the three and the percentages below
+#    should be read as such.
 #
 # 2. HZBuffer::_is_occluded(): test the near plane before projecting the corner.
 #    The corner was run through p_cam_projection and the result thrown away when
