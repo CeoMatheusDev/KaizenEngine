@@ -61,9 +61,11 @@ change that has to live inside the fragment loop is a patch, not a new
 
 | Patch | Target | Gate | Status |
 |---|---|---|---|
-| `patches/rendering-device/002-texture-buffer-callback.patch` | `servers/rendering/rendering_device.cpp` | none (bug fix) | Implemented, verified |
-| `patches/rendering-device/003-resource-tracker-integration.md` | `servers/rendering/rendering_device.cpp` | diagnostics opt-in | Implemented, verified |
+| `patches/rendering-device/002-texture-buffer-callback.patch` (+ `.md`) | `servers/rendering/rendering_device.cpp` | none (bug fix) | Implemented. The `.patch` used to hold prose and no diff; it is the real diff of `0b5ec230` now, verified to reproduce that commit byte for byte. "Verified" there means built and smoke-run once, by the author: no in-repo test reaches the new branch |
+| `patches/rendering-device/003-resource-tracker-integration.patch` (+ `.md`) | `servers/rendering/rendering_device.cpp`, `SConstruct` | diagnostics opt-in | Implemented. Had a note and no diff at all; the diff (`f4b8a1ca`) now exists, including the `SConscript("kaizen/SCsub")` line the hooks need to link |
 | `patches/rendering-device/004-pipeline-lifetime-integration.patch` | `drivers/vulkan/rendering_device_driver_vulkan.cpp/.h` | `KAIZEN_PIPELINE_LIFETIME=on` | Implemented, verified |
+| `patches/vulkan/001-image-buffer.patch` (+ `.md`) | `drivers/vulkan/rendering_device_driver_vulkan.cpp` | none | Implemented. Also prose-only until now; real diff of `0b5ec230`, byte-verified. No test creates or binds an image buffer uniform |
+| `patches/rendering-server/001-pipeline-cache-telemetry.patch` (+ `.md`) | `servers/rendering/rendering_server_enums.h`, `rendering_server.cpp`, `rendering_server_default.cpp`, `doc/classes/RenderingServer.xml`, generated C# glue | none (read-only counters) | Written after the fact: `087edfa7` had changed three upstream files with no patch entry. Completes the missing doc XML entries and C# doc comments; guarded by `tests/kaizen/api_glue`. `kaizen_api_hash` in `NativeCalls.cs` stays unverified - only a built engine can compute it |
 | `patches/raycast/001-hzb-level0-scatter.patch` | `modules/raycast/raycast_occlusion_cull.cpp` | none (output is bit-identical) | Applied; −46 % on the level-0 scatter at the default ray budget in an offline harness (≈2.4 µs per viewport per frame at 147×83, `-O3`); only reachable in builds with `modules/raycast`. Guarded by `tests/kaizen/hzb_occlusion` |
 | `patches/raycast/002-camera-ray-generation-cost.patch` | `modules/raycast/raycast_occlusion_cull.cpp` | none (output is bit-identical) | Applied; -33 % on per-frame camera-ray generation at the default ray budget (130 -> 87 us of CPU per viewport per frame, offline `-O3`; the loop is split across worker threads, so this is CPU time, not frame time). Applies in either order with patch 001, both verified. Guarded by `tests/kaizen/hzb_occlusion` |
 | `patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.patch` | `servers/rendering/renderer_rd/shaders/scene_forward_lights_inc.glsl` | existing `ShadowQuality` setting | Applied, GPU cost unmeasured |
@@ -75,3 +77,32 @@ exist yet. The HZB entry is backed by an offline harness that proves the output
 is bit-identical and sizes the gain on the function alone; the shadow entry has
 no measurement at all beyond code review. Treat both as unverified until
 `benchmarks/rd_3d` is re-run against them.
+
+## Areas with no Kaizen modification
+
+Audio and physics are upstream code with no fork changes, and it is worth writing
+that down rather than leaving it to be rediscovered: 56 files in `servers/audio`, 40
+in `servers/physics_3d` and 38 in `servers/physics_2d` carry the "Modified by ... 2026"
+header, which looks like a divergence claim. The method to tell the two apart is the
+per-path history, not the header:
+
+    gh api "repos/<fork>/commits?path=servers/audio&per_page=8"
+
+`servers/audio`, `servers/physics_3d`, `servers/physics_2d`: touched only by `0f541294`
+(initial import) and `e96f3e3a` ("docs: fix license headers, ..."), i.e. headers only, no
+behaviour. `drivers/vulkan`: five commits of real work (`0b5ec230`, `ba797e61`,
+`f8949606`, `d7524aee`, `7df9e26a`, `087053a3`), all listed in the table above.
+`modules/mono`: one commit (`087edfa7`), and it edited generated glue rather than adding
+an implementation - see `patches/rendering-server/001`. `modules/gdscript`: one commit,
+and its whole content is an empty `modules/gdscript/tests/scripts/.kaizen/.gdignore`.
+`core/`: nothing beyond the header pass.
+
+Two consequences that are easy to get wrong. First, no audio or physics number in
+`benchmarks/results/` measures fork code: those areas are covered by the S-scenes only as
+workload, so an audio or physics regression cannot be attributed to this fork, and cannot
+be detected by it either - there is no audio or physics scene in `benchmarks/rd_3d`, and
+the reports do not record the audio state at all (`AudioServer` runs whatever driver the
+host has during every sampled window; nothing in `benchmarks/` passes `--no-audio`, and
+`check_report.py` has no field for it, so two cells can differ in that and still pair).
+Second, a future fork change in those areas starts from upstream behaviour: the table above
+is the baseline to diff against, not the header.

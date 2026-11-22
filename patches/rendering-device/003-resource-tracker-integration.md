@@ -43,3 +43,19 @@
 #     604 releases confirmed at runtime, 81 at teardown, 0 leaks.
 #
 # See docs/architecture/resource-diagnostics.md for the full design.
+
+# Diff
+#   patches/rendering-device/003-resource-tracker-integration.patch - the two
+#   upstream-derived files this integration needed: the hooks in
+#   servers/rendering/rendering_device.cpp and the SConscript("kaizen/SCsub")
+#   line in SConstruct that makes the diagnostics library exist to link against.
+#   The SConstruct hunk is listed here rather than in its own patch because the
+#   hooks do not link without it; splitting them would make neither revertible on
+#   its own. The Kaizen side of the feature (kaizen/diagnostics/rendering/*) is
+#   fork-owned code, not an upstream modification, and so needs no patch file.
+
+# Verification of the diff
+#   `patch -p1` onto servers/rendering/rendering_device.cpp and SConstruct as of
+#   0b5ec230^ - after 002 - reproduces both files from f4b8a1ca byte for byte.
+#   Before this note, 003 was the one entry in patches/ with a note and no diff at
+#   all, so the "Verification" above could not be re-run by anyone.
