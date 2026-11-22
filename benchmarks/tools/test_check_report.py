@@ -405,6 +405,19 @@ class CheckReportTests(unittest.TestCase):
         _off, on = self.s8_reports(90000, 20000)
         self.assertEqual(self.check(on, on), 0)
 
+    def test_s8_invalid_side_skips_the_pair_verdict(self):
+        # The "on" cell is already invalid (the harness said so). The pair check must
+        # not add a second, differently-worded failure that points at the culler; it
+        # reports the skip instead. Counting failures would not show the difference -
+        # both reports are counted - so assert on the messages.
+        off, on = self.s8_reports(90000, 89900)
+        on.update({"valid": False, "invalid_reason": "occlusion culling is not provided by this build"})
+        paths = [self.write("pair_%d.json" % i, r) for i, r in enumerate([off, off, on, on])]
+        _per_report, per_cell, _failures = check_report.run(paths)
+        issues = [issue for _key, _count, cell in per_cell for issue in cell]
+        self.assertFalse([m for level, m in issues if level == check_report.FAIL and "nothing was culled" in m])
+        self.assertTrue([m for level, m in issues if "pair not compared" in m])
+
     def test_s8_zero_primitives_fails(self):
         _off, on = self.s8_reports(90000, 0)
         self.assertGreater(self.check(on), 0)

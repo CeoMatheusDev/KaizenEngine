@@ -328,6 +328,18 @@ def _check_s8_pairs(grouped, per_cell, failure_count):
                 values.extend(((report.get("frames") or {}).get("primitives")) or [])
             return _median(values) if values else 0
 
+        runs = sides[False][1] + sides[True][1]
+        invalid = [r for r in runs if r.get("valid") is not True]
+        if invalid:
+            # An invalid run already FAILs with the harness's own reason. Repeating
+            # it as "occulsion culled nothing" would point at the wrong cause, so say
+            # the comparison was skipped and why, instead of going silent.
+            issues = issues_by_key.get(sides[True][0])
+            if issues is not None:
+                issues.append((INFO, "occlusion pair not compared: %d of %d runs are marked invalid (%s)"
+                               % (len(invalid), len(runs), invalid[0].get("invalid_reason") or "no reason given")))
+            continue
+
         off = median_primitives(sides[False][1])
         on = median_primitives(sides[True][1])
         if off <= 0 or on <= 0:
@@ -335,8 +347,11 @@ def _check_s8_pairs(grouped, per_cell, failure_count):
         ratio = float(on) / float(off)
         if ratio > 0.995:
             level, message = FAIL, (
-                "closed variant: %d primitives with occlusion on vs %d off (%.1f%%); occlusion culled "
-                "nothing, so the culler is inactive in this build or nothing occludes the field"
+                "closed variant: %d primitives with occlusion on vs %d off (%.1f%%) - nothing was "
+                "culled. Either this build has no occlusion provider (the base "
+                "RendererSceneOcclusionCull returns a null buffer and only warns once: "
+                "modules/raycast must be built, which Web templates skip by default) or the scene "
+                "failed to occlude the field. Check the build before blaming the culler."
                 % (on, off, 100.0 * ratio))
             failure_count += 1
         else:

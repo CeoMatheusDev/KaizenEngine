@@ -39,6 +39,21 @@
 #    near-screen pyramid. Quoting the 1920x1080 row as an engine cost would overstate
 #    the default case by about two orders of magnitude; benchmarks/rd_3d S8 exists to
 #    replace these estimates with measurements.
+#    Reachability, because it bounds what this is worth: update_mips() has exactly
+#    one caller in the tree, RaycastOcclusionCull::buffer_update()
+#    (modules/raycast/raycast_occlusion_cull.cpp:619). The base
+#    RendererSceneOcclusionCull::buffer_update() is an empty virtual
+#    (renderer_scene_occlusion_cull.h:245), so without modules/raycast built there is
+#    no pyramid at all: buffer_get_ptr() returns null, the OCCLUSION_CULLED macro
+#    short-circuits on that first test, and enabling occlusion culling costs nothing
+#    and culls nothing. Same shape upstream (checked against godotengine/godot 4.6):
+#    RendererSceneCull's constructor creates the dummy unconditionally and the module
+#    instance overwrites the singleton afterwards, because
+#    initialize_modules(MODULE_INITIALIZATION_LEVEL_SCENE) runs after the rendering
+#    server is constructed (main/main.cpp:794 vs :774).
+#    Within that reachable path, buffer_update() is Embree ray casting over the
+#    scenario (scenario.raycast + sort_rays) plus this mip build, so update_mips() is
+#    one term of it, not the whole. The percentages below are of that term.
 #
 # 2. HZBuffer::_is_occluded(): test the near plane before projecting the corner.
 #    The corner was run through p_cam_projection and the result thrown away when

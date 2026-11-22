@@ -225,6 +225,16 @@ func unmet_requirements() -> PackedStringArray:
 	# Compatibility does not maintain an HZB for the viewport, so a "culling on"
 	# cell there is a culling-off cell with a wrong label. Say so and let the
 	# collector record the cell as not applicable.
+	#
+	# The other way this scene can cull nothing is a build without modules/raycast:
+	# the base RendererSceneOcclusionCull::buffer_get_ptr() returns null and the
+	# per-instance test is skipped. That is deliberately NOT checked here. The
+	# module registers no classes and no singletons - it only constructs the
+	# subclass that claims the static singleton - so there is no ClassDB or
+	# Engine.has_singleton() query that can answer it, and
+	# Viewport.use_occlusion_culling reads back true either way. A probe would be
+	# a guess with a confident label; the off/on pair in check_report.py is the
+	# evidence instead.
 	if occlusion_requested and RenderingServer.get_current_rendering_method() == "gl_compatibility":
 		reasons.append("the Compatibility renderer does not provide occlusion culling; the cell is not applicable")
 	return reasons

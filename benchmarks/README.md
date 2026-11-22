@@ -143,6 +143,13 @@ where the field sits inside a sealed box and the camera orbits outside it.
     --bench-preset Q0 --bench-config D1 --bench-out /absolute/path/S8_closed_on_D1.json
 ```
 
+Both cells only measure something in a build with `modules/raycast` enabled (Embree): the
+base occlusion culler in `servers/rendering` is a no-op whose buffer pointer is null, so
+the per-instance test never runs and nothing is culled, at no cost. Web export templates
+skip that module by default, so an identical off/on pair there is the expected outcome, not
+a regression — the checker's message says so. There is no way to query this from GDScript
+(the module registers no classes or singletons), which is why the pair is the evidence.
+
 Run the two closed cells together and `check_report.py` compares them: it FAILs the
 occlusion-on cell when the primitive median barely moves, because "culling enabled,
 nothing culled" means the mechanism is inactive in that build. It also FAILs when the

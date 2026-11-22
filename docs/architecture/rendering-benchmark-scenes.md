@@ -493,6 +493,28 @@ number the run used.
 | S8/n/closed/off | `--bench-variant closed` | naive path: everything behind the shell still drawn |
 | S8/n/closed/on | `--bench-variant closed --bench-occlusion 1` | primitives and GPU time fall, CPU time rises by the HZB update and per-instance test |
 
+**Build gate: who actually provides the HZB.** The engine's own `RendererSceneOcclusionCull`
+is a no-op — `buffer_update()` is an empty virtual and `buffer_get_ptr()` returns `nullptr`,
+which makes the `OCCLUSION_CULLED` test short-circuit before any per-instance work. The real
+provider is `modules/raycast` (Embree): it fills the base level by casting rays and calls
+`update_mips()`, the pyramid's only caller in the tree. The module is skipped on Web
+(`platform/web/detect.py:85`) and architecture-gated (`modules/raycast/config.py`).
+
+Two consequences for anyone reading an S8 cell:
+
+- A zero-delta closed pair on a build without the module is **the expected result**, not a
+  regression — the FAIL message says so, because the alternative is debugging a culler that
+  was never installed.
+- "Leaving occlusion culling on costs something even when it cannot help" is false in such
+  builds: with a null buffer pointer the per-instance test never runs. The `open` arm of
+  this scene only measures anything in module builds.
+
+There is no GDScript-visible probe for this: the module registers no classes and no
+singletons (it only constructs the subclass, which claims the static singleton), so no
+`ClassDB.class_exists()` or `Engine.has_singleton()` query can answer it, and
+`Viewport.use_occlusion_culling` reads back as `true` either way. The pair evidence is the
+only honest signal, which is why the checker compares off/on instead of trusting the label.
+
 **Validity conditions**
 
 - `occlusion_requested == occlusion_effective`, else the cell FAILs.
