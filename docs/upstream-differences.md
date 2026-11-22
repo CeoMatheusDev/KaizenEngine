@@ -7,6 +7,11 @@ KaizenEngine is a fork of Godot 4.8.0-beta. As of the differential audit
 graphics driver source code. All 390 modified files in `servers/` and `drivers/`
 contain only cosmetic license header updates (`LICENSE` → `LICENSE.txt`).
 
+That audit describes the fork baseline. Work landed after it does change
+upstream behaviour, but never silently: every change is a small, isolated
+patch recorded in `patches/` and listed below, and each one keeps a fallback
+either through a runtime gate or by dropping the patch file.
+
 ## Method
 
 - Compared `git diff 0f54129..HEAD` for all files under `servers/`, `drivers/`,
@@ -32,7 +37,7 @@ contain only cosmetic license header updates (`LICENSE` → `LICENSE.txt`).
 |---|---|---|---|---|
 | 1 | `rendering_device.cpp:924` | `texture_buffer` em callbacks: `DEV_ASSERT(false && "FIXME: Broken.")` | Alta | Patch 002 planejado |
 | 2 | `rendering_device_driver_vulkan.cpp:4881` | `UNIFORM_TYPE_IMAGE_BUFFER`: `CRASH_NOW_MSG("Unimplemented!")` | Crítica | Patch 001 planejado |
-| 3 | `rendering_device_driver_vulkan.cpp:5416` | Pipeline cache cresce sem limite | Média | Avaliar |
+| 3 | `rendering_device_driver_vulkan.cpp:5416` | Pipeline cache cresce sem limite | Média | Parcial: registry opt-in `KAIZEN_PIPELINE_CACHE=on`; evicção por orçamento continua desligada |
 | 4 | `rasterizer_gles3.cpp:278` | Early return em construtor (GLAD fail) | Média | Avaliar |
 | 5 | `forward_mobile/render_forward_mobile.h:447-448` | SSAO/SSIL stubs (vazios) | Informativa | Documentado |
 | 6 | `rendering_device.cpp:7899,8021` | `frames_pending_resources_for_processing` set (não incrementado) | Baixa | By design |
@@ -44,3 +49,23 @@ contain only cosmetic license header updates (`LICENSE` → `LICENSE.txt`).
 - Known issues are documented here and in `docs/architecture/rendering-audit.md`.
 - Fixes are applied as isolated patches in `patches/` directory.
 - New Kaizen functionality is developed in `kaizen/` subsystems, not by modifying upstream files.
+
+"Preserved intact" is enforced against the fork baseline, not against the
+patched working tree: a change to an upstream file is acceptable only when it
+exists as a patch file under `patches/`, is listed below, and can be reverted by
+dropping that patch. Shader include files follow the same rule — a sampling
+change that has to live inside the fragment loop is a patch, not a new
+`kaizen/` subsystem.
+
+## Applied patches
+
+| Patch | Target | Gate | Status |
+|---|---|---|---|
+| `patches/rendering-device/002-texture-buffer-callback.patch` | `servers/rendering/rendering_device.cpp` | none (bug fix) | Implemented, verified |
+| `patches/rendering-device/003-resource-tracker-integration.md` | `servers/rendering/rendering_device.cpp` | diagnostics opt-in | Implemented, verified |
+| `patches/rendering-device/004-pipeline-lifetime-integration.patch` | `drivers/vulkan/rendering_device_driver_vulkan.cpp/.h` | `KAIZEN_PIPELINE_LIFETIME=on` | Implemented, verified |
+| `patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.patch` | `servers/rendering/renderer_rd/shaders/scene_forward_lights_inc.glsl` | existing `ShadowQuality` setting | Applied, GPU cost unmeasured |
+
+The last entry is the only one without a measurement: it was written in a
+sandbox with no GPU, so no S4 A/B run backs its expected gain. Treat the change
+as unverified until `benchmarks/rd_3d` is re-run against it.
