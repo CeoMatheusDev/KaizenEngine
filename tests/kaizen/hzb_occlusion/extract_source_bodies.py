@@ -69,10 +69,11 @@ def find_body(text, definition_regex, source):
     matches = [m for m in re.finditer(definition_regex, text, re.MULTILINE)]
     if len(matches) != 1:
         raise SystemExit(
-            "%s: expected exactly one definition matching %r, found %d. "
+            f"{source}: expected exactly one definition matching {definition_regex!r}, "
+            f"found {len(matches)}. "
             "The engine function moved or changed signature; update FUNCTIONS in "
             "this script, and make sure the change is reflected in the matching "
-            "patches/*/0*.md note." % (source, definition_regex, len(matches))
+            "patches/*/0*.md note."
         )
     start = matches[0].end() - 1  # on the '{'
     depth = 0
@@ -102,7 +103,7 @@ def find_body(text, definition_regex, source):
             if depth == 0:
                 return text[start + 1 : index], text.count("\n", 0, matches[0].start()) + 1
         index += 1
-    raise SystemExit("%s: definition matching %r is not brace-balanced" % (source, definition_regex))
+    raise SystemExit(f"{source}: definition matching {definition_regex!r} is not brace-balanced")
 
 
 def main(argv):
@@ -121,20 +122,17 @@ def main(argv):
         if source not in cache:
             path = os.path.join(args.repo_root, source)
             if not os.path.isfile(path):
-                raise SystemExit("missing source file: %s" % path)
+                raise SystemExit(f"missing source file: {path}")
             with io_open(path) as handle:
                 cache[source] = handle.read()
         body, line = find_body(cache[source], regex, source)
-        parts.append(
-            "\n// ---- %s:%d  %s\nstatic %s {\n%s%s}\n"
-            % (source, line, name, signature, prologue, body)
-        )
+        parts.append(f"\n// ---- {source}:{line}  {name}\nstatic {signature} {{\n{prologue}{body}}}\n")
         if current is None:
             current = (source, line)
 
     with io_open(args.out, "w") as handle:
         handle.write("".join(parts))
-    print("extracted %d function bodies -> %s" % (len(FUNCTIONS), args.out))
+    print(f"extracted {len(FUNCTIONS)} function bodies -> {args.out}")
     return 0
 
 

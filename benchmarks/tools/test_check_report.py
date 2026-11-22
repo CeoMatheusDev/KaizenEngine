@@ -119,7 +119,7 @@ class CheckReportTests(unittest.TestCase):
         return str(path)
 
     def check(self, *reports):
-        paths = [self.write("report_%d.json" % index, report) for index, report in enumerate(reports)]
+        paths = [self.write(f"report_{index}.json", report) for index, report in enumerate(reports)]
         _, _, failures = check_report.run(paths)
         return failures
 
@@ -412,7 +412,7 @@ class CheckReportTests(unittest.TestCase):
         # both reports are counted - so assert on the messages.
         off, on = self.s8_reports(90000, 89900)
         on.update({"valid": False, "invalid_reason": "occlusion culling is not provided by this build"})
-        paths = [self.write("pair_%d.json" % i, r) for i, r in enumerate([off, off, on, on])]
+        paths = [self.write(f"pair_{i}.json", r) for i, r in enumerate([off, off, on, on])]
         _per_report, per_cell, _failures = check_report.run(paths)
         issues = [issue for _key, _count, cell in per_cell for issue in cell]
         self.assertFalse([m for level, m in issues if level == check_report.FAIL and "nothing was culled" in m])

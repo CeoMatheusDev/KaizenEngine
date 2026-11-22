@@ -283,6 +283,11 @@ the sanitizer state from `-DKAIZEN_TEST_SANITIZERS` (which `KAIZEN_SANITIZERS` n
 along with the matching `-fsanitize`), and compute the verdict and the exit code from the
 same `run_succeeded()`.
 
+`run_tests.sh` builds the report test twice - plain, and with `-DKAIZEN_TEST_SANITIZERS` -
+because the two states print different words and both have to be checked. Neither of those
+two builds links a sanitizer; only `run_vulkan_tests.sh` with `KAIZEN_SANITIZERS` does
+that, and it is the only place the "built with address" line may ever appear.
+
 ## In-engine pipeline destruction (opt-in)
 
 The Vulkan driver defers `vkDestroyPipeline` through the registry only when

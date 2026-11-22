@@ -37,6 +37,14 @@ REPORT_BIN="${OUT_DIR}/test_pipeline_lifetime_report"
 	"${SCRIPT_DIR}/vulkan/test_pipeline_lifetime_report.cpp" \
 	-o "${REPORT_BIN}"
 
+# Both sides of the sanitizer question, not one: the report has to say "NOT BUILT"
+# without the macro and "built with X" with it, so both builds are checked. Neither of
+# these two lines links a sanitizer - that is run_vulkan_tests.sh's job, on a machine
+# that asked for it - and the test asserts the wording, not the world.
+"${CXX}" "${CXXFLAGS[@]}" -DKAIZEN_TEST_SANITIZERS=\"address,undefined\" \
+	"${SCRIPT_DIR}/vulkan/test_pipeline_lifetime_report.cpp" \
+	-o "${REPORT_BIN}_sanmarked"
+
 # The HZB occlusion test compiles function bodies lifted out of the engine sources,
 # because those translation units need the generated headers this suite exists to
 # avoid. The extraction step is part of the build: if an engine function moves, it
@@ -58,6 +66,7 @@ python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
 python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | tail -3
 
 "${REPORT_BIN}" "$@"
+"${REPORT_BIN}_sanmarked" "$@"
 "${RESOURCE_BIN}" "$@"
 "${PIPELINE_BIN}" "$@"
 "${HZB_BIN}" "$@"

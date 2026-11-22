@@ -262,8 +262,8 @@ def _check_s8(fail, warn, info, frames, parameters):
     if requested is None or effective is None:
         warn("S8 parameters do not record occlusion_requested/occlusion_effective")
     elif bool(requested) != bool(effective):
-        fail("occlusion culling requested=%s but the viewport reports %s; the cell does not "
-             "measure what its label says" % (bool(requested), bool(effective)))
+        fail(f"occlusion culling requested={bool(requested)} but the viewport reports "
+             f"{bool(effective)}; the cell does not measure what its label says")
 
     primitives = frames.get("primitives")
     if not isinstance(primitives, list) or not primitives:
@@ -274,10 +274,9 @@ def _check_s8(fail, warn, info, frames, parameters):
     buffer_size = parameters.get("occlusion_buffer")
     if isinstance(buffer_size, (list, tuple)) and len(buffer_size) == 2:
         texels = int(buffer_size[0]) * int(buffer_size[1])
-        info("occlusion HZB base level %dx%d from %s rays/thread x %s threads (%d pyramid texels); "
-             "a ray budget, not the screen" % (int(buffer_size[0]), int(buffer_size[1]),
-                                               parameters.get("rays_per_thread"),
-                                               parameters.get("processor_count"), texels))
+        info(f"occlusion HZB base level {int(buffer_size[0])}x{int(buffer_size[1])} from "
+             f"{parameters.get('rays_per_thread')} rays/thread x {parameters.get('processor_count')} "
+             f"threads ({texels} pyramid texels); a ray budget, not the screen")
 
 
 def _cell_parameters(key):
@@ -336,8 +335,8 @@ def _check_s8_pairs(grouped, per_cell, failure_count):
             # the comparison was skipped and why, instead of going silent.
             issues = issues_by_key.get(sides[True][0])
             if issues is not None:
-                issues.append((INFO, "occlusion pair not compared: %d of %d runs are marked invalid (%s)"
-                               % (len(invalid), len(runs), invalid[0].get("invalid_reason") or "no reason given")))
+                issues.append((INFO, f"occlusion pair not compared: {len(invalid)} of {len(runs)} runs "
+                                     f"are marked invalid ({invalid[0].get('invalid_reason') or 'no reason given'})"))
             continue
 
         off = median_primitives(sides[False][1])
