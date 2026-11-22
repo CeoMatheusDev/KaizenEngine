@@ -697,9 +697,9 @@ int main() {
 	test_generate_camera_rays();
 
 	if (failures) {
-		printf("hzb_occlusion: %d failure(s) over %d case(s)\n", failures, checks);
+		printf("hzb_occlusion: %d checks, %d failure(s)\n", checks, failures);
 		return 1;
 	}
-	printf("hzb_occlusion: %d case(s), 0 failure(s)\n", checks);
+	printf("hzb_occlusion: %d checks, 0 failure(s)\n", checks);
 	return 0;
 }
