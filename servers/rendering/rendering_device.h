@@ -56,6 +56,8 @@
 #include "servers/rendering/rendering_device_enums.h"
 #include "servers/rendering/rendering_device_graph.h"
 #include "kaizen/rendering/pipeline_cache/pipeline_key.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_types.h"
+#include "kaizen/rendering/pipeline_cache/pipeline_registry.h"
 
 class RDTextureFormat;
 class RDTextureView;
@@ -1322,7 +1324,7 @@ private:
 
 public:
 	RID render_pipeline_create(RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags = 0, uint32_t p_for_render_pass = 0, const Vector<PipelineSpecializationConstant> &p_specialization_constants = Vector<PipelineSpecializationConstant>());
-	RID render_pipeline_create_cached(const Kaizen::PipelineKey &p_key, RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, Kaizen::PipelineHandle &r_handle);
+	RID render_pipeline_create_cached(uint64_t p_key_hash, const Kaizen::PipelineKey &p_key, RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, Kaizen::PipelineHandle &r_handle);
 	bool render_pipeline_is_valid(RID p_pipeline);
 
 	RID compute_pipeline_create(RID p_shader, const Vector<PipelineSpecializationConstant> &p_specialization_constants = Vector<PipelineSpecializationConstant>());
@@ -1354,12 +1356,22 @@ public:
 	// Kaizen P2.3 pipeline cache API (no-op when disabled).
 	Kaizen::PipelineHandle pipeline_cache_acquire(uint64_t p_key, uint64_t p_bytes);
 	Kaizen::PipelineHandle pipeline_cache_acquire(const Kaizen::PipelineKey &p_key, uint64_t p_bytes);
+	RID pipeline_cache_get_rid(Kaizen::PipelineHandle p_handle);
 	void pipeline_cache_register_rid(Kaizen::PipelineHandle p_handle, RID p_rid);
 	void pipeline_cache_release(Kaizen::PipelineHandle p_handle);
 	void pipeline_cache_retire(Kaizen::PipelineHandle p_handle);
 	void pipeline_cache_enforce_budget();
 	void pipeline_cache_drain();
 	void pipeline_cache_confirm_all();
+
+	// Kaizen pipeline cache telemetry accessor
+	Kaizen::PipelineStats pipeline_cache_get_stats() const {
+		MutexLock lock(pipeline_cache_mutex);
+		if (pipeline_cache_registry) {
+			return pipeline_cache_registry->get_stats();
+		}
+		return Kaizen::PipelineStats();
+	}
 
 private:
 	/****************/

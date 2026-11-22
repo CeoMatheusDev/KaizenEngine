@@ -35,7 +35,7 @@ usage() {
 
 # --- Defaults ------------------------------------------------------------
 declare -a TARGETS=()
-MONO="no"
+MONO="yes"
 DEV_BUILD="no"
 PRODUCTION="no"
 JOBS="$(kz_nproc)"

@@ -2392,7 +2392,11 @@ public static partial class RenderingServer
         /// <summary>
         /// <para>Number of pipeline compilations that were triggered to optimize the current scene. These compilations are done in the background and should not cause any stutters whatsoever.</para>
         /// </summary>
-        PipelineCompilationsSpecialization = 10
+        PipelineCompilationsSpecialization = 10,
+        PipelineCacheLogicalAcquires = 11,
+        PipelineCacheSharedAcquires = 12,
+        PipelineCachePhysicalCreates = 13,
+        PipelineCacheReleases = 14
     }
 
     public enum PipelineSource : long

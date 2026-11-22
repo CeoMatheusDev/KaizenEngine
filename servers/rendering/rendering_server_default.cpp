@@ -331,6 +331,18 @@ uint64_t RenderingServerDefault::get_rendering_info(RSE::RenderingInfo p_info) {
 		return RSG::canvas_render->get_pipeline_compilations(RSE::PIPELINE_SOURCE_DRAW) + RSG::scene->get_pipeline_compilations(RSE::PIPELINE_SOURCE_DRAW);
 	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION) {
 		return RSG::canvas_render->get_pipeline_compilations(RSE::PIPELINE_SOURCE_SPECIALIZATION) + RSG::scene->get_pipeline_compilations(RSE::PIPELINE_SOURCE_SPECIALIZATION);
+	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES) {
+		RenderingDevice *rd = RenderingDevice::get_singleton();
+		return rd ? rd->pipeline_cache_get_stats().logical_acquires : 0;
+	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES) {
+		RenderingDevice *rd = RenderingDevice::get_singleton();
+		return rd ? rd->pipeline_cache_get_stats().shared_acquires : 0;
+	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES) {
+		RenderingDevice *rd = RenderingDevice::get_singleton();
+		return rd ? rd->pipeline_cache_get_stats().physical_creates : 0;
+	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_RELEASES) {
+		RenderingDevice *rd = RenderingDevice::get_singleton();
+		return rd ? rd->pipeline_cache_get_stats().releases : 0;
 	}
 	return RSG::utilities->get_rendering_info(p_info);
 }

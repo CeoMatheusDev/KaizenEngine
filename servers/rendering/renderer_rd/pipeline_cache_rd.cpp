@@ -166,8 +166,9 @@ RID PipelineCacheRD::_generate_version(RD::VertexFormatID p_vertex_format_id, RD
 	}
 
 	Kaizen::PipelineKey pipeline_key = _make_pipeline_key(shader, p_vertex_format_id, p_framebuffer_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, p_bool_specializations, specialization_constants);
+	uint64_t pipeline_key_hash = pipeline_key.hash();
 	Kaizen::PipelineHandle cache_handle;
-	RID pipeline = RD::get_singleton()->render_pipeline_create_cached(pipeline_key, shader, p_framebuffer_format_id, p_vertex_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, specialization_constants, cache_handle);
+	RID pipeline = RD::get_singleton()->render_pipeline_create_cached(pipeline_key_hash, pipeline_key, shader, p_framebuffer_format_id, p_vertex_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, specialization_constants, cache_handle);
 	ERR_FAIL_COND_V(pipeline.is_null(), RID());
 
 	static bool shared_acquire_test_ran = false;
@@ -176,7 +177,7 @@ RID PipelineCacheRD::_generate_version(RD::VertexFormatID p_vertex_format_id, RD
 		shared_acquire_test_ran = true;
 		ERR_FAIL_COND_V_MSG(cache_handle.is_null(), RID(), "Pipeline cache verification requires KAIZEN_PIPELINE_CACHE=on.");
 		Kaizen::PipelineHandle duplicate_handle;
-		const RID duplicate_pipeline = RD::get_singleton()->render_pipeline_create_cached(pipeline_key, shader, p_framebuffer_format_id, p_vertex_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, specialization_constants, duplicate_handle);
+		const RID duplicate_pipeline = RD::get_singleton()->render_pipeline_create_cached(pipeline_key_hash, pipeline_key, shader, p_framebuffer_format_id, p_vertex_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, specialization_constants, duplicate_handle);
 		const bool shared_identity = duplicate_pipeline == pipeline && duplicate_handle == cache_handle;
 		if (!duplicate_handle.is_null()) {
 			RD::get_singleton()->pipeline_cache_release(duplicate_handle);

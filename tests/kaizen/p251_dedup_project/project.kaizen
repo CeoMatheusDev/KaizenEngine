@@ -1,0 +1,14 @@
+; Engine configuration file.
+; P2.5.1 Natural Deduplication Test: exercises multi-consumer sharing, semantic separation,
+; and lifetime integrity for the PipelineCacheRD.
+
+config_version=5
+
+[application]
+
+config/name="P2.5.1 Pipeline Deduplication"
+run/main_scene="res://main.tscn"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"

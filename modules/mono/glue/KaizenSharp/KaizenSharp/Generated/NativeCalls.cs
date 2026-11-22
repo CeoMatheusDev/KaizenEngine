@@ -11,7 +11,7 @@ using Kaizen.NativeInterop;
 [System.Runtime.CompilerServices.SkipLocalsInit]
 internal static class NativeCalls
 {
-    internal static ulong kaizen_api_hash = 34626250;
+    internal static ulong kaizen_api_hash = 2389096496;
 
     private const int VarArgsSpanThreshold = 10;
 

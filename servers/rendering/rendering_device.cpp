@@ -5197,7 +5197,7 @@ bool RenderingDevice::render_pipeline_is_valid(RID p_pipeline) {
 	return render_pipeline_owner.owns(p_pipeline);
 }
 
-RID RenderingDevice::render_pipeline_create_cached(const Kaizen::PipelineKey &p_key, RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, Kaizen::PipelineHandle &r_handle) {
+RID RenderingDevice::render_pipeline_create_cached(uint64_t p_key_hash, const Kaizen::PipelineKey &p_key, RID p_shader, FramebufferFormatID p_framebuffer_format, VertexFormatID p_vertex_format, RenderPrimitive p_render_primitive, const PipelineRasterizationState &p_rasterization_state, const PipelineMultisampleState &p_multisample_state, const PipelineDepthStencilState &p_depth_stencil_state, const PipelineColorBlendState &p_blend_state, BitField<PipelineDynamicStateFlags> p_dynamic_state_flags, uint32_t p_for_render_pass, const Vector<PipelineSpecializationConstant> &p_specialization_constants, Kaizen::PipelineHandle &r_handle) {
 	r_handle = Kaizen::PipelineHandle();
 	if (pipeline_cache_registry == nullptr) {
 		return render_pipeline_create(p_shader, p_framebuffer_format, p_vertex_format, p_render_primitive, p_rasterization_state, p_multisample_state, p_depth_stencil_state, p_blend_state, p_dynamic_state_flags, p_for_render_pass, p_specialization_constants);
@@ -9382,6 +9382,17 @@ Kaizen::PipelineHandle RenderingDevice::pipeline_cache_acquire(const Kaizen::Pip
 	}
 	MutexLock lock(pipeline_cache_mutex);
 	return pipeline_cache_registry->acquire(p_key, p_bytes);
+}
+
+RID RenderingDevice::pipeline_cache_get_rid(Kaizen::PipelineHandle p_handle) {
+	if (pipeline_cache_registry == nullptr || p_handle.is_null()) {
+		return RID();
+	}
+	MutexLock lock(pipeline_cache_mutex);
+	if (pipeline_cache_rids.has(p_handle.index)) {
+		return pipeline_cache_rids[p_handle.index];
+	}
+	return RID();
 }
 
 void RenderingDevice::pipeline_cache_register_rid(Kaizen::PipelineHandle p_handle, RID p_rid) {
