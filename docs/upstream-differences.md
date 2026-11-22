@@ -100,9 +100,13 @@ and its whole content is an empty `modules/gdscript/tests/scripts/.kaizen/.gdign
 Two consequences that are easy to get wrong. First, no audio or physics number in
 `benchmarks/results/` measures fork code: those areas are covered by the S-scenes only as
 workload, so an audio or physics regression cannot be attributed to this fork, and cannot
-be detected by it either - there is no audio or physics scene in `benchmarks/rd_3d`, and
-the reports do not record the audio state at all (`AudioServer` runs whatever driver the
-host has during every sampled window; nothing in `benchmarks/` passes `--no-audio`, and
-`check_report.py` has no field for it, so two cells can differ in that and still pair).
+be detected by it either - there is no audio or physics scene in `benchmarks/rd_3d`. The
+audio state a cell was measured in used to be invisible: `AudioServer` mixed on whatever
+driver the host had, and there was no switch to look for in the report, because `--no-audio`
+is not a switch this engine has (`--audio-driver Dummy` is, and `--headless` implies it).
+`benchmarks/rd_3d/scripts/bench_harness.gd` now records `runtime.audio_driver` and
+`check_report.py` warns when it is not `Dummy` and refuses to pair cells whose states
+differ. That does not repair history: all 228 published reports predate the field, so the
+state they were measured in is not recoverable, and those cells remain silent about audio.
 Second, a future fork change in those areas starts from upstream behaviour: the table above
 is the baseline to diff against, not the header.

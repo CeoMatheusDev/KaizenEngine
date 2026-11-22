@@ -30,6 +30,19 @@ LOOP_FRAMES = 300
 STABLE_WINDOW = 120
 TOLERANCE = 0.01
 
+# The only audio state a published cell may show. "Dummy" is selected by
+# --audio-driver Dummy (and implied by --headless); it is not "no audio work": the dummy
+# driver keeps its own thread, which wakes every buffer_frames/mix_rate (~10.7 ms at the
+# default 512/48000) and mixes under the driver mutex. What a real driver adds on top is
+# a *device* callback: the period is then set by the audio hardware, the thread priority by
+# the backend, and an underrun turns into a burst. None of that is controlled by the
+# benchmark, so it must not be free to differ between the two sides of a comparison.
+AUDIO_ISOLATED_DRIVER = "Dummy"
+
+# Stand-in for reports written before the harness recorded the audio state, so a cell key and
+# any message built from it say what is missing instead of printing None.
+AUDIO_NOT_RECORDED = "not recorded"
+
 FAIL = "FAIL"
 WARN = "WARN"
 INFO = "INFO"
@@ -84,6 +97,20 @@ def _check_report(report):
         fail("display server is %r; no rendering surface was used" % runtime.get("display_server"))
     if runtime.get("vsync_mode") != 0:
         fail("display vsync mode is %r, expected 0" % runtime.get("vsync_mode"))
+
+    # The audio state is read from the runtime block, never from the invocation: Main::setup
+    # consumes recognised engine switches (only unrecognised arguments reach main_args, and
+    # --audio-driver has its own branch), so build.flags cannot show what was asked for. It is
+    # a WARN and not a FAIL because the numbers are still the numbers - what is unprovable is
+    # that two cells were measured under the same host conditions.
+    if "audio_driver" not in runtime:
+        warn("runtime does not record audio_driver; this run was measured with whatever audio "
+             "state the host had, so it cannot be paired with a run that records a different one")
+    elif str(runtime.get("audio_driver")) != AUDIO_ISOLATED_DRIVER:
+        warn(f"audio_driver is {runtime.get('audio_driver')!r}, not {AUDIO_ISOLATED_DRIVER!r}: a "
+             "live output device drives the audio mix from a hardware callback with a backend-chosen "
+             "thread priority, so the mix thread competes with the render thread on host state the "
+             "benchmark does not set; re-run with --audio-driver Dummy")
 
     if report.get("valid") is not True:
         fail("harness marked the run invalid: %s" % (report.get("invalid_reason") or "no reason given"))
@@ -286,10 +313,17 @@ def _cell_parameters(key):
         return None
 
 
+def _cell_audio(key):
+    """The audio state of a cell, as recorded in its key."""
+    return key[8]
+
+
 def _s8_pair_signature(key):
     """Everything that must match for two S8 cells to be one A/B pair, or None.
     key is (scene, parameters, preset, configuration, method, driver, adapter,
-    content hash). The parameters and the content hash deliberately stay out of
+    content hash, audio driver). The audio driver stays out as well, so a pair
+    refused for that reason alone can be named rather than dropped in silence;
+    _check_s8_pairs compares it explicitly. The parameters and the content hash deliberately stay out of
     the signature: the hash covers scene_parameters(), which is where the
     occlusion flag is recorded, so demanding it match would guarantee no pair is
     ever found. Everything that is *not* the setting under test must match."""
@@ -319,6 +353,28 @@ def _check_s8_pairs(grouped, per_cell, failure_count):
     issues_by_key = {key: issues for key, _count, issues in per_cell}
     for sides in signatures.values():
         if set(sides) != {False, True}:
+            continue
+
+        a_audio = _cell_audio(sides[False][0])
+        b_audio = _cell_audio(sides[True][0])
+        if a_audio != b_audio:
+            # Refuse the pair out loud. Silence here would read as "no data" on a directory
+            # where old cells and new ones sit side by side, and a difference nobody names is a
+            # difference someone will later assume was zero.
+            if AUDIO_NOT_RECORDED in (a_audio, b_audio):
+                level = WARN
+                detail = (f"one side is {a_audio!r} and the other {b_audio!r}, so it cannot be "
+                          f"shown that the audio state matched")
+            else:
+                level = FAIL
+                detail = (f"one side ran with audio driver {a_audio!r} and the other with "
+                          f"{b_audio!r}; only the dummy driver is free of a device callback")
+            issues = issues_by_key.get(sides[True][0])
+            message = f"S8 pair refused: {detail}"
+            if issues is not None:
+                issues.append((level, message))
+            if level == FAIL:
+                failure_count += 1
             continue
 
         def median_primitives(reports):
@@ -405,6 +461,11 @@ def _cell_key(report):
         str(runtime.get("rendering_driver")),
         str(runtime.get("adapter_name")),
         str(scene.get("content_hash")),
+        # Part of the cell identity: two runs that differ only in whether a live audio device
+        # was mixing are not repeats of one measurement. Splitting them here is what makes the
+        # pair check below able to trust a cell, and it replaces a misleading p95-spread
+        # complaint with the audio message the run actually deserves.
+        str(runtime.get("audio_driver") or AUDIO_NOT_RECORDED),
     )
 
 

@@ -516,6 +516,11 @@ func _write_report(p_pso_total_delta: Dictionary) -> bool:
 		"adapter_name": RenderingServer.get_video_adapter_name(),
 		"adapter_vendor": RenderingServer.get_video_adapter_vendor(),
 		"api_version": RenderingServer.get_video_adapter_api_version(),
+		# The audio state has to be in the report, not inferred from the invocation: Main::setup
+		# consumes recognised engine switches, so --audio-driver never reaches build.flags. The
+		# dummy driver still mixes on its own thread every ~10.7 ms; what it removes is the audio
+		# device callback that sets a real driver's period and thread priority.
+		"audio_driver": AudioServer.get_driver_name(),
 		"window_size": [window_size.x, window_size.y],
 	}
 

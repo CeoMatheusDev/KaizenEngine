@@ -60,6 +60,7 @@ def make_report(**overrides):
             "adapter_name": "Fake GPU",
             "adapter_vendor": "Fake Vendor",
             "api_version": "1.3",
+            "audio_driver": "Dummy",
             "window_size": [1920, 1080],
         },
         "timing": {
@@ -421,6 +422,76 @@ class CheckReportTests(unittest.TestCase):
     def test_s8_zero_primitives_fails(self):
         _off, on = self.s8_reports(90000, 0)
         self.assertGreater(self.check(on), 0)
+
+    def test_audio_dummy_state_is_not_mentioned(self):
+        report = make_report()
+        self.assertEqual(self.check(report), 0)
+        self.assertEqual([m for _level, m in check_report._check_report(report) if "audio" in m], [])
+
+    def test_live_audio_driver_warns_without_failing(self):
+        # The numbers are still the numbers. What cannot be proven is that the host conditions
+        # matched the other cell's, so this is a warning: loud enough to block a publication
+        # review, not a claim that the measurement itself is broken.
+        report = make_report()
+        report["runtime"]["audio_driver"] = "ALSA"
+        self.assertEqual(self.check(report), 0)
+        audio = [(level, m) for level, m in check_report._check_report(report) if "audio" in m]
+        self.assertEqual([level for level, _m in audio], [check_report.WARN], audio)
+        self.assertIn("ALSA", audio[0][1])
+        self.assertIn("--audio-driver Dummy", audio[0][1])
+
+    def test_unrecorded_audio_state_warns(self):
+        # Every published cell predates the field, so the absence has to be reported without
+        # condemning 228 measurements that were only never asked to record it.
+        report = make_report()
+        del report["runtime"]["audio_driver"]
+        self.assertEqual(self.check(report), 0)
+        audio = [m for _level, m in check_report._check_report(report) if "audio" in m]
+        self.assertEqual(len(audio), 1, audio)
+        self.assertIn("does not record audio_driver", audio[0])
+
+    def test_audio_state_splits_repeated_runs(self):
+        # Two runs differing only in whether a sound card was mixing are not repeats of one
+        # measurement: comparing their spread would blame the p95 for a host difference.
+        first = make_report()
+        second = make_report()
+        second["runtime"]["audio_driver"] = "ALSA"
+        paths = [self.write("audio_repeat_0.json", first), self.write("audio_repeat_1.json", second)]
+        _per_report, per_cell, _failures = check_report.run(paths)
+        self.assertEqual(per_cell, [])
+
+    def test_s8_pair_with_matching_audio_is_compared(self):
+        off, on = self.s8_reports(90000, 89900)
+        for report in (off, on):
+            report["runtime"]["audio_driver"] = "Dummy"
+        paths = [self.write(f"same_audio_{index}.json", report) for index, report in enumerate([off, off, on, on])]
+        _per_report, per_cell, failures = check_report.run(paths)
+        messages = [m for _key, _count, cell in per_cell for _level, m in cell]
+        self.assertTrue([m for m in messages if "nothing was culled" in m], messages)
+        self.assertGreater(failures, 0)
+
+    def test_s8_pair_refused_when_audio_differs(self):
+        off, on = self.s8_reports(90000, 89900)
+        on["runtime"]["audio_driver"] = "ALSA"
+        paths = [self.write(f"audio_pair_{index}.json", report) for index, report in enumerate([off, off, on, on])]
+        _per_report, per_cell, failures = check_report.run(paths)
+        messages = [m for _key, _count, cell in per_cell for _level, m in cell]
+        refused = [m for m in messages if "S8 pair refused" in m]
+        self.assertEqual(len(refused), 1, messages)
+        self.assertIn("ALSA", refused[0])
+        self.assertGreater(failures, 0)
+        # The culler must not be blamed for a difference in the audio state.
+        self.assertEqual([m for m in messages if "nothing was culled" in m], [])
+
+    def test_s8_pair_with_unrecorded_audio_is_refused_as_a_warning(self):
+        off, on = self.s8_reports(90000, 89900)
+        del on["runtime"]["audio_driver"]
+        paths = [self.write(f"unknown_audio_{index}.json", report) for index, report in enumerate([off, off, on, on])]
+        _per_report, per_cell, failures = check_report.run(paths)
+        refused = [(level, m) for _key, _count, cell in per_cell for level, m in cell if "S8 pair refused" in m]
+        self.assertEqual([level for level, _m in refused], [check_report.WARN], refused)
+        self.assertIn("cannot be shown", refused[0][1])
+        self.assertEqual(failures, 0)
 
     def test_s8_different_ray_budgets_do_not_pair(self):
         off, on = self.s8_reports(90000, 89900)
