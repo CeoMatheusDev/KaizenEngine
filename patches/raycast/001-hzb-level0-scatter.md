@@ -74,6 +74,11 @@
 #   this path is actually worth, and both numbers are dominated by the Embree ray
 #   cast in the same buffer_update() call.
 
+# Guarded in-tree by tests/kaizen/hzb_occlusion: run_tests.sh extracts this function and
+# compares it against the naive per-texel-bounds scatter over 19 buffer geometries, with
+# the destination poisoned by a value the inputs cannot produce, so a texel that stops
+# being written is a failure rather than an accident of allocation.
+
 # Reproducing: git diff of modules/raycast/raycast_occlusion_cull.cpp, applied with
 # `patch -p1` onto the pre-change tree; verified to reproduce the file byte-for-byte.
 # Note that `git apply` from a subdirectory resolves paths against the repository

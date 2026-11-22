@@ -29,5 +29,21 @@ PIPELINE_BIN="${OUT_DIR}/test_pipeline_registry"
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_budget.cpp" \
 	-o "${PIPELINE_BIN}"
 
+# The HZB occlusion test compiles function bodies lifted out of the engine sources,
+# because those translation units need the generated headers this suite exists to
+# avoid. The extraction step is part of the build: if an engine function moves, it
+# fails here rather than testing nothing.
+HZB_INC="${OUT_DIR}/hzb_extracted.inc"
+HZB_BIN="${OUT_DIR}/test_hzb_occlusion"
+
+python3 "${SCRIPT_DIR}/hzb_occlusion/extract_source_bodies.py" \
+	--repo-root "${REPO_ROOT}" \
+	--out "${HZB_INC}"
+
+"${CXX}" "${CXXFLAGS[@]}" -I"${OUT_DIR}" \
+	"${SCRIPT_DIR}/hzb_occlusion/test_hzb_occlusion.cpp" \
+	-o "${HZB_BIN}"
+
 "${RESOURCE_BIN}" "$@"
 "${PIPELINE_BIN}" "$@"
+"${HZB_BIN}" "$@"

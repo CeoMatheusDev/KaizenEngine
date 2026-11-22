@@ -241,3 +241,48 @@ The Vulkan driver defers `vkDestroyPipeline` through the registry only when
 the upstream immediate call. The hooks are documented in
 `patches/rendering-device/004-pipeline-lifetime-integration.md`; the model and
 the remaining work are in `docs/architecture/pipeline-lifetime.md`.
+
+## HZB occlusion CPU invariants
+
+`hzb_occlusion/` covers the three CPU terms the occlusion patches touch: the pyramid
+build in `servers/rendering/renderer_scene_occlusion_cull.cpp`, and the level-0 scatter
+and the camera-ray generation in `modules/raycast/raycast_occlusion_cull.cpp`.
+
+Those two translation units cannot be compiled here at all - they include
+`platform_config.h` and the `*.gen.h` headers that only exist after a SCons build, which
+is exactly what this suite is written to avoid. So `extract_source_bodies.py` lifts the
+five function bodies out of the engine sources verbatim at build time, and the test
+supplies the shims they need (`LocalVector`, `RID`, `Ref`, the `Engine`/`RenderingServer`
+singletons, a `Vector3` that mirrors `core/math/vector3.h`). The bodies are unmodified;
+they compile warning-free under the same `-Wall -Wextra -std=c++17` the other two suites
+use, which is checked on every run rather than asserted here.
+
+Each case compares the extracted function against a reference written in the naive
+pre-patch form - max over the 2x2 block with a clamp per sampled offset, a scatter with
+a bounds test per texel, one division and one field reload per ray - and the comparison is
+bit-exact, because bit-exactness is the claim being protected. Destinations are poisoned
+with values the inputs cannot produce, so a texel or a ray slot that stops being written
+is a failure rather than an accident of allocation. `update_mips()` is checked against a
+hand-computed 4x4 pyramid too, so a reference that is wrong the same way twice cannot pass.
+
+Two things this buys beyond the obvious:
+
+- It catches the specific shortcut someone will be tempted to repeat. Replacing the
+  per-ray `(float(x) + 0.5f) / width` with a multiply by a hoisted reciprocal fails 17 of
+  the 114 cases: the values are not equal in float, and a texel that changes by one ULP can
+  flip which instances survive the cull. Dropping the `odd_w` gate in the mip build fails 30.
+- It fails loudly when the engine moves. `extract_source_bodies.py` requires each
+  definition to match exactly once, so a rename or a signature change stops the build with
+  instructions instead of silently testing nothing. Update its table and the matching
+  `patches/*/*.md` note together.
+
+The suite is built by `run_tests.sh` and is deliberately not registered in
+`tests/meson.build`: it needs the extraction step as a codegen target, and meson remains
+unvalidated for Kaizen changes. Adding a plain entry for the `.cpp` there would break the
+configure step, since `hzb_extracted.inc` is generated into the build directory.
+
+Not covered, and not coverable here: the Embree traversal between generation and scatter,
+the threading that splits the ray loop across workers, the GPU side of
+`Viewport.use_occlusion_culling`, and anything that depends on real engine types rather
+than on the shimmed members. Timing claims still come from the offline harnesses
+described in the patch notes, not from this test - `run_tests.sh` measures nothing.

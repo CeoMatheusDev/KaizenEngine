@@ -83,6 +83,12 @@
 #   in this sandbox (no engine build, no Embree), so no share-of-buffer_update claim
 #   is made either.
 
+# Guarded in-tree by tests/kaizen/hzb_occlusion, which compares the extracted body against
+# the naive per-ray form and poisons both tile arrays before the call. That suite is also
+# the direct evidence for the refusal in item 2 of patches/rendering-scene/001 and for the
+# "no reciprocal multiply" note above: substituting a hoisted 1/w multiply for the division
+# fails 17 of its 114 cases, so those two expressions really are not interchangeable here.
+
 # Reproducing: git diff of modules/raycast/raycast_occlusion_cull.cpp for this
 # function, applied with `patch -p1` onto the tree as of patch 001; verified to
 # reproduce the file byte-for-byte. `git apply` from a subdirectory resolves paths

@@ -110,4 +110,10 @@
 #     build; the extracted-body compile is a weaker check. Needs a large-scene frame
 #     capture with occlusion culling on to confirm the win survives the code around it.
 
+#    The invariant is guarded in-tree: ./tests/kaizen/run_tests.sh extracts this function
+#    from the source and compares it against a naive 2x2-max reference over 19 buffer
+#    geometries plus a hand-computed case (tests/kaizen/hzb_occlusion). Drop the clamps or
+#    one of the odd-dimension gates and that suite fails - removing the odd_w test alone
+#    fails 30 of its 114 cases - with no GPU and no engine build involved.
+
 # Rollback: drop patches/rendering-scene/001-hzb-occlusion-cpu-cost.patch.

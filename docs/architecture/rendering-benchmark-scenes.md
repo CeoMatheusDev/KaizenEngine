@@ -471,9 +471,20 @@ viewport's buffer dirty, so the new size applies on the next frame — inside th
 window. S8 is the only scene that mutates a rendering setting at runtime, and only when the
 flag is passed; the value lands in `scene_parameters()` (`rays_per_thread`, `rays_requested`,
 `rays_per_thread_project`) and therefore in the content hash, and the checker refuses to pair
-cells taken at different budgets. This is what makes the pyramid-build cost visible in-engine
-without touching the project file, which is the cell that can put a real number on the HZB
-work in `patches/rendering-scene/001-hzb-occlusion-cpu-cost.md`.
+cells taken at different budgets.
+
+Note what the budget actually scales, because it is not only the pyramid. `rays x threads`
+sizes the base level, and the per-frame work is then: **one camera ray generated per base-level
+texel** (a normalise each: a sqrt and three divisions, plus the `u`/`v` divisions), the Embree
+traversal itself, the level-0 scatter (one texel per ray) and the mip build (about a third of
+the base). At the default 147x83 on the reference machine the measured split of the CPU terms
+is ~130 us for ray generation, ~5 us for the scatter and ~7 us for the mip build
+(`patches/raycast/002-camera-ray-generation-cost.md`, `patches/raycast/001-hzb-level0-scatter.md`,
+`patches/rendering-scene/001-hzb-occlusion-cpu-cost.md`) - so `--bench-rays` mostly multiplies
+the *ray generation* cost, and reading a raised-budget cell as "pyramid-build cost" would be
+off by a factor of twenty. The loop is also threaded over tiles, which the cell cannot
+separate: `viewport_cpu_ms` is the aggregate, and the single-threaded terms are the scatter
+and the mip build.
 
 **Report the HZB size; do not assume it is the screen.** `RendererViewport::_draw_3d()`
 sizes the base level from `rendering/occlusion_culling/occlusion_rays_per_thread` (default

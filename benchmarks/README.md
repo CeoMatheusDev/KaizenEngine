@@ -159,7 +159,12 @@ separately from `occlusion_requested`.
 `--bench-rays <n>` overrides `rendering/occlusion_culling/occlusion_rays_per_thread`
 at runtime (the project setting is read once at startup). This is the only lever on
 the size of the occlusion pyramid, and it exists because the pyramid is **not** the
-screen: the base level is `rays × threads` clamped between one texel per 32×32 and
+screen, and because the budget sizes *three* per-frame costs, not one: the base level
+is one generated camera ray per texel (the dominant term), then the level-0 scatter,
+then the mip build. A cell run at a raised budget is mostly a measurement of ray
+generation; see the split recorded in
+`docs/architecture/rendering-benchmark-scenes.md` before attributing a delta to the
+pyramid: the base level is `rays × threads` clamped between one texel per 32×32 and
 one per 2×2 screen region, which at the 512 default on a 24-thread machine is
 147×83. Raising it makes the cost of building the pyramid visible; pairs taken at
 different budgets are not a pair, and the checker refuses to pair them.
