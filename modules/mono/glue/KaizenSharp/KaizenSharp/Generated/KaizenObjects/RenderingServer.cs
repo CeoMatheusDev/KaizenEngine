@@ -2393,9 +2393,21 @@ public static partial class RenderingServer
         /// <para>Number of pipeline compilations that were triggered to optimize the current scene. These compilations are done in the background and should not cause any stutters whatsoever.</para>
         /// </summary>
         PipelineCompilationsSpecialization = 10,
+        /// <summary>
+        /// <para>Total number of pipeline cache acquires that succeeded since startup, counting both hits and misses. Unlike the pipeline compilation constants above, this is a cumulative counter, not a per-frame value.</para>
+        /// </summary>
         PipelineCacheLogicalAcquires = 11,
+        /// <summary>
+        /// <para>Total number of pipeline cache acquires since startup that reused a pipeline that was already resident, i.e. cache hits. Dividing this by <see cref="Kaizen.RenderingServer.RenderingInfo.PipelineCacheLogicalAcquires"/> gives the hit rate.</para>
+        /// </summary>
         PipelineCacheSharedAcquires = 12,
+        /// <summary>
+        /// <para>Total number of pipeline objects actually created in the graphics driver since startup. This is the count that costs real time and driver memory: with a shared pipeline cache it stays below the number of distinct pipelines the scene requests, and every unit of the difference between it and <see cref="Kaizen.RenderingServer.RenderingInfo.PipelineCacheLogicalAcquires"/> is a request answered from a cache hit.</para>
+        /// </summary>
         PipelineCachePhysicalCreates = 13,
+        /// <summary>
+        /// <para>Total number of pipeline references released back to the cache since startup. A release does not destroy anything by itself: the cache decides when a released pipeline becomes evictable.</para>
+        /// </summary>
         PipelineCacheReleases = 14
     }
 

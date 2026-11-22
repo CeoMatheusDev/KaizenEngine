@@ -1,0 +1,110 @@
+diff --git a/doc/classes/RenderingServer.xml b/doc/classes/RenderingServer.xml
+index d00c897a..694264f6 100644
+--- a/doc/classes/RenderingServer.xml
++++ b/doc/classes/RenderingServer.xml
+@@ -6309,6 +6309,18 @@
+ 		<constant name="RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION" value="10" enum="RenderingInfo">
+ 			Number of pipeline compilations that were triggered to optimize the current scene. These compilations are done in the background and should not cause any stutters whatsoever.
+ 		</constant>
++		<constant name="RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES" value="11" enum="RenderingInfo">
++			Total number of pipeline cache acquires that succeeded since startup, counting both hits and misses. Unlike the pipeline compilation constants above, this is a cumulative counter, not a per-frame value.
++		</constant>
++		<constant name="RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES" value="12" enum="RenderingInfo">
++			Total number of pipeline cache acquires since startup that reused a pipeline that was already resident, i.e. cache hits. Dividing this by [constant RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES] gives the hit rate.
++		</constant>
++		<constant name="RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES" value="13" enum="RenderingInfo">
++			Total number of pipeline objects actually created in the graphics driver since startup. This is the count that costs real time and driver memory: with a shared pipeline cache it stays below the number of distinct pipelines the scene requests, and every unit of the difference between it and [constant RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES] is a request answered from a cache hit.
++		</constant>
++		<constant name="RENDERING_INFO_PIPELINE_CACHE_RELEASES" value="14" enum="RenderingInfo">
++			Total number of pipeline references released back to the cache since startup. A release does not destroy anything by itself: the cache decides when a released pipeline becomes evictable.
++		</constant>
+ 		<constant name="PIPELINE_SOURCE_CANVAS" value="0" enum="PipelineSource">
+ 			Pipeline compilation that was triggered by the 2D canvas renderer.
+ 		</constant>
+diff --git a/modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs b/modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs
+index f27dce5f..977d914e 100644
+--- a/modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs
++++ b/modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs
+@@ -2392,7 +2392,23 @@ public static partial class RenderingServer
+         /// <summary>
+         /// <para>Number of pipeline compilations that were triggered to optimize the current scene. These compilations are done in the background and should not cause any stutters whatsoever.</para>
+         /// </summary>
+-        PipelineCompilationsSpecialization = 10
++        PipelineCompilationsSpecialization = 10,
++        /// <summary>
++        /// <para>Total number of pipeline cache acquires that succeeded since startup, counting both hits and misses. Unlike the pipeline compilation constants above, this is a cumulative counter, not a per-frame value.</para>
++        /// </summary>
++        PipelineCacheLogicalAcquires = 11,
++        /// <summary>
++        /// <para>Total number of pipeline cache acquires since startup that reused a pipeline that was already resident, i.e. cache hits. Dividing this by <see cref="Kaizen.RenderingServer.RenderingInfo.PipelineCacheLogicalAcquires"/> gives the hit rate.</para>
++        /// </summary>
++        PipelineCacheSharedAcquires = 12,
++        /// <summary>
++        /// <para>Total number of pipeline objects actually created in the graphics driver since startup. This is the count that costs real time and driver memory: with a shared pipeline cache it stays below the number of distinct pipelines the scene requests, and every unit of the difference between it and <see cref="Kaizen.RenderingServer.RenderingInfo.PipelineCacheLogicalAcquires"/> is a request answered from a cache hit.</para>
++        /// </summary>
++        PipelineCachePhysicalCreates = 13,
++        /// <summary>
++        /// <para>Total number of pipeline references released back to the cache since startup. A release does not destroy anything by itself: the cache decides when a released pipeline becomes evictable.</para>
++        /// </summary>
++        PipelineCacheReleases = 14
+     }
+ 
+     public enum PipelineSource : long
+diff --git a/servers/rendering/rendering_server.cpp b/servers/rendering/rendering_server.cpp
+index 145b2f95..84c38d53 100644
+--- a/servers/rendering/rendering_server.cpp
++++ b/servers/rendering/rendering_server.cpp
+@@ -3578,6 +3578,12 @@ void RenderingServer::_bind_methods() {
+ 	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW);
+ 	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION);
+ 
++	// Kaizen pipeline cache telemetry
++	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES);
++	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES);
++	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES);
++	BIND_ENUM_CONSTANT(RSE::RENDERING_INFO_PIPELINE_CACHE_RELEASES);
++
+ 	BIND_ENUM_CONSTANT(RSE::PIPELINE_SOURCE_CANVAS);
+ 	BIND_ENUM_CONSTANT(RSE::PIPELINE_SOURCE_MESH);
+ 	BIND_ENUM_CONSTANT(RSE::PIPELINE_SOURCE_SURFACE);
+diff --git a/servers/rendering/rendering_server_default.cpp b/servers/rendering/rendering_server_default.cpp
+index 4f92e969..ad19b555 100644
+--- a/servers/rendering/rendering_server_default.cpp
++++ b/servers/rendering/rendering_server_default.cpp
+@@ -331,6 +331,18 @@ uint64_t RenderingServerDefault::get_rendering_info(RSE::RenderingInfo p_info) {
+ 		return RSG::canvas_render->get_pipeline_compilations(RSE::PIPELINE_SOURCE_DRAW) + RSG::scene->get_pipeline_compilations(RSE::PIPELINE_SOURCE_DRAW);
+ 	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION) {
+ 		return RSG::canvas_render->get_pipeline_compilations(RSE::PIPELINE_SOURCE_SPECIALIZATION) + RSG::scene->get_pipeline_compilations(RSE::PIPELINE_SOURCE_SPECIALIZATION);
++	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES) {
++		RenderingDevice *rd = RenderingDevice::get_singleton();
++		return rd ? rd->pipeline_cache_get_stats().logical_acquires : 0;
++	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES) {
++		RenderingDevice *rd = RenderingDevice::get_singleton();
++		return rd ? rd->pipeline_cache_get_stats().shared_acquires : 0;
++	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES) {
++		RenderingDevice *rd = RenderingDevice::get_singleton();
++		return rd ? rd->pipeline_cache_get_stats().physical_creates : 0;
++	} else if (p_info == RSE::RENDERING_INFO_PIPELINE_CACHE_RELEASES) {
++		RenderingDevice *rd = RenderingDevice::get_singleton();
++		return rd ? rd->pipeline_cache_get_stats().releases : 0;
+ 	}
+ 	return RSG::utilities->get_rendering_info(p_info);
+ }
+diff --git a/servers/rendering/rendering_server_enums.h b/servers/rendering/rendering_server_enums.h
+index 2ad2fed7..998f2495 100644
+--- a/servers/rendering/rendering_server_enums.h
++++ b/servers/rendering/rendering_server_enums.h
+@@ -937,6 +937,13 @@ enum RenderingInfo {
+ 	RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
+ 	RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
+ 	RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION,
++
++	// Kaizen pipeline cache telemetry
++	RENDERING_INFO_PIPELINE_CACHE_LOGICAL_ACQUIRES,
++	RENDERING_INFO_PIPELINE_CACHE_SHARED_ACQUIRES,
++	RENDERING_INFO_PIPELINE_CACHE_PHYSICAL_CREATES,
++	RENDERING_INFO_PIPELINE_CACHE_RELEASES,
++
+ 	RENDERING_INFO_MAX,
+ };
+ 

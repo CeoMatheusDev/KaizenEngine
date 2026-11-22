@@ -29,6 +29,14 @@ PIPELINE_BIN="${OUT_DIR}/test_pipeline_registry"
 	"${REPO_ROOT}/kaizen/rendering/pipeline_cache/pipeline_budget.cpp" \
 	-o "${PIPELINE_BIN}"
 
+# The pipeline lifetime report helpers are pure formatting and tallying, so they are
+# tested here rather than only inside the device test, which skips without a GPU.
+REPORT_BIN="${OUT_DIR}/test_pipeline_lifetime_report"
+
+"${CXX}" "${CXXFLAGS[@]}" \
+	"${SCRIPT_DIR}/vulkan/test_pipeline_lifetime_report.cpp" \
+	-o "${REPORT_BIN}"
+
 # The HZB occlusion test compiles function bodies lifted out of the engine sources,
 # because those translation units need the generated headers this suite exists to
 # avoid. The extraction step is part of the build: if an engine function moves, it
@@ -44,6 +52,12 @@ python3 "${SCRIPT_DIR}/hzb_occlusion/extract_source_bodies.py" \
 	"${SCRIPT_DIR}/hzb_occlusion/test_hzb_occlusion.cpp" \
 	-o "${HZB_BIN}"
 
+# C# glue consistency: the generated bindings are tracked in-tree and maintained by
+# hand, so the four sources that have to agree are compared instead of trusted.
+python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
+python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | tail -3
+
+"${REPORT_BIN}" "$@"
 "${RESOURCE_BIN}" "$@"
 "${PIPELINE_BIN}" "$@"
 "${HZB_BIN}" "$@"
