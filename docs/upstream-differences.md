@@ -65,7 +65,11 @@ change that has to live inside the fragment loop is a patch, not a new
 | `patches/rendering-device/003-resource-tracker-integration.md` | `servers/rendering/rendering_device.cpp` | diagnostics opt-in | Implemented, verified |
 | `patches/rendering-device/004-pipeline-lifetime-integration.patch` | `drivers/vulkan/rendering_device_driver_vulkan.cpp/.h` | `KAIZEN_PIPELINE_LIFETIME=on` | Implemented, verified |
 | `patches/renderer-rd/001-shadow-pcss-blocker-and-pcf-kernel.patch` | `servers/rendering/renderer_rd/shaders/scene_forward_lights_inc.glsl` | existing `ShadowQuality` setting | Applied, GPU cost unmeasured |
+| `patches/rendering-scene/001-hzb-occlusion-cpu-cost.patch` | `servers/rendering/renderer_scene_occlusion_cull.{h,cpp}` | none (output is bit-identical) | Applied, −31 % to −44 % on the HZB mip build in an offline harness |
 
-The last entry is the only one without a measurement: it was written in a
-sandbox with no GPU, so no S4 A/B run backs its expected gain. Treat the change
-as unverified until `benchmarks/rd_3d` is re-run against it.
+Neither of the last two entries has an in-engine measurement: they were written
+in a sandbox with no GPU and no scons install, so no S4 A/B and no full build
+exist yet. The HZB entry is backed by an offline harness that proves the output
+is bit-identical and sizes the gain on the function alone; the shadow entry has
+no measurement at all beyond code review. Treat both as unverified until
+`benchmarks/rd_3d` is re-run against them.

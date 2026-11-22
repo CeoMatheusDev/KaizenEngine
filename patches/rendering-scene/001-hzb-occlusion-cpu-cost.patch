@@ -1,0 +1,114 @@
+diff --git a/servers/rendering/renderer_scene_occlusion_cull.cpp b/servers/rendering/renderer_scene_occlusion_cull.cpp
+index f823dd8b..46e854ec 100644
+--- a/servers/rendering/renderer_scene_occlusion_cull.cpp
++++ b/servers/rendering/renderer_scene_occlusion_cull.cpp
+@@ -133,41 +133,65 @@ void RendererSceneOcclusionCull::HZBuffer::update_mips() {
+ 		return;
+ 	}
+ 
++	// The whole pyramid is rebuilt every frame per viewport, so this loop runs over
++	// about 4/3 of the occlusion buffer's texels (2.7M for a 1920x1080 buffer). The
++	// previous level's dimensions, their parity and the level pointers do not depend
++	// on the texel being written, and clamping an offset to the previous level's edge
++	// only ever changes the result on the last row or column, so all of it is hoisted
++	// out of the inner loop.
+ 	for (uint32_t mip = 1; mip < mips.size(); mip++) {
+-		for (int y = 0; y < sizes[mip].y; y++) {
+-			for (int x = 0; x < sizes[mip].x; x++) {
+-				int prev_x = x * 2;
+-				int prev_y = y * 2;
++		const int prev_w = sizes[mip - 1].width;
++		const int prev_h = sizes[mip - 1].height;
++		const int w = sizes[mip].width;
++		const int h = sizes[mip].height;
+ 
+-				int prev_w = sizes[mip - 1].width;
+-				int prev_h = sizes[mip - 1].height;
++		const float *prev = mips[mip - 1];
++		float *dst = mips[mip];
+ 
+-				bool odd_w = (prev_w % 2) != 0;
+-				bool odd_h = (prev_h % 2) != 0;
++		const bool odd_w = (prev_w % 2) != 0;
++		const bool odd_h = (prev_h % 2) != 0;
+ 
+-#define CHECK_OFFSET(xx, yy) max_depth = MAX(max_depth, mips[mip - 1][MIN(prev_h - 1, prev_y + (yy)) * prev_w + MIN(prev_w - 1, prev_x + (xx))])
++		const int last_x = w - 1;
++		const int last_y = h - 1;
+ 
+-				float max_depth = mips[mip - 1][prev_y * sizes[mip - 1].x + prev_x];
+-				CHECK_OFFSET(0, 1);
+-				CHECK_OFFSET(1, 0);
+-				CHECK_OFFSET(1, 1);
++		for (int y = 0; y <= last_y; y++) {
++			const int prev_y = y * 2;
++			const int prev_y1 = (y == last_y) ? MIN(prev_h - 1, prev_y + 1) : prev_y + 1;
++			const int prev_y2 = (y == last_y) ? prev_h - 1 : prev_y + 2;
++
++			const float *row0 = &prev[prev_y * prev_w];
++			const float *row1 = &prev[prev_y1 * prev_w];
++			const float *row2 = &prev[prev_y2 * prev_w];
++			float *out = &dst[y * w];
++
++			for (int x = 0; x <= last_x; x++) {
++				const int prev_x = x * 2;
++				const int prev_x1 = (x == last_x) ? MIN(prev_w - 1, prev_x + 1) : prev_x + 1;
++				const int prev_x2 = (x == last_x) ? prev_w - 1 : prev_x + 2;
++
++#define CHECK_OFFSET(rr, cc) max_depth = MAX(max_depth, (rr)[cc])
++
++				float max_depth = row0[prev_x];
++				CHECK_OFFSET(row1, prev_x);
++				CHECK_OFFSET(row0, prev_x1);
++				CHECK_OFFSET(row1, prev_x1);
+ 
+ 				if (odd_w) {
+-					CHECK_OFFSET(2, 0);
+-					CHECK_OFFSET(2, 1);
++					CHECK_OFFSET(row0, prev_x2);
++					CHECK_OFFSET(row1, prev_x2);
+ 				}
+ 
+ 				if (odd_h) {
+-					CHECK_OFFSET(0, 2);
+-					CHECK_OFFSET(1, 2);
++					CHECK_OFFSET(row2, prev_x);
++					CHECK_OFFSET(row2, prev_x1);
+ 				}
+ 
+ 				if (odd_w && odd_h) {
+-					CHECK_OFFSET(2, 2);
++					CHECK_OFFSET(row2, prev_x2);
+ 				}
+-
+-				mips[mip][y * sizes[mip].x + x] = max_depth;
+ #undef CHECK_OFFSET
++
++				out[x] = max_depth;
+ 			}
+ 		}
+ 	}
+diff --git a/servers/rendering/renderer_scene_occlusion_cull.h b/servers/rendering/renderer_scene_occlusion_cull.h
+index 93651b66..0a45ba0f 100644
+--- a/servers/rendering/renderer_scene_occlusion_cull.h
++++ b/servers/rendering/renderer_scene_occlusion_cull.h
+@@ -102,14 +102,17 @@ public:
+ 					min_depth = MIN(min_depth, -view.z);
+ 				}
+ 
+-				Vector3 projected = p_cam_projection.xform(view);
+-
++				// Tested before the projection: the corner is discarded either way, and a
++				// box straddling the near plane is common for geometry a player walks into
++				// inside a building, so skipping the matrix multiply here is not a rare path.
+ 				if (-view.z < 0.0) {
+ 					rect_min = Vector2(0.0f, 0.0f);
+ 					rect_max = Vector2(1.0f, 1.0f);
+ 					break;
+ 				}
+ 
++				Vector3 projected = p_cam_projection.xform(view);
++
+ 				Vector2 normalized = Vector2(projected.x * 0.5f + 0.5f, projected.y * 0.5f + 0.5f);
+ 				rect_min = rect_min.min(normalized);
+ 				rect_max = rect_max.max(normalized);

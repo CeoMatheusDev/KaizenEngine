@@ -102,13 +102,16 @@ public:
 					min_depth = MIN(min_depth, -view.z);
 				}
 
-				Vector3 projected = p_cam_projection.xform(view);
-
+				// Tested before the projection: the corner is discarded either way, and a
+				// box straddling the near plane is common for geometry a player walks into
+				// inside a building, so skipping the matrix multiply here is not a rare path.
 				if (-view.z < 0.0) {
 					rect_min = Vector2(0.0f, 0.0f);
 					rect_max = Vector2(1.0f, 1.0f);
 					break;
 				}
+
+				Vector3 projected = p_cam_projection.xform(view);
 
 				Vector2 normalized = Vector2(projected.x * 0.5f + 0.5f, projected.y * 0.5f + 0.5f);
 				rect_min = rect_min.min(normalized);
