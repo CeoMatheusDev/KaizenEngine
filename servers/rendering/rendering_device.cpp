@@ -9770,6 +9770,21 @@ bool RenderingDevice::has_feature(const Features p_feature) const {
 			// DLSS is supported if the vendor is NVIDIA and the SDK is integrated.
 			return _get_device_vendor_name(device) == "NVIDIA";
 		}
+		case SUPPORTS_STREAMLINE: {
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
+		case SUPPORTS_REFLEX: {
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
+		case SUPPORTS_RAY_RECONSTRUCTION: {
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
+		case SUPPORTS_FRAME_GENERATION: {
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
+		case SUPPORTS_NGX: {
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
 		default:
 			return driver->has_feature(p_feature);
 	}
@@ -10494,6 +10509,11 @@ void RenderingDevice::_bind_methods() {
 	BIND_ENUM_CONSTANT(SUPPORTS_METALFX_SPATIAL);
 	BIND_ENUM_CONSTANT(SUPPORTS_METALFX_TEMPORAL);
 	BIND_ENUM_CONSTANT(SUPPORTS_DLSS);
+	BIND_ENUM_CONSTANT(SUPPORTS_STREAMLINE);
+	BIND_ENUM_CONSTANT(SUPPORTS_REFLEX);
+	BIND_ENUM_CONSTANT(SUPPORTS_RAY_RECONSTRUCTION);
+	BIND_ENUM_CONSTANT(SUPPORTS_FRAME_GENERATION);
+	BIND_ENUM_CONSTANT(SUPPORTS_NGX);
 	BIND_ENUM_CONSTANT(SUPPORTS_BUFFER_DEVICE_ADDRESS);
 	BIND_ENUM_CONSTANT(SUPPORTS_IMAGE_ATOMIC_32_BIT);
 	BIND_ENUM_CONSTANT(SUPPORTS_RAY_QUERY);
