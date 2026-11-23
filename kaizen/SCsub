@@ -7,6 +7,19 @@ env.kaizen_sources = []
 
 env.add_source_files(env.kaizen_sources, "diagnostics/rendering/*.cpp")
 env.add_source_files(env.kaizen_sources, "rendering/pipeline_cache/*.cpp")
+env.add_source_files(env.kaizen_sources, "rendering/upscaling/*.cpp")
+
+# NVIDIA rendering SDKs
+if not env["disable_3d"]:
+    SConscript("rendering/nvidia/SCsub")
+
+# Physics interfaces (always built when 3D is enabled)
+if not env["disable_physics_3d"]:
+    SConscript("physics/SCsub")
+
+# NVIDIA PhysX physics backend (only when explicitly enabled)
+if not env["disable_physics_3d"] and env["builtin_physx"]:
+    SConscript("physics/physx/SCsub")
 
 lib = env.add_library("kaizen", env.kaizen_sources)
 env.Prepend(LIBS=[lib])

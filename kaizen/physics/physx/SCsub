@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+import os
+import subprocess
+
+Import("env")
+
+env_physx = env.Clone()
+
+physx_dir = str(Dir(env["physx_sdk_path"]).abspath)
+
+# Only check for PhysX SDK if explicitly enabled.
+if env["builtin_physx"]:
+    physx_source_dir = physx_dir + "/physx/"
+    if not os.path.exists(physx_source_dir + "source/foundation/PxFoundation.h"):
+        print("NVIDIA PhysX SDK source not found in " + physx_source_dir)
+        print("Please clone https://github.com/NVIDIA-Omniverse/PhysX into thirdparty/physx/physx/")
+        env["builtin_physx"] = False
+        env["builtin_physx_extensions"] = False
+        env["builtin_physx_gpu"] = False
+        Return()
+
+    # Build PhysX from source using CMake.
+    physx_build_dir = physx_dir + "/build/"
+
+    def build_physx(target, source, env):
+        """Build PhysX libraries from source using CMake."""
+        build_type = "Release" if env["target"] == "template_release" else "Debug"
+
+        cmake_cmd = [
+            "cmake",
+            "-S", physx_source_dir,
+            "-B", physx_build_dir,
+            "-DCMAKE_BUILD_TYPE=" + build_type,
+            "-DPX_BUILD_DEFAULT_SAMPLES=OFF",
+            "-DPX_BUILD_TOOLS=OFF",
+            "-DPX_BUILD_TESTSUITE=OFF",
+            "-DPX_BUILD_COOKING=ON",
+            "-DPX_BUILD_EXTENSIONS=ON",
+            "-DPX_BUILD_CHARACTER_KINEMATIC=ON",
+            "-DPX_BUILD_VEHICLE=ON",
+            "-DPX_BUILD_GPU=" + ("ON" if env["builtin_physx_gpu"] else "OFF"),
+            "-DPX_BUILD_PVD=OFF",
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+        ]
+
+        print("Building NVIDIA PhysX SDK from source...")
+        result = subprocess.run(cmake_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print("CMake configuration failed:")
+            print(result.stderr)
+            return False
+
+        result = subprocess.run(
+            ["cmake", "--build", physx_build_dir, "--config", build_type, "-j" + str(env.GetOption("num_jobs") or 4)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print("PhysX build failed:")
+            print(result.stderr)
+            return False
+
+        print("PhysX SDK built successfully.")
+        return True
+
+    # Check if cmake is available.
+    try:
+        subprocess.run(["cmake", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("CMake is required to build PhysX from source but was not found.")
+        env["builtin_physx"] = False
+        env["builtin_physx_extensions"] = False
+        env["builtin_physx_gpu"] = False
+        Return()
+
+    # Set up include paths.
+    env_physx.Prepend(CPPPATH=[
+        physx_dir + "/physx/include",
+        physx_dir + "/pxshared/include",
+    ])
+
+    # Set up library paths.
+    physx_lib_dir = physx_build_dir + "/lib/" + ("Release" if env["target"] == "template_release" else "Debug")
+    if os.path.exists(physx_lib_dir):
+        env_physx.Prepend(LIBPATH=[physx_lib_dir])
+
+    # Add PhysX libraries.
+    physx_libs = [
+        "PhysXFoundation",
+        "PhysXCommon",
+        "PhysXCore",
+    ]
+    if env["builtin_physx_extensions"]:
+        physx_libs += [
+            "PhysXCooking",
+            "PhysXExtensions",
+            "PhysXCharacterKinematic",
+            "PhysXVehicle",
+        ]
+    if env["builtin_physx_gpu"]:
+        physx_libs.append("PhysXGPU")
+
+    env_physx.EitherAppend(LIBS, physx_libs)
+    env_physx.EitherAppend(CPPDEFINES, ["PHYSX_ENABLED"])
+
+    if env["builtin_physx_extensions"]:
+        env_physx.EitherAppend(CPPDEFINES, ["PHYSX_EXTENSIONS_ENABLED"])
+    if env["builtin_physx_gpu"]:
+        env_physx.EitherAppend(CPPDEFINES, ["PHYSX_GPU_ENABLED"])
+
+    print("NVIDIA PhysX SDK detected - PhysX backend enabled")
+
+# Source files
+module_obj = []
+
+if env["builtin_physx"]:
+    env_physx.add_source_files(module_obj, "*.cpp")
+
+env.kaizen_sources += module_obj

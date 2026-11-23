@@ -208,6 +208,16 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 					msaa_3d = RSE::VIEWPORT_MSAA_DISABLED;
 				}
 			}
+
+			// DLSS support check - only available on NVIDIA GPUs with DLSS support
+			if (scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_DLSS) {
+				// Check if DLSS is supported by querying the renderer
+				if (!RD::get_singleton()->has_feature(RD::SUPPORTS_DLSS)) {
+					scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_FSR2;
+					WARN_PRINT_ONCE("DLSS is not supported on this GPU. Falling back to FSR 2 scaling.");
+					scaling_type = RSE::scaling_3d_mode_type(scaling_3d_mode);
+				}
+			}
 #else
 			if (scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL) {
 				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_FSR2;
@@ -215,6 +225,9 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 			} else if (scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_SPATIAL) {
 				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_FSR;
 				WARN_PRINT_ONCE("MetalFX spatial upscaling is not supported by the current renderer or hardware. Falling back to FSR scaling.");
+			} else if (scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_DLSS) {
+				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_FSR2;
+				WARN_PRINT_ONCE("DLSS upscaling is not supported by the current renderer or hardware. Falling back to FSR 2 scaling.");
 			}
 #endif // RD_ENABLED
 
@@ -222,9 +235,9 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 			bool use_taa = p_viewport->use_taa;
 
 			if (scaling_3d_is_not_bilinear && scaling_3d_scale >= (1.0 + EPSILON)) {
-				// FSR, MetalFX, and nearest-neighbor scaling are not designed for downsampling.
+				// FSR, MetalFX, DLSS, and nearest-neighbor scaling are not designed for downsampling.
 				// Fall back to bilinear scaling.
-				WARN_PRINT_ONCE("FSR, MetalFX, and nearest-neighbor 3D resolution scaling are not designed for downsampling. Falling back to bilinear 3D resolution scaling.");
+				WARN_PRINT_ONCE("FSR, MetalFX, DLSS, and nearest-neighbor 3D resolution scaling are not designed for downsampling. Falling back to bilinear 3D resolution scaling.");
 				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR;
 				scaling_type = RSE::scaling_3d_mode_type(scaling_3d_mode);
 			}
@@ -263,6 +276,7 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 				case RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL:
 				case RSE::VIEWPORT_SCALING_3D_MODE_FSR:
 				case RSE::VIEWPORT_SCALING_3D_MODE_FSR2:
+				case RSE::VIEWPORT_SCALING_3D_MODE_DLSS:
 					target_width = p_viewport->size.width;
 					target_height = p_viewport->size.height;
 					render_width = MAX(target_width * scaling_3d_scale, 1.0); // target_width / (target_width * scaling)
@@ -1069,6 +1083,12 @@ void RendererViewport::viewport_set_scaling_3d_mode(RID p_viewport, RSE::Viewpor
 			WARN_PRINT_ONCE_ED("FSR2 3D scaling is only available when using the Forward+ renderer.");
 			return;
 		}
+# ifdef NGX_DLSS_ENABLED
+		if (p_mode == RSE::VIEWPORT_SCALING_3D_MODE_DLSS) {
+			WARN_PRINT_ONCE_ED("DLSS 3D scaling is only available when using the Forward+ renderer.");
+			return;
+		}
+# endif
 		if (p_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL) {
 			WARN_PRINT_ONCE_ED("MetalFX Temporal 3D scaling is only available when using the Forward+ renderer.");
 			return;

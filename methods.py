@@ -1688,6 +1688,20 @@ def to_raw_cstring(value: str | list[str]) -> str:
         return "({})".format(" ".join(f'R"<!>({segment.decode()})<!>"' for segment in split))
 
 
+def either_append(env, key, values):
+    """
+    Append values to an environment key only if not already present.
+    Unlike env.Append, this avoids duplicates.
+    """
+    existing = env.get(key, [])
+    if isinstance(existing, str):
+        existing = [existing]
+    for v in values:
+        if v not in existing:
+            existing.append(v)
+    env[key] = existing
+
+
 def get_default_include_paths(env):
     if env.msvc:
         return []

@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-11-23",
+  "sdk_group": "physx",
+  "sdk_root": "thirdparty/physx",
+  "sdks": {
+    "physx": {
+      "name": "NVIDIA PhysX SDK",
+      "description": "Physics simulation SDK - Foundation, Common, Core modules",
+      "acquisition": "github",
+      "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
+      "legacy_url": "https://github.com/NVIDIAGameWorks/PhysX",
+      "license": "Apache-2.0 (PhysX 5), BSD-3-Clause (PhysX 4.1)",
+      "redistribution": "permitted",
+      "developer_account_required": false,
+      "current_version": "5.9.1",
+      "min_version": "5.0.0",
+      "expected_structure": {
+        "source": [
+          "source/foundation/",
+          "source/common/",
+          "source/core/",
+          "source/physx/"
+        ],
+        "include": [
+          "include/foundation/",
+          "include/common/",
+          "include/core/",
+          "include/physx/"
+        ]
+      },
+      "build_from_source": true,
+      "cmake_build": true,
+      "cmake_options": [
+        "-DPX_BUILD_DEFAULT_SAMPLES=OFF",
+        "-DPX_BUILD_TOOLS=OFF",
+        "-DPX_BUILD_TESTSUITE=OFF",
+        "-DPX_BUILD_COOKING=ON",
+        "-DPX_BUILD_EXTENSIONS=ON",
+        "-DPX_BUILD_CHARACTER_KINEMATIC=ON",
+        "-DPX_BUILD_VEHICLE=ON",
+        "-DPX_BUILD_GPU=OFF",
+        "-DCMAKE_BUILD_TYPE=Release"
+      ],
+      "required_libraries": [
+        "PhysXFoundation",
+        "PhysXCommon",
+        "PhysXCore",
+        "PhysXCooking",
+        "PhysXExtensions",
+        "PhysXCharacterKinematic",
+        "PhysXVehicle"
+      ],
+      "build_flag": "PHYSX_ENABLED",
+      "notes": "PhysX 5 is Apache 2.0, fully open source. Can be cloned and built from source. No developer account required."
+    },
+    "pxshared": {
+      "name": "PhysX Shared (PxShared)",
+      "description": "Shared PhysX headers, profiling, and debugging infrastructure",
+      "acquisition": "github",
+      "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
+      "license": "Apache-2.0",
+      "redistribution": "permitted",
+      "developer_account_required": false,
+      "current_version": "5.9.1",
+      "expected_structure": {
+        "source": [
+          "source/shared/",
+          "source/foundation/",
+          "source/common/"
+        ],
+        "include": [
+          "include/foundation/",
+          "include/common/"
+        ]
+      },
+      "build_from_source": true,
+      "cmake_build": true,
+      "build_flag": "PHYSX_ENABLED",
+      "notes": "Part of PhysX SDK repository. Provides shared infrastructure."
+    },
+    "physxextensions": {
+      "name": "PhysX Extensions",
+      "description": "PhysX extensions - cooking, character controller, vehicle SDK",
+      "acquisition": "github",
+      "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
+      "license": "Apache-2.0",
+      "redistribution": "permitted",
+      "developer_account_required": false,
+      "current_version": "5.9.1",
+      "expected_structure": {
+        "source": [
+          "source/extensions/"
+        ],
+        "include": [
+          "include/extensions/"
+        ],
+        "modules": [
+          "physxcooking",
+          "physxcharacterkinematic",
+          "physxvehicle"
+        ]
+      },
+      "build_from_source": true,
+      "cmake_build": true,
+      "build_flag": "PHYSX_EXTENSIONS_ENABLED",
+      "notes": "Extensions include cooking, character controller, and vehicle SDK."
+    },
+    "platform": {
+      "name": "PhysX Platform Support",
+      "description": "Platform-specific PhysX build configurations",
+      "acquisition": "github",
+      "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
+      "license": "Apache-2.0",
+      "redistribution": "permitted",
+      "developer_account_required": false,
+      "current_version": "5.9.1",
+      "expected_structure": {
+        "source": [
+          "source/platform/"
+        ],
+        "include": [
+          "include/platform/"
+        ]
+      },
+      "build_from_source": true,
+      "cmake_build": true,
+      "build_flag": "PHYSX_ENABLED",
+      "notes": "Platform-specific code for PhysX builds."
+    }
+  }
+}

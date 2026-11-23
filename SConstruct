@@ -137,6 +137,8 @@ env.__class__.disable_warnings = methods.disable_warnings
 env.__class__.force_optimization_on_debug = methods.force_optimization_on_debug
 env.__class__.module_add_dependencies = methods.module_add_dependencies
 env.__class__.module_check_dependencies = methods.module_check_dependencies
+env.__class__.either_append = methods.either_append
+env.__class__.EitherAppend = methods.either_append
 
 env["x86_libtheora_opt_gcc"] = False
 env["x86_libtheora_opt_vc"] = False
@@ -284,6 +286,67 @@ opts.Add(BoolVariable("disable_navigation_2d", "Disable 2D navigation features",
 opts.Add(BoolVariable("disable_navigation_3d", "Disable 3D navigation features", False))
 opts.Add(BoolVariable("disable_xr", "Disable XR nodes and server", False))
 opts.Add(BoolVariable("disable_overrides", "Disable project settings overrides (override.cfg)", False))
+
+# NVIDIA SDK build options
+opts.Add(
+    BoolVariable(
+        "builtin_nvidia_dlss",
+        "Enable NVIDIA DLSS SDK integration (requires local SDK installation)",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_nvidia_streamline",
+        "Enable NVIDIA Streamline SDK integration",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_nvidia_reflex",
+        "Enable NVIDIA Reflex SDK integration",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_nvidia_ngx",
+        "Enable NVIDIA NGX SDK integration",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_physx",
+        "Enable NVIDIA PhysX SDK integration (physics backend)",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_physx_extensions",
+        "Enable NVIDIA PhysX Extensions (cooking, character controller, vehicle)",
+        False,
+    )
+)
+opts.Add(
+    BoolVariable(
+        "builtin_physx_gpu",
+        "Enable NVIDIA PhysX GPU acceleration (requires CUDA-capable GPU)",
+        False,
+    )
+)
+opts.Add(
+    "nvidia_sdk_path",
+    "Custom path to NVIDIA SDK root directory (default: thirdparty/nvidia/)",
+    "thirdparty/nvidia",
+)
+opts.Add(
+    "physx_sdk_path",
+    "Custom path to PhysX SDK root directory (default: thirdparty/physx/)",
+    "thirdparty/physx",
+)
 opts.Add(
     BoolVariable(
         "disable_path_overrides",
@@ -1104,6 +1167,25 @@ if env["disable_physics_2d"]:
     env.Append(CPPDEFINES=["PHYSICS_2D_DISABLED"])
 if env["disable_physics_3d"]:
     env.Append(CPPDEFINES=["PHYSICS_3D_DISABLED"])
+    env["builtin_physx"] = False
+    env["builtin_physx_extensions"] = False
+    env["builtin_physx_gpu"] = False
+
+# NVIDIA SDK build flags
+if env["builtin_nvidia_dlss"]:
+    env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
+if env["builtin_nvidia_streamline"]:
+    env.Append(CPPDEFINES=["STREAMLINE_ENABLED"])
+if env["builtin_nvidia_reflex"]:
+    env.Append(CPPDEFINES=["REFLEX_ENABLED"])
+if env["builtin_nvidia_ngx"]:
+    env.Append(CPPDEFINES=["NGX_ENABLED"])
+if env["builtin_physx"]:
+    env.Append(CPPDEFINES=["PHYSX_ENABLED"])
+if env["builtin_physx_extensions"]:
+    env.Append(CPPDEFINES=["PHYSX_EXTENSIONS_ENABLED"])
+if env["builtin_physx_gpu"]:
+    env.Append(CPPDEFINES=["PHYSX_GPU_ENABLED"])
 if env["disable_navigation_2d"]:
     env.Append(CPPDEFINES=["NAVIGATION_2D_DISABLED"])
 if env["disable_navigation_3d"]:

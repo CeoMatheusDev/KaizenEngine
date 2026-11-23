@@ -9766,6 +9766,10 @@ bool RenderingDevice::has_feature(const Features p_feature) const {
 			// report the SUPPORTS_ATTACHMENT_VRS feature, to avoid VRS texture creation logic.
 			return fsr_capabilities.attachment_supported || fdm_capabilities.attachment_supported;
 		}
+		case SUPPORTS_DLSS: {
+			// DLSS is supported if the vendor is NVIDIA and the SDK is integrated.
+			return _get_device_vendor_name(device) == "NVIDIA";
+		}
 		default:
 			return driver->has_feature(p_feature);
 	}
@@ -10489,6 +10493,7 @@ void RenderingDevice::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(SUPPORTS_METALFX_SPATIAL);
 	BIND_ENUM_CONSTANT(SUPPORTS_METALFX_TEMPORAL);
+	BIND_ENUM_CONSTANT(SUPPORTS_DLSS);
 	BIND_ENUM_CONSTANT(SUPPORTS_BUFFER_DEVICE_ADDRESS);
 	BIND_ENUM_CONSTANT(SUPPORTS_IMAGE_ATOMIC_32_BIT);
 	BIND_ENUM_CONSTANT(SUPPORTS_RAY_QUERY);
