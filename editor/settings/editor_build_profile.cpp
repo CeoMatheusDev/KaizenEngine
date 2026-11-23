@@ -256,6 +256,9 @@ const HashMap<EditorBuildProfile::BuildOption, LocalVector<EditorBuildProfile::B
 	{ BUILD_OPTION_PHYSICS_JOLT, {
 			BUILD_OPTION_PHYSICS_3D,
 	} },
+	{ BUILD_OPTION_PHYSICS_PHYSX, {
+			BUILD_OPTION_PHYSICS_3D,
+	} },
 	{ BUILD_OPTION_DYNAMIC_FONTS, {
 			BUILD_OPTION_TEXT_SERVER_ADVANCED,
 	} },
@@ -655,6 +658,7 @@ void EditorBuildProfile::_bind_methods() {
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_3D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_KAIZEN_3D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_JOLT);
+	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_PHYSX);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_FALLBACK);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_ADVANCED);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_DYNAMIC_FONTS);
@@ -741,6 +745,11 @@ EditorBuildProfile::EditorBuildProfile() {
 		{ "physics/3d/physics_engine", { PhysicsServer3DManager::JOLT_PHYSICS_NAME } },
 	};
 	build_option_settings.insert(BUILD_OPTION_PHYSICS_JOLT, settings_jolt);
+
+	HashMap<String, LocalVector<Variant>> settings_physx = {
+		{ "physics/3d/physics_engine", { PhysicsServer3DManager::PHYSX_PHYSICS_NAME } },
+	};
+	build_option_settings.insert(BUILD_OPTION_PHYSICS_PHYSX, settings_physx);
 
 	HashMap<String, LocalVector<Variant>> settings_msdfgen = {
 		{ "gui/theme/default_font_multichannel_signed_distance_field", { true } },
