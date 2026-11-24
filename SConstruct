@@ -292,42 +292,42 @@ opts.Add(
     BoolVariable(
         "builtin_nvidia_dlss",
         "Enable NVIDIA DLSS SDK integration (requires local SDK installation)",
-        False,
+        True,
     )
 )
 opts.Add(
     BoolVariable(
         "builtin_nvidia_streamline",
         "Enable NVIDIA Streamline SDK integration",
-        False,
+        True,
     )
 )
 opts.Add(
     BoolVariable(
         "builtin_nvidia_reflex",
         "Enable NVIDIA Reflex SDK integration",
-        False,
+        True,
     )
 )
 opts.Add(
     BoolVariable(
         "builtin_nvidia_ngx",
         "Enable NVIDIA NGX SDK integration",
-        False,
+        True,
     )
 )
 opts.Add(
     BoolVariable(
         "builtin_physx",
         "Enable NVIDIA PhysX SDK integration (physics backend)",
-        False,
+        True,
     )
 )
 opts.Add(
     BoolVariable(
         "builtin_physx_extensions",
         "Enable NVIDIA PhysX Extensions (cooking, character controller, vehicle)",
-        False,
+        True,
     )
 )
 opts.Add(
@@ -1225,6 +1225,14 @@ if env["builtin_physx"]:
 # only when the Vulkan backend is enabled: every NVIDIA feature here runs
 # through Vulkan).
 if env["vulkan"]:
+    # TUs outside drivers/vulkan that touch Vulkan types directly (e.g. the
+    # DLSS effect, which wraps VkImage/VkCommandBuffer) need the bundled
+    # Vulkan headers -- and the same volk mode as drivers/vulkan, otherwise
+    # the call paths mix volk trampolines with direct libvulkan symbols.
+    env.Prepend(CPPPATH=["#thirdparty/vulkan", "#thirdparty/vulkan/include"])
+    if env["use_volk"]:
+        env.AppendUnique(CPPDEFINES=["USE_VOLK"])
+        env.Prepend(CPPPATH=["#thirdparty/volk"])
     if env["builtin_nvidia_dlss"]:
         env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
     if env["builtin_nvidia_streamline"]:

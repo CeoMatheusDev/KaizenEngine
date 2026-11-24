@@ -28,17 +28,22 @@ python tools/sdk/sdk_manager.py --list
 2. The build system will automatically build PhysX from source using CMake
 
 ### Build Configuration
+PhysX is compiled straight into the engine: the module's SCsub builds the
+CPU SDK (foundation, lowlevel, simulation controller, extensions, PVD,
+...) from `thirdparty/physx/physx/physx/source`, so a normal build picks
+it up with no extra steps:
 ```bash
-# Enable PhysX during build
-scons builtin_physx=yes builtin_physx_extensions=yes builtin_physx_gpu=no
+scons platform=linuxbsd target=editor        # PhysX on by default
+scons physx_physics_3d                        # optional: just the PhysX group
+scons builtin_physx_gpu=yes                   # opt-in: GPU sim (needs CUDA)
 ```
 
 ## Build Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `builtin_physx` | no | Enable NVIDIA PhysX SDK integration |
-| `builtin_physx_extensions` | no | Enable PhysX Extensions (cooking, character controller, vehicle) |
+| `builtin_physx` | yes | Enable NVIDIA PhysX SDK integration |
+| `builtin_physx_extensions` | yes | Enable PhysX Extensions (cooking, character controller, vehicle) |
 | `builtin_physx_gpu` | no | Enable PhysX GPU acceleration (requires CUDA-capable GPU) |
 | `physx_sdk_path` | thirdparty/physx | Custom path to PhysX SDK root |
 
@@ -84,17 +89,13 @@ PhysX can be swapped for any other physics backend by implementing the same inte
 - Redistribution is permitted for both source and binary forms
 - Third-party components (OpenUSD, etc.) retain their own licenses
 
-## CMake Build
-PhysX is built from source using CMake with the following options:
-- `PX_BUILD_DEFAULT_SAMPLES=OFF`
-- `PX_BUILD_TOOLS=OFF`
-- `PX_BUILD_TESTSUITE=OFF`
-- `PX_BUILD_COOKING=ON`
-- `PX_BUILD_EXTENSIONS=ON`
-- `PX_BUILD_CHARACTER_KINEMATIC=ON`
-- `PX_BUILD_VEHICLE=ON`
-- `PX_BUILD_GPU=ON/OFF` (configurable)
-- `PX_BUILD_PVD=OFF`
+## In-engine Build
+The module's SCsub compiles the CPU SDK sources directly (no separate CMake
+invocation): `PX_PHYSX_STATIC_LIB`, `PX_PHYSX_CORE`, cooking, extensions,
+character kinematic and vehicle are on; `PX_SUPPORT_GPU_PHYSX` only with
+`builtin_physx_gpu=yes`. The OmniPvd headers under `physx_base/pvdruntime`
+are on the include path, so PVD streams compile in. Platform-specific
+sources (`*/windows/*`, `*/unix/*`) are filtered per platform.
 
 ## Runtime Detection
 - PhysX is only enabled when `builtin_physx=yes` is set during build
@@ -130,7 +131,8 @@ Project settings applied when the "PhysX Physics" server starts:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `gpu_acceleration` | on | Request GPU acceleration when available. |
+| `gpu_acceleration` | on | Request GPU acceleration when available (needs a CUDA build, `builtin_physx_gpu=yes`; falls back to CPU with a warning otherwise). |
+| `broadphase_mbp` | on | Use the MBP broadphase with a default region (SAP otherwise). |
 | `cooking` | on | Enable mesh cooking (convex / concave / heightmap shapes). |
 | `character_controller` | on | Create the per-scene character controller manager. |
 | `vehicle` | on | Vehicle API availability. |

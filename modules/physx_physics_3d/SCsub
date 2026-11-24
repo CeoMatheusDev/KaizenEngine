@@ -2,5 +2,88 @@
 from misc.utility.scons_hints import *
 
 Import("env")
+Import("env_modules")
 
-env.add_source_files(env.modules_sources, "*.cpp")
+env_physx = env_modules.Clone()
+
+# ---------------------------------------------------------------------------
+# NVIDIA PhysX SDK sources (tools/sdk/manifest/physx_sdks.json declares
+# build_from_source: true). The CPU-side SDK is compiled straight into the
+# engine; the GPU/CUDA side (physxgpu, gpusimulationcontroller, ...) is
+# excluded: it needs a CUDA toolchain and is not required for simulation.
+# Sources are passed as a list (not a glob string) so they always compile as
+# individual objects instead of being merged into SCU batches.
+# ---------------------------------------------------------------------------
+physx_base = "#thirdparty/physx/physx/physx"
+
+env_physx.Prepend(CPPPATH=[physx_base + "/include", physx_base + "/source"])
+# OmniPvd runtime headers (sibling of source/ inside the physx/ subtree).
+env_physx.Prepend(CPPPATH=[physx_base + "/pvdruntime/include"])
+env_physx.Append(CPPDEFINES=["PX_PHYSX_STATIC_LIB"])
+
+# Internal headers live in per-library include/src folders (mirroring the SDK's
+# own CMake include paths); add every source subdirectory so cross-library
+# includes like "GuPrunerTypedef.h" resolve. Directories without files of their
+# own (e.g. common/include) still matter: they are include roots.
+import os as _os
+
+for _root, _dirs, _files in _os.walk(Dir(physx_base + "/source").abspath):
+    if env_physx["platform"] != "windows":
+        if "/windows" in _root:
+            continue
+    else:
+        if "/unix" in _root:
+            continue
+    env_physx.Prepend(CPPPATH=[_root])
+
+physx_source_dirs = [
+    "common",
+    "compiler",
+    "foundation",
+    "geomutils",
+    "immediatemode",
+    "lowlevel",
+    "lowlevelaabb",
+    "lowleveldynamics",
+    "physx",
+    "physxcharacterkinematic",
+    "physxextensions",
+    "physxmetadata",
+    "physxvehicle",
+    "pvd",
+    "scenequery",
+    "simulationcontroller",
+    "task",
+]
+
+thirdparty_obj = []
+thirdparty_sources = []
+for physx_sub in physx_source_dirs:
+    for depth in ("*.cpp", "*/*.cpp", "*/*/*.cpp", "*/*/*/*.cpp"):
+        for physx_file in env_physx.Glob(physx_base + "/source/" + physx_sub + "/" + depth):
+            physx_path = physx_file.get_path()
+            # Skip per-platform trees that do not belong to the host.
+            if env_physx["platform"] != "windows":
+                if "/windows/" in physx_path:
+                    continue
+            else:
+                if "/unix/" in physx_path:
+                    continue
+            thirdparty_sources.append(physx_file)
+
+env_thirdparty = env_physx.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.add_source_files(thirdparty_obj, thirdparty_sources)
+env.modules_sources += thirdparty_obj
+
+# PhysX module sources
+module_obj = []
+env_physx.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+# Force rebuilding the module files when the SDK sources are updated.
+env.Depends(module_obj, thirdparty_obj)
+
+# Dev convenience alias: `scons physx_physics_3d` builds the whole group
+# (PhysX SDK sources + module sources) without building the full engine.
+env.Alias("physx_physics_3d", thirdparty_obj + module_obj)

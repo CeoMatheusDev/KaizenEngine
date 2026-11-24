@@ -25,6 +25,8 @@
 #include "core/os/mutex.h"
 #include "core/os/os.h"
 
+#include <atomic>
+
 #include <characterkinematic/PxControllerManager.h>
 #include <extensions/PxDefaultCpuDispatcher.h>
 
@@ -38,6 +40,7 @@ namespace {
 
 Mutex exception_mutex;
 HashMap<uint64_t, HashSet<uint64_t>> exception_pairs;
+std::atomic<bool> has_exceptions{ false }; // Fast path for the filter shader.
 
 _FORCE_INLINE_ uint64_t _owner_key_from_filter(const PxFilterData &d) {
 	return ((uint64_t)d.word3 << 32) | (uint64_t)d.word2;
@@ -55,7 +58,7 @@ PxFilterFlags PhysXBackend::filter_shader(PxFilterObjectAttributes p_attr_0, PxF
 	}
 	const uint64_t k0 = _owner_key_from_filter(p_data_0);
 	const uint64_t k1 = _owner_key_from_filter(p_data_1);
-	if (k0 && k1 && k0 != k1) {
+	if (k0 && k1 && k0 != k1 && has_exceptions.load(std::memory_order_relaxed)) {
 		MutexLock lock(exception_mutex);
 		const HashMap<uint64_t, HashSet<uint64_t>>::ConstIterator it = exception_pairs.find(k0);
 		if (it && it->value.has(k1)) {
@@ -70,6 +73,7 @@ void PhysXBackend::add_collision_exception(const void *p_owner_a, const void *p_
 	MutexLock lock(exception_mutex);
 	exception_pairs[(uint64_t)(uintptr_t)p_owner_a].insert((uint64_t)(uintptr_t)p_owner_b);
 	exception_pairs[(uint64_t)(uintptr_t)p_owner_b].insert((uint64_t)(uintptr_t)p_owner_a);
+	has_exceptions.store(true, std::memory_order_relaxed);
 }
 
 void PhysXBackend::remove_collision_exception(const void *p_owner_a, const void *p_owner_b) {
@@ -162,6 +166,12 @@ bool PhysXBackend::init() {
 	dispatcher = PxDefaultCpuDispatcherCreate(worker_count);
 	ERR_FAIL_NULL_V_MSG(dispatcher, false, "PhysX: PxDefaultCpuDispatcherCreate failed.");
 
+	if (config.gpu_acceleration) {
+		// PhysX GPU simulation needs the CUDA runtime (physxgpu), which is not
+		// compiled into the engine. Simulation runs on the CPU.
+		WARN_PRINT_ONCE("PhysX: GPU acceleration is not available in this build (PhysX GPU requires the CUDA runtime); using CPU simulation.");
+	}
+
 	print_line(vformat("PhysX %d initialized (workers: %d, cooking: %s)", (int)PX_PHYSICS_VERSION, (int)worker_count, config.cooking ? "on" : "off"));
 	return true;
 }
@@ -218,6 +228,7 @@ void *PhysXBackend::create_scene(const Vector3 &p_gravity) {
 	scene_desc.gravity = to_px(p_gravity);
 	scene_desc.cpuDispatcher = static_cast<PxDefaultCpuDispatcher *>(dispatcher);
 	scene_desc.filterShader = PhysXBackend::filter_shader;
+	scene_desc.broadPhaseType = config.broadphase_mbp ? PxBroadPhaseType::eMBP : PxBroadPhaseType::eSAP;
 	if (!scene_desc.isValid()) {
 		ERR_PRINT("PhysX: invalid scene description.");
 		return nullptr;
@@ -225,6 +236,16 @@ void *PhysXBackend::create_scene(const Vector3 &p_gravity) {
 
 	PxScene *scene = px->createScene(scene_desc);
 	ERR_FAIL_NULL_V_MSG(scene, nullptr, "PhysX: createScene failed.");
+
+	if (config.broadphase_mbp) {
+		// MBP requires regions: one huge default region so every actor is
+		// simulated regardless of where it spawns. Callers with tighter world
+		// bounds can add regions through the SDK directly.
+		PxBroadPhaseRegion region;
+		region.mBounds = PxBounds3::centerExtents(PxVec3(0.0f), PxVec3(1.0e6f));
+		scene->addBroadPhaseRegion(region);
+	}
+
 	scenes.push_back(scene);
 
 	if (config.character_controller) {
