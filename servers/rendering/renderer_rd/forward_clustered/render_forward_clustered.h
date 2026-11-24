@@ -109,6 +109,8 @@ public:
 		RendererRD::FSR2Context *fsr2_context = nullptr;
 #ifdef NGX_DLSS_ENABLED
 		RendererRD::DLSSContext *dlss_context = nullptr;
+		int dlss_context_quality = -1;
+		int dlss_context_rr_mode = -1;
 #endif
 #ifdef METAL_MFXTEMPORAL_ENABLED
 		RendererRD::MFXTemporalContext *mfx_temporal_context = nullptr;

@@ -2886,6 +2886,8 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("viewport_set_scaling_3d_mode", "viewport", "scaling_3d_mode"), &RenderingServer::viewport_set_scaling_3d_mode);
 	ClassDB::bind_method(D_METHOD("viewport_set_scaling_3d_scale", "viewport", "scale"), &RenderingServer::viewport_set_scaling_3d_scale);
 	ClassDB::bind_method(D_METHOD("viewport_set_fsr_sharpness", "viewport", "sharpness"), &RenderingServer::viewport_set_fsr_sharpness);
+	ClassDB::bind_method(D_METHOD("viewport_set_dlss_quality", "viewport", "dlss_quality"), &RenderingServer::viewport_set_dlss_quality);
+	ClassDB::bind_method(D_METHOD("viewport_set_ray_reconstruction", "viewport", "enabled"), &RenderingServer::viewport_set_ray_reconstruction);
 	ClassDB::bind_method(D_METHOD("viewport_set_texture_mipmap_bias", "viewport", "mipmap_bias"), &RenderingServer::viewport_set_texture_mipmap_bias);
 	ClassDB::bind_method(D_METHOD("viewport_set_anisotropic_filtering_level", "viewport", "anisotropic_filtering_level"), &RenderingServer::viewport_set_anisotropic_filtering_level);
 	ClassDB::bind_method(D_METHOD("viewport_set_update_mode", "viewport", "update_mode"), &RenderingServer::viewport_set_update_mode);
@@ -3809,6 +3811,13 @@ void RenderingServer::init() {
 	}
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/scaling_3d/scale", PROPERTY_HINT_RANGE, "0.1,2.0,0.0001"), 1.0);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/scaling_3d/fsr_sharpness", PROPERTY_HINT_RANGE, "0,2,0.01"), 0.2f);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/scaling_3d/dlss_quality", PROPERTY_HINT_ENUM, "Ultra Performance,Performance,Balanced,Max Quality,DLAA"), (int)RSE::VIEWPORT_DLSS_QUALITY_MAX_QUALITY);
+
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "rendering/ray_tracing/enabled"), true);
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "rendering/ray_tracing/ray_reconstruction"), false);
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "rendering/ray_tracing/denoising"), false);
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "rendering/ray_tracing/hardware_acceleration"), true);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/ray_tracing/max_recursion_depth", PROPERTY_HINT_RANGE, "1,64,1"), 32);
 
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "rendering/textures/default_filters/texture_mipmap_bias", PROPERTY_HINT_RANGE, "-2,2,0.001"), 0.0f);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "rendering/textures/decals/filter", PROPERTY_HINT_ENUM, "Nearest (Fast),Linear (Fast),Nearest Mipmap (Fast),Linear Mipmap (Fast),Nearest Mipmap Anisotropic (Average),Linear Mipmap Anisotropic (Average)"), RSE::DECAL_FILTER_LINEAR_MIPMAPS);

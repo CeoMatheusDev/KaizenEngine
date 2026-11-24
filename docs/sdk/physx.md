@@ -123,3 +123,22 @@ The "PhysX Physics" PhysicsServer3D runs on the real PhysX 5 SDK
 
 Not covered (documented, loud no-op where applicable): soft bodies, custom
 shapes, per-sample heightmap editing, area wind and override-mode gravity.
+
+### Configuration (`physics/physx_physics_3d/*`)
+
+Project settings applied when the "PhysX Physics" server starts:
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `gpu_acceleration` | on | Request GPU acceleration when available. |
+| `cooking` | on | Enable mesh cooking (convex / concave / heightmap shapes). |
+| `character_controller` | on | Create the per-scene character controller manager. |
+| `vehicle` | on | Vehicle API availability. |
+| `simulation_step` | 1/60 | Fixed simulation step in seconds. |
+| `max_sub_steps` | 4 | Sub-step cap per `step()` call. |
+| `broadphase_mbp` | on | MBP broadphase (off = SAP). |
+
+Select the server with `physics/3d/physics_engine = "PhysX Physics"` (or
+`--physics-3d-server "PhysX Physics"`). Scripts use the standard
+`PhysicsServer3D` API; the settings are readable and writable through
+`ProjectSettings` like any other engine setting.

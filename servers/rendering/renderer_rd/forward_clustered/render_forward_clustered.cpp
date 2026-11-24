@@ -108,8 +108,18 @@ void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_fsr2(Rende
 
 #ifdef NGX_DLSS_ENABLED
 void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_dlss(RendererRD::DLSSEffect *p_effect) {
+	const int quality = (int)render_buffers->get_dlss_quality();
+	const int rr_mode = render_buffers->get_ray_reconstruction() ? 1 : 0;
+	if (dlss_context != nullptr && (dlss_context_quality != quality || dlss_context_rr_mode != rr_mode)) {
+		// Quality and Ray Reconstruction are create-time parameters: rebuild
+		// the feature when the viewport settings change.
+		memdelete(dlss_context);
+		dlss_context = nullptr;
+	}
 	if (dlss_context == nullptr) {
-		dlss_context = p_effect->create_context(render_buffers->get_internal_size(), render_buffers->get_target_size());
+		dlss_context = p_effect->create_context(render_buffers->get_internal_size(), render_buffers->get_target_size(), quality, rr_mode);
+		dlss_context_quality = quality;
+		dlss_context_rr_mode = rr_mode;
 	}
 }
 #endif

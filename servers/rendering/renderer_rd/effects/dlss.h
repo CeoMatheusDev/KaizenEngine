@@ -97,7 +97,11 @@ public:
 	// Creates the NGX DLSS feature for the given resolution pair. Returns a
 	// context whose `created` flag reports whether the SDK accepted it; the
 	// context object exists either way so callers can retry after a resize.
-	DLSSContext *create_context(Size2i p_internal_size, Size2i p_target_size);
+	// `p_quality` is a RenderingServerEnums::ViewportDLSSQuality value (-1 =
+	// Max Quality). `p_rr_mode` selects Ray Reconstruction: 1 = on, 0 = off,
+	// -1 = follow is_ray_reconstruction_enabled(). When Ray Reconstruction is
+	// requested but unavailable, Super Resolution is created instead.
+	DLSSContext *create_context(Size2i p_internal_size, Size2i p_target_size, int p_quality = -1, int p_rr_mode = -1);
 	void upscale(const Parameters &p_params);
 
 	// DLSS Ray Reconstruction (DLSSD) toggle. When enabled, create_context()

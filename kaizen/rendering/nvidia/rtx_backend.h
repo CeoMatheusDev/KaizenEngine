@@ -27,6 +27,8 @@
 // NVIDIA RTX backend - wraps existing Vulkan ray tracing infrastructure
 // with NVIDIA-specific optimizations and features (DLSS Ray Reconstruction, etc.)
 class RTXBackend : public RefCounted {
+	GDCLASS(RTXBackend, RefCounted);
+
 public:
 	struct Config {
 		bool enabled = false;
@@ -37,6 +39,10 @@ public:
 		int max_recursion_depth = 32;
 	};
 
+protected:
+	static void _bind_methods();
+
+public:
 	RTXBackend();
 	~RTXBackend() override;
 
@@ -57,10 +63,18 @@ public:
 	const Config &get_config() const { return config; }
 	void set_config(const Config &p_config) { config = p_config; }
 
+	// Loads the `rendering/ray_tracing/*` project settings into the config.
+	void load_settings();
+
 	// Feature toggles (config shortcuts).
+	void set_enabled(bool p_enabled) { config.enabled = p_enabled; }
+	bool is_enabled() const { return config.enabled; }
 	bool is_ray_reconstruction_enabled() const { return config.ray_reconstruction; }
 	void set_ray_reconstruction_enabled(bool p_enabled) { config.ray_reconstruction = p_enabled; }
 	bool is_denoising_enabled() const { return config.denoising; }
+	void set_denoising_enabled(bool p_enabled) { config.denoising = p_enabled; }
+	bool is_hardware_acceleration_enabled() const { return config.hardware_acceleration; }
+	void set_hardware_acceleration_enabled(bool p_enabled) { config.hardware_acceleration = p_enabled; }
 
 	// Capabilities.
 	uint32_t get_max_recursion_depth() const { return config.max_recursion_depth; }

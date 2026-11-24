@@ -122,6 +122,16 @@ public:
 		SCALING_3D_MODE_MAX
 	};
 
+	// Note: Must be kept in sync with RenderingServerEnums::ViewportDLSSQuality.
+	enum DLSSQuality {
+		DLSS_QUALITY_ULTRA_PERFORMANCE,
+		DLSS_QUALITY_PERFORMANCE,
+		DLSS_QUALITY_BALANCED,
+		DLSS_QUALITY_MAX_QUALITY,
+		DLSS_QUALITY_DLAA,
+		DLSS_QUALITY_MAX
+	};
+
 	enum PositionalShadowAtlasQuadrantSubdiv {
 		SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED,
 		SHADOW_ATLAS_QUADRANT_SUBDIV_1,
@@ -338,6 +348,8 @@ private:
 	Scaling3DMode scaling_3d_mode = SCALING_3D_MODE_BILINEAR;
 	float scaling_3d_scale = 1.0;
 	float fsr_sharpness = 0.2f;
+	DLSSQuality dlss_quality = DLSS_QUALITY_MAX_QUALITY;
+	bool use_ray_reconstruction = false;
 	float texture_mipmap_bias = 0.0f;
 	AnisotropicFiltering anisotropic_filtering_level = ANISOTROPY_4X;
 	bool use_debanding = false;
@@ -624,6 +636,12 @@ public:
 
 	void set_fsr_sharpness(float p_fsr_sharpness);
 	float get_fsr_sharpness() const;
+
+	void set_dlss_quality(DLSSQuality p_dlss_quality);
+	DLSSQuality get_dlss_quality() const;
+
+	void set_use_ray_reconstruction(bool p_enabled);
+	bool is_using_ray_reconstruction() const;
 
 	void set_texture_mipmap_bias(float p_texture_mipmap_bias);
 	float get_texture_mipmap_bias() const;
@@ -976,6 +994,7 @@ public:
 	SubViewport();
 };
 VARIANT_ENUM_CAST(Viewport::Scaling3DMode);
+VARIANT_ENUM_CAST(Viewport::DLSSQuality);
 VARIANT_ENUM_CAST(SubViewport::UpdateMode);
 VARIANT_ENUM_CAST(Viewport::PositionalShadowAtlasQuadrantSubdiv);
 VARIANT_ENUM_CAST(Viewport::MSAA);
