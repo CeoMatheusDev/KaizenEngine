@@ -150,7 +150,7 @@ ehthumbs.db
 [Dd]esktop.ini
 .directory
 
-# NVIDIA and PhysX SDKs (downloaded locally, not committed)
+# NVIDIA, PhysX and Lua SDKs (downloaded locally, not committed)
 thirdparty/nvidia/dlss/
 thirdparty/nvidia/streamline/
 thirdparty/nvidia/reflex/
@@ -159,3 +159,4 @@ thirdparty/nvidia/common/
 thirdparty/physx/physx/
 thirdparty/physx/pxshared/
 thirdparty/physx/build/
+thirdparty/lua/

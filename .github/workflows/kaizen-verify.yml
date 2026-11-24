@@ -26,5 +26,11 @@ jobs:
       - name: Build PhysX SDK group
         run: ./build.sh physx
 
+      - name: Build Lua script group
+        run: ./build.sh lua
+
       - name: PhysX runtime smoke test
-        run: ./build.sh smoke
+        run: bash tests/kaizen/run_physx_smoke.sh
+
+      - name: Lua runtime smoke test
+        run: bash tests/kaizen/run_lua_smoke.sh

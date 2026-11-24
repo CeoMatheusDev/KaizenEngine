@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+Import("env")
+Import("env_modules")
+
+# Bundled Lua 5.5 sources, downloaded via:
+#   python3 tools/sdk/sdk_manager.py --download lua/lua
+# This module builds the embeddable library; the Lua script language
+# (ScriptLanguage implementation on par with GDScript and C#) will be
+# registered in a later round.
+
+lua_root = "#thirdparty/lua/lua"
+
+import os as _os
+lua_sources = []
+for _f in sorted(_os.listdir(Dir(lua_root).abspath)):
+    # lua.c/luac.c are the standalone interpreter/compiler mains and
+    # onelua.c is the single-file amalgamation - none belong in the library.
+    if _f.endswith(".c") and _f not in ("lua.c", "luac.c", "onelua.c"):
+        lua_sources.append(lua_root + "/" + _f)
+
+thirdparty_obj = []
+env_lua = env_modules.Clone()
+env_lua.Prepend(CPPPATH=[lua_root])
+env_lua.disable_warnings()
+env_lua.add_source_files(thirdparty_obj, lua_sources)
+env.modules_sources += thirdparty_obj
+
+module_obj = []
+env_lua.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+# Force rebuilding the module files when the SDK sources are updated.
+env.Depends(module_obj, thirdparty_obj)
+
+# Dev convenience alias: `scons lua_script` builds the whole group.
+env.Alias("lua_script", thirdparty_obj + module_obj)

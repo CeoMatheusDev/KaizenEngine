@@ -336,7 +336,14 @@ class SDKManager:
             return False
 
         print(f"Cloning {url} into {sdk_dir} (shallow)...")
-        result = subprocess.run(["git", "clone", "--depth", "1", url, str(sdk_dir)], capture_output=True, text=True)
+        clone_cmd = ["git", "clone", "--depth", "1"]
+        # Optional pinned ref (tag/branch): keeps the fetched version matching
+        # the manifest instead of whatever the default branch happens to be.
+        ref = sdk_info.get("acquisition_ref", "")
+        if ref:
+            clone_cmd += ["--branch", ref]
+        clone_cmd += [url, str(sdk_dir)]
+        result = subprocess.run(clone_cmd, capture_output=True, text=True)
         if result.returncode != 0:
             print(RED(f"git clone failed:\n{result.stderr}"))
             return False

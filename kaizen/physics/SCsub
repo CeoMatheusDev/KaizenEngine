@@ -9,8 +9,8 @@ if not env["disable_physics_3d"]:
     SConscript("simulation/SCsub")
     SConscript("diagnostics/SCsub")
 
-    # NVIDIA PhysX physics backend (only when explicitly enabled). Included
-    # here only - kaizen/SCsub must not include physx/SCsub again, or the
-    # sources would be compiled twice.
-    if env["builtin_physx"]:
-        SConscript("physx/SCsub")
+    # The NVIDIA PhysX backend (kaizen/physics/physx/*.cpp) is compiled by
+    # modules/physx_physics_3d/SCsub together with the SDK sources and the
+    # module TUs. Keeping every PhysX symbol in one archive resolves the
+    # kaizen-lib <-> module-lib circular reference the single-pass linker
+    # cannot settle.
