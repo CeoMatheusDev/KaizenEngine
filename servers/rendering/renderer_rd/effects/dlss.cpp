@@ -292,10 +292,11 @@ void DLSSEffect::upscale(const Parameters &p_params) {
 
 	RD *rd = RD::get_singleton();
 
-	// Make every recorded engine operation complete before NGX reads the
-	// inputs, and make the result visible before engine work continues.
+	// Push the engine's recorded work onto the queue before our submission so
+	// the barrier below can order against it. No sync() here: the ALL_COMMANDS
+	// / MEMORY_WRITE barrier scope already covers earlier submissions on the
+	// queue, so the GPU pipelines both instead of stalling the CPU.
 	rd->submit();
-	rd->sync();
 
 	const Size2i internal = p_params.internal_size;
 	const Size2i target = p_params.target_size;
