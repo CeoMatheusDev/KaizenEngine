@@ -2,13 +2,17 @@
 from misc.utility.scons_hints import *
 
 import os
-import subprocess
 
 Import("env")
 
 # SDK presence detection (and the PHYSX_ENABLED defines) happens in
 # SConstruct before module detection. By this point env["builtin_physx"] is
 # only True when the PhysX SDK sources are actually installed.
+#
+# The PhysX SDK sources themselves are compiled directly into the engine by
+# modules/physx_physics_3d/SCsub (no CMake step, no prebuilt libraries to
+# track down). This backend only adds the Kaizen glue (settings, overrides,
+# PVD wiring) plus the SDK headers it needs to compile against.
 
 if not env["builtin_physx"]:
     Return()
@@ -20,113 +24,28 @@ physx_dir = str(Dir("#" + physx_sdk_path).abspath) if not os.path.isabs(physx_sd
 
 # The cloned repo can place the PhysX SDK under physx/physx/, physx/ or
 # directly at the configured path depending on how it was obtained.
-if os.path.exists(physx_dir + "/physx/physx/CMakeLists.txt"):
+if os.path.exists(physx_dir + "/physx/physx/include/foundation/PxFoundation.h"):
     physx_source_dir = physx_dir + "/physx/physx/"
-elif os.path.exists(physx_dir + "/physx/CMakeLists.txt"):
+elif os.path.exists(physx_dir + "/physx/include/foundation/PxFoundation.h"):
     physx_source_dir = physx_dir + "/physx/"
-elif os.path.exists(physx_dir + "/CMakeLists.txt"):
+elif os.path.exists(physx_dir + "/include/foundation/PxFoundation.h"):
     physx_source_dir = physx_dir + "/"
 else:
-    physx_source_dir = physx_dir + "/physx/"
+    physx_source_dir = physx_dir + "/physx/physx/"
 
 if not os.path.exists(physx_source_dir + "include/foundation/PxFoundation.h"):
     print("NVIDIA PhysX SDK source not found in " + physx_source_dir)
-    print("Please clone https://github.com/NVIDIA-Omniverse/PhysX into thirdparty/physx/physx/")
+    print("Please run: python3 tools/sdk/sdk_manager.py --download physx/physx")
     env["builtin_physx"] = False
     env["builtin_physx_extensions"] = False
     env["builtin_physx_gpu"] = False
     Return()
 
-# Check if cmake is available.
-try:
-    subprocess.run(["cmake", "--version"], capture_output=True, check=True)
-except (subprocess.CalledProcessError, FileNotFoundError):
-    print("CMake is required to build PhysX from source but was not found.")
-    env["builtin_physx"] = False
-    env["builtin_physx_extensions"] = False
-    env["builtin_physx_gpu"] = False
-    Return()
-
-# Build PhysX from source using CMake.
-physx_build_dir = physx_dir + "/build/"
-physx_build_type = "Release" if env["target"] == "template_release" else "Debug"
-physx_lib_dir = physx_build_dir + "lib/" + physx_build_type
-
-
-def build_physx():
-    """Build PhysX libraries from source using CMake."""
-    cmake_cmd = [
-        "cmake",
-        "-S", physx_source_dir,
-        "-B", physx_build_dir,
-        "-DCMAKE_BUILD_TYPE=" + physx_build_type,
-        "-DPX_BUILD_DEFAULT_SAMPLES=OFF",
-        "-DPX_BUILD_TOOLS=OFF",
-        "-DPX_BUILD_TESTSUITE=OFF",
-        "-DPX_BUILD_COOKING=" + ("ON" if env["builtin_physx_extensions"] else "OFF"),
-        "-DPX_BUILD_EXTENSIONS=" + ("ON" if env["builtin_physx_extensions"] else "OFF"),
-        "-DPX_BUILD_CHARACTER_KINEMATIC=" + ("ON" if env["builtin_physx_extensions"] else "OFF"),
-        "-DPX_BUILD_VEHICLE=" + ("ON" if env["builtin_physx_extensions"] else "OFF"),
-        "-DPX_BUILD_GPU=" + ("ON" if env["builtin_physx_gpu"] else "OFF"),
-        "-DPX_BUILD_PVD=OFF",
-        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
-    ]
-
-    print("Building NVIDIA PhysX SDK from source...")
-    result = subprocess.run(cmake_cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print("CMake configuration failed:")
-        print(result.stderr)
-        return False
-
-    result = subprocess.run(
-        ["cmake", "--build", physx_build_dir, "--config", physx_build_type, "-j" + str(env.GetOption("num_jobs") or 4)],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print("PhysX build failed:")
-        print(result.stderr)
-        return False
-
-    print("PhysX SDK built successfully.")
-    return True
-
-
-# Build PhysX now when the expected libraries are not present yet, so they
-# exist before SCons generates the link line.
-if not os.path.isdir(physx_lib_dir):
-    if not build_physx():
-        print("Failed to build the NVIDIA PhysX SDK from source.")
-        env["builtin_physx"] = False
-        env["builtin_physx_extensions"] = False
-        env["builtin_physx_gpu"] = False
-        Return()
-
-# Set up include paths and libraries on the base env so both the backend
-# sources and the final program link see them.
+# Headers only - the SDK objects come from the module's in-tree build.
 env.EitherAppend("CPPPATH", [
     physx_source_dir + "include",
-    physx_dir + "/pxshared/include",
+    physx_source_dir + "pvdruntime/include",
 ])
-env.EitherAppend("LIBPATH", [physx_lib_dir])
-
-physx_libs = [
-    "PhysXFoundation",
-    "PhysXCommon",
-    "PhysXCore",
-]
-if env["builtin_physx_extensions"]:
-    physx_libs += [
-        "PhysXCooking",
-        "PhysXExtensions",
-        "PhysXCharacterKinematic",
-        "PhysXVehicle",
-    ]
-if env["builtin_physx_gpu"]:
-    physx_libs.append("PhysXGPU")
-
-env.EitherAppend("LIBS", physx_libs)
 
 print("NVIDIA PhysX SDK detected - PhysX backend enabled")
 

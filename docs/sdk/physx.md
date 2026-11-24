@@ -97,6 +97,12 @@ character kinematic and vehicle are on; `PX_SUPPORT_GPU_PHYSX` only with
 are on the include path, so PVD streams compile in. Platform-specific
 sources (`*/windows/*`, `*/unix/*`) are filtered per platform.
 
+To verify the SDK build end to end:
+```bash
+./build.sh physx     # compile the PhysX SDK group
+./build.sh smoke     # runtime smoke test: a box must settle on a plane
+```
+
 ## Runtime Detection
 - PhysX is only enabled when `builtin_physx=yes` is set during build
 - GPU acceleration requires a CUDA-capable GPU

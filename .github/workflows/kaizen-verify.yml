@@ -1,0 +1,30 @@
+name: kaizen-verify
+
+on:
+  push:
+    branches: [p2.3-shared-pipeline-cache, "arena/**"]
+  pull_request:
+    branches: [p2.3-shared-pipeline-cache]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          python3 -m pip install --user scons zstandard
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Regenerate build-time headers
+        run: bash tools/regen_gen_headers.sh
+
+      - name: Test suite (license banners + engine checks)
+        run: bash tests/kaizen/run_tests.sh
+
+      - name: Build PhysX SDK group
+        run: ./build.sh physx
+
+      - name: PhysX runtime smoke test
+        run: ./build.sh smoke
