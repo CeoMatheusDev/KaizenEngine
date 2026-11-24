@@ -8527,7 +8527,7 @@ HashMap<String, Variant> EditorNode::get_initial_settings() {
 	settings["display/window/stretch/mode"] = "canvas_items";
 	settings["gui/common/auto_focus_strategy"] = Control::AutoFocusStrategy::STRATEGY_BALLOON;
 	settings["input_devices/joypads/ignore_joypad_on_unfocused_application"] = true;
-	settings["physics/3d/physics_engine"] = PhysicsServer3DManager::JOLT_PHYSICS_NAME;
+	settings["physics/3d/physics_engine"] = PhysicsServer3DManager::KAIZEN_PHYSICS_3D_NAME;
 	settings["rendering/rendering_device/driver.windows"] = "d3d12";
 	settings["rendering/lights_and_shadows/multi_bounce_occlusion/enabled"] = true;
 	return settings;

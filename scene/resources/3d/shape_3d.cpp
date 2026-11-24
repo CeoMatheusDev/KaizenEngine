@@ -157,12 +157,6 @@ void Shape3D::_update_shape() {
 }
 
 void Shape3D::_validate_property(PropertyInfo &p_property) const {
-	if (p_property.name == "custom_solver_bias" && GLOBAL_GET(PhysicsServer3DManager::setting_property_name) == PhysicsServer3DManager::JOLT_PHYSICS_NAME) {
-		// This property is not used by Jolt Physics. Hide it from the editor to avoid confusion.
-		// Third-party physics engines may make use of this property, so we leave it visible for those.
-		p_property.usage = PROPERTY_USAGE_STORAGE;
-	}
-
 	if (p_property.name == "margin" && GLOBAL_GET(PhysicsServer3DManager::setting_property_name) == PhysicsServer3DManager::KAIZEN_PHYSICS_3D_NAME) {
 		// This property is not used by KaizenPhysics3D. Hide it from the editor to avoid confusion.
 		// Third-party physics engines may make use of this property, so we leave it visible for those.

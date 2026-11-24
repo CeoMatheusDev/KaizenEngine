@@ -76,7 +76,6 @@ const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 	"module_kaizen_physics_2d_enabled",
 	"disable_physics_3d",
 	"module_kaizen_physics_3d_enabled",
-	"module_jolt_physics_enabled",
 	"module_text_server_fb_enabled",
 	"module_text_server_adv_enabled",
 	"module_freetype_enabled",
@@ -110,7 +109,6 @@ const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX
 	false, // PHYSICS_KAIZEN_2D
 	false, // PHYSICS_3D
 	false, // PHYSICS_KAIZEN_3D
-	false, // PHYSICS_JOLT
 	true, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_ADVANCED
 	false, // DYNAMIC_FONTS
@@ -144,7 +142,6 @@ const bool EditorBuildProfile::build_option_disable_values[BUILD_OPTION_MAX] = {
 	false, // PHYSICS_KAIZEN_2D
 	true, // PHYSICS_3D
 	false, // PHYSICS_KAIZEN_3D
-	false, // PHYSICS_JOLT
 	false, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_ADVANCED
 	false, // DYNAMIC_FONTS
@@ -178,7 +175,6 @@ const bool EditorBuildProfile::build_option_explicit_use[BUILD_OPTION_MAX] = {
 	false, // PHYSICS_KAIZEN_2D
 	false, // PHYSICS_3D
 	false, // PHYSICS_KAIZEN_3D
-	false, // PHYSICS_JOLT
 	false, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_ADVANCED
 	false, // DYNAMIC_FONTS
@@ -211,7 +207,6 @@ const EditorBuildProfile::BuildOptionCategory EditorBuildProfile::build_option_c
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_KAIZEN_2D
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_3D
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_KAIZEN_3D
-	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_JOLT
 	BUILD_OPTION_CATEGORY_TEXT_SERVER, // TEXT_SERVER_FALLBACK
 	BUILD_OPTION_CATEGORY_TEXT_SERVER, // TEXT_SERVER_ADVANCED
 	BUILD_OPTION_CATEGORY_TEXT_SERVER, // DYNAMIC_FONTS
@@ -251,9 +246,6 @@ const HashMap<EditorBuildProfile::BuildOption, LocalVector<EditorBuildProfile::B
 			BUILD_OPTION_PHYSICS_2D,
 	} },
 	{ BUILD_OPTION_PHYSICS_KAIZEN_3D, {
-			BUILD_OPTION_PHYSICS_3D,
-	} },
-	{ BUILD_OPTION_PHYSICS_JOLT, {
 			BUILD_OPTION_PHYSICS_3D,
 	} },
 	{ BUILD_OPTION_PHYSICS_PHYSX, {
@@ -446,7 +438,6 @@ String EditorBuildProfile::get_build_option_name(BuildOption p_build_option) {
 		TTRC("Kaizen Physics (2D)"),
 		TTRC("Physics Server (3D)"),
 		TTRC("Kaizen Physics (3D)"),
-		TTRC("Jolt Physics"),
 		TTRC("Text Server: Fallback"),
 		TTRC("Text Server: Advanced"),
 		TTRC("TTF, OTF, Type 1, WOFF1 Fonts"),
@@ -484,7 +475,6 @@ String EditorBuildProfile::get_build_option_description(BuildOption p_build_opti
 		TTRC("Kaizen Physics backend (2D)."),
 		TTRC("PhysicsServer and capabilities for 3D."),
 		TTRC("Kaizen Physics backend (3D)."),
-		TTRC("Jolt Physics backend (3D only)."),
 		TTRC("Fallback implementation of Text Server\nSupports basic text layouts."),
 		TTRC("Text Server implementation powered by ICU and HarfBuzz libraries.\nSupports complex text layouts, BiDi, and contextual OpenType font features."),
 		TTRC("TrueType, OpenType, Type 1, and WOFF1 font format support using FreeType library (if disabled, WOFF2 support is also disabled)."),
@@ -657,7 +647,6 @@ void EditorBuildProfile::_bind_methods() {
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_KAIZEN_2D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_3D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_KAIZEN_3D);
-	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_JOLT);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_PHYSX);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_FALLBACK);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_ADVANCED);
@@ -740,11 +729,6 @@ EditorBuildProfile::EditorBuildProfile() {
 		{ "physics/3d/physics_engine", { "DEFAULT", PhysicsServer3DManager::KAIZEN_PHYSICS_3D_NAME } },
 	};
 	build_option_settings.insert(BUILD_OPTION_PHYSICS_KAIZEN_3D, settings_phy_kaizen_3d);
-
-	HashMap<String, LocalVector<Variant>> settings_jolt = {
-		{ "physics/3d/physics_engine", { PhysicsServer3DManager::JOLT_PHYSICS_NAME } },
-	};
-	build_option_settings.insert(BUILD_OPTION_PHYSICS_JOLT, settings_jolt);
 
 	HashMap<String, LocalVector<Variant>> settings_physx = {
 		{ "physics/3d/physics_engine", { PhysicsServer3DManager::PHYSX_PHYSICS_NAME } },

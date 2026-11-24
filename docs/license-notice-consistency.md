@@ -57,8 +57,8 @@ Counts (all tracked code files, extensions `.c .cpp .h .hpp .m .mm .inc .kt .jav
 
 | Group | Style A | Style B |
 |---|---|---|
-| Whole tree | 2483 (9 of them under `thirdparty/`) | 1541 |
-| Collisions (`servers/physics_*`, `modules/kaizen_physics_*`, `modules/jolt_physics`) | 166 | 78 |
+| Whole tree | 2396 (9 of them under `thirdparty/`) | 1125 |
+| Collisions (`servers/physics_*`, `modules/kaizen_physics_*`) | 79 | 78 |
 | Navigation / NPC AI (`servers/navigation_*`, `modules/navigation_*`) | 78 | 20 |
 | Audio (`servers/audio`, `scene/audio`, `scene/resources/audio`, `modules/interactive_music`) | 13 | 72 |
 
@@ -117,10 +117,10 @@ and 19 rows in `tests/kaizen/vulkan/pipeline_lifetime_report.h` and its `.cpp`, 
 in code this fork added two commits earlier. The guard found that last class on its first run,
 which is the argument for it existing.
 
-**2469 rows are left ragged on purpose** - the contributors line in Style A files (and the
+**2382 rows are left ragged on purpose** - the contributors line in Style A files (and the
 equivalent line at row 8 of the seven `.kt` files, whose box is 75). Padding cannot reach
 them; see section 4. The number is not free-floating: it is the budget in
-`tests/kaizen/run_tests.sh` (`--max-pending 2469`) and the `BUDGET` in
+`tests/kaizen/run_tests.sh` (`--max-pending 2382`) and the `BUDGET` in
 `tests/kaizen/license_box/test_check_license_box.py`, so growing it fails CI and paying it
 down passes with a smaller number.
 
@@ -179,7 +179,7 @@ a quality pass; `git show 0f541294` is the source of the current wording.
 
 | Rule | Where |
 |---|---|
-| Every banner row equals the file's own border width, or is a recorded pending row | `tests/kaizen/license_box/check_license_box.py`, run by `./tests/kaizen/run_tests.sh` with `--max-pending 2469` |
+| Every banner row equals the file's own border width, or is a recorded pending row | `tests/kaizen/license_box/check_license_box.py`, run by `./tests/kaizen/run_tests.sh` with `--max-pending 2382` |
 | `--fix` may only move spaces | the tool re-reads the file and compares with all spaces removed before writing; a non-space difference aborts |
 | The generator template matches the tree | `test_generator_is_a_noop_on_a_box_file` |
 | The generator leaves Style B alone | `test_generator_does_not_touch_slash_banner_files` |
