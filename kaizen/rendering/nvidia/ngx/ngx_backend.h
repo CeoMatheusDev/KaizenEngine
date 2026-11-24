@@ -26,8 +26,8 @@
 
 #ifdef NGX_ENABLED
 	#include "nvsdk_ngx.h"
-	#include "nvsdk_ngx_core.h"
-	#include "nvsdk_ngx_dlss.h"
+	#include "nvsdk_ngx_defs.h"
+	#include "nvsdk_ngx_params.h"
 #endif
 
 namespace RendererRD {
@@ -62,9 +62,7 @@ private:
 	bool supported = false;
 	Config config;
 
-#ifdef NGX_ENABLED
 	void *ngx_handle = nullptr;
-#endif
 };
 
 } // namespace RendererRD

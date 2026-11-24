@@ -104,14 +104,13 @@ void StreamlineBackend::cleanup() {
 
 bool StreamlineBackend::init_streamline() {
 #ifdef STREAMLINE_ENABLED
-	sl_handle = OS::get_singleton()->load_dynamic_library("sl");
-	if (!sl_handle) {
-		WARN_PRINT("StreamlineBackend: Failed to load Streamline library.");
+	Error err = OS::get_singleton()->open_dynamic_library("sl.interposer", sl_handle);
+	if (err != OK || !sl_handle) {
+		WARN_PRINT("StreamlineBackend: Failed to load the Streamline interposer.");
 		return false;
 	}
 
-	// Initialize Streamline.
-	// Actual Streamline API calls would go here using dlsym/GetProcAddress.
+	// Initialize Streamline (slInit and friends) once the SDK is wired in.
 #endif
 	return true;
 }
@@ -119,7 +118,7 @@ bool StreamlineBackend::init_streamline() {
 void StreamlineBackend::shutdown_streamline() {
 #ifdef STREAMLINE_ENABLED
 	if (sl_handle) {
-		OS::get_singleton()->unload_dynamic_library(sl_handle);
+		OS::get_singleton()->close_dynamic_library(sl_handle);
 		sl_handle = nullptr;
 	}
 	sl_device = nullptr;

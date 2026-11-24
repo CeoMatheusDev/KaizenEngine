@@ -109,14 +109,16 @@ class Viewport : public Node {
 	GDCLASS(Viewport, Node);
 
 public:
+	// Note: Must be kept in sync with RenderingServerEnums::ViewportScaling3DMode,
+	// as the values are passed to the rendering server with a plain int cast.
 	enum Scaling3DMode {
 		SCALING_3D_MODE_BILINEAR,
 		SCALING_3D_MODE_FSR,
 		SCALING_3D_MODE_FSR2,
-		SCALING_3D_MODE_DLSS,
 		SCALING_3D_MODE_METALFX_SPATIAL,
 		SCALING_3D_MODE_METALFX_TEMPORAL,
 		SCALING_3D_MODE_NEAREST,
+		SCALING_3D_MODE_DLSS,
 		SCALING_3D_MODE_MAX
 	};
 

@@ -32,11 +32,6 @@ ReflexBackend::ReflexBackend() {
 	config.latency_stats = false;
 	config.analyzer = false;
 	supported = false;
-
-#ifdef REFLEX_ENABLED
-	reflex_handle = nullptr;
-	nvapi_handle = nullptr;
-#endif
 }
 
 ReflexBackend::~ReflexBackend() {
@@ -55,25 +50,28 @@ bool ReflexBackend::init() {
 	}
 
 #ifdef REFLEX_ENABLED
-	reflex_handle = OS::get_singleton()->load_dynamic_library("reflex");
-	if (!reflex_handle) {
-		// Try loading via Streamline.
-		reflex_handle = OS::get_singleton()->load_dynamic_library("sl");
+	// Reflex is dispatched through the Streamline interposer.
+	Error err = OS::get_singleton()->open_dynamic_library("sl.interposer", reflex_handle);
+	if (err != OK || !reflex_handle) {
+		WARN_PRINT("ReflexBackend: Failed to load the Streamline interposer.");
+		return false;
 	}
-#endif
 
 	supported = true;
 	return true;
+#else
+	return false;
+#endif
 }
 
 void ReflexBackend::shutdown() {
 #ifdef REFLEX_ENABLED
 	if (reflex_handle) {
-		OS::get_singleton()->unload_dynamic_library(reflex_handle);
+		OS::get_singleton()->close_dynamic_library(reflex_handle);
 		reflex_handle = nullptr;
 	}
 	if (nvapi_handle) {
-		OS::get_singleton()->unload_dynamic_library(nvapi_handle);
+		OS::get_singleton()->close_dynamic_library(nvapi_handle);
 		nvapi_handle = nullptr;
 	}
 #endif

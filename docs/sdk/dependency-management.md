@@ -89,7 +89,7 @@ The build system detects SDKs by checking for their include files:
 - Streamline: `thirdparty/nvidia/streamline/include/sl.h`
 - Reflex: `thirdparty/nvidia/reflex/include/sl_reflex.h`
 - NGX: `thirdparty/nvidia/ngx/include/nvsdk_ngx.h`
-- PhysX: `thirdparty/physx/physx/source/foundation/PxFoundation.h`
+- PhysX: `thirdparty/physx/physx/physx/include/foundation/PxFoundation.h`
 
 ### Conditional Compilation
 Each SDK is conditionally compiled based on availability:

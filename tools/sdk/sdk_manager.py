@@ -131,6 +131,23 @@ class SDKManager:
 
         return self.project_root / sdk_root / sdk_key.split("/", 1)[1]
 
+    def _find_expected_file(self, sdk_dir: Path, rel_path: str) -> bool:
+        """Match an expected file, accepting versioned library names.
+
+        The NVIDIA GitHub mirrors ship version-suffixed libraries
+        (libnvidia-ngx-dlss.so.310.9.16), so a missing exact path still
+        matches when a file with the same stem exists.
+        """
+        for candidate in (sdk_dir / rel_path, sdk_dir / "include" / rel_path, sdk_dir / "lib" / rel_path):
+            if candidate.exists():
+                return True
+            parent, name = candidate.parent, candidate.name
+            if parent.is_dir():
+                for entry in parent.iterdir():
+                    if entry.name == name or entry.name.startswith(name + "."):
+                        return True
+        return False
+
     def is_installed(self, sdk_key: str) -> bool:
         """Check if an SDK appears to be installed."""
         sdk_dir = self.get_sdk_dir(sdk_key)
@@ -143,12 +160,12 @@ class SDKManager:
         # Check for at least one include file and one lib if specified
         if include_dirs:
             for inc in include_dirs:
-                if not (sdk_dir / inc).exists() and not (sdk_dir / "include" / inc).exists():
+                if not self._find_expected_file(sdk_dir, inc):
                     return False
 
         if lib_dirs:
             for lib in lib_dirs:
-                if not (sdk_dir / lib).exists() and not (sdk_dir / "lib" / lib).exists():
+                if not self._find_expected_file(sdk_dir, lib):
                     return False
 
         # Check source directories for source-built SDKs
@@ -184,18 +201,13 @@ class SDKManager:
 
         # Check include files (try both with and without include/ prefix)
         for inc_path in expected.get("include", []):
-            full_path = sdk_dir / inc_path
-            if not full_path.exists():
-                full_path = sdk_dir / "include" / inc_path
-            if not full_path.exists():
+            if not self._find_expected_file(sdk_dir, inc_path):
                 issues.append(f"Missing include file: {inc_path}")
 
-        # Check lib files (try both with and without lib/ prefix)
+        # Check lib files (try both with and without lib/ prefix, and accept
+        # version-suffixed names like libnvidia-ngx-dlss.so.310.9.16)
         for lib_path in expected.get("lib", []):
-            full_path = sdk_dir / lib_path
-            if not full_path.exists():
-                full_path = sdk_dir / "lib" / lib_path
-            if not full_path.exists():
+            if not self._find_expected_file(sdk_dir, lib_path):
                 issues.append(f"Missing library file: {lib_path}")
 
         # Check source directories for source-built SDKs
@@ -279,11 +291,71 @@ class SDKManager:
             print(RED(f"Failed to install {sdk_key}: {e}"))
             return False
 
+    # Parent SDK key for entries that ship inside another SDK.
+    _BUNDLED_PARENTS = {
+        "bundled_with_dlss": "nvidia/dlss",
+        "bundled_with_streamline": "nvidia/streamline",
+        "bundled_with_physx": "physx/physx",
+    }
+
+    def download(self, sdk_key: str) -> bool:
+        """Clone a GitHub-hosted SDK into its target directory (shallow)."""
+        sdk_info, _ = self.manifest.get_sdk(sdk_key)
+        acquisition = sdk_info.get("acquisition", "")
+
+        # Bundled SDKs come from their parent SDK's repository.
+        if acquisition in self._BUNDLED_PARENTS:
+            parent = self._BUNDLED_PARENTS[acquisition]
+            print(f"{sdk_key} is bundled with {parent}; downloading {parent} instead.")
+            return self.download(parent)
+
+        url = sdk_info.get("acquisition_url", "")
+        if acquisition not in ("github", "manual_or_github") or "github.com" not in url:
+            print(YELLOW(f"{sdk_key} cannot be downloaded automatically (acquisition: {acquisition})."))
+            self.download_instructions(sdk_key)
+            return False
+
+        sdk_dir = self.get_sdk_dir(sdk_key)
+        if self.is_installed(sdk_key):
+            valid, issues = self.validate_installation(sdk_key)
+            if valid:
+                print(GREEN(f"{sdk_key} is already installed and valid at {sdk_dir}."))
+                return True
+            print(YELLOW(f"{sdk_key} at {sdk_dir} exists but is incomplete; remove it first to re-download."))
+
+        if not sdk_dir.exists():
+            sdk_dir.mkdir(parents=True, exist_ok=True)
+        elif any(sdk_dir.iterdir()):
+            print(RED(f"{sdk_dir} is not empty. Remove it first to re-download."))
+            return False
+
+        try:
+            subprocess.run(["git", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(RED("git is required for automatic SDK downloads."))
+            return False
+
+        print(f"Cloning {url} into {sdk_dir} (shallow)...")
+        result = subprocess.run(["git", "clone", "--depth", "1", url, str(sdk_dir)], capture_output=True, text=True)
+        if result.returncode != 0:
+            print(RED(f"git clone failed:\n{result.stderr}"))
+            return False
+
+        valid, issues = self.validate_installation(sdk_key)
+        if valid:
+            print(GREEN(f"{sdk_key} downloaded and validated successfully."))
+            return True
+        print(YELLOW(f"{sdk_key} downloaded but validation found issues:"))
+        for issue in issues:
+            print(f"  - {issue}")
+        return True
+
     def download_instructions(self, sdk_key: str):
         """Print manual download instructions for SDKs that require them."""
         sdk_info, group_name = self.manifest.get_sdk(sdk_key)
+        sdk_name = sdk_info.get("name", sdk_key)
 
-        print(f"\n{BOLD(f'Manual Download Instructions: {sdk_info.get("name", sdk_key)}')}\n")
+        print(f"\n{BOLD('Manual Download Instructions: ' + sdk_name)}\n")
         print(f"Acquisition: {sdk_info.get('acquisition', 'unknown')}")
         print(f"License: {sdk_info.get('license', 'N/A')}")
         print(f"Redistribution: {sdk_info.get('redistribution', 'N/A')}")
@@ -323,19 +395,24 @@ def main():
     if args.list or args.status:
         manager.list_sdks()
     elif args.validate:
+        all_valid = True
         if args.validate == "all":
             for key, _, _ in manager.manifest.list_all():
                 valid, issues = manager.validate_installation(key)
+                all_valid = all_valid and valid
                 status = GREEN("VALID") if valid else RED("INVALID")
                 print(f"{key}: {status}")
                 for issue in issues:
                     print(f"  - {issue}")
         else:
             valid, issues = manager.validate_installation(args.validate)
+            all_valid = valid
             status = GREEN("VALID") if valid else RED("INVALID")
             print(f"{args.validate}: {status}")
             for issue in issues:
                 print(f"  - {issue}")
+        if not all_valid:
+            sys.exit(1)
     elif args.instructions:
         manager.download_instructions(args.instructions)
     elif args.install:
@@ -344,8 +421,8 @@ def main():
             sys.exit(1)
         manager.install_from_archive(args.install, Path(args.archive))
     elif args.download:
-        print(YELLOW(f"Automatic download not yet implemented for {args.download}"))
-        manager.download_instructions(args.download)
+        if not manager.download(args.download):
+            sys.exit(1)
     else:
         parser.print_help()
 

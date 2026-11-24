@@ -99,7 +99,7 @@ public:
 	// Access to the low-level DLSSEffect (existing singleton).
 	DLSSEffect *get_dlss_effect() const { return DLSSEffect::get_singleton(); }
 
-	// NGX/Streamline handle access.
+	// NGX library handle access.
 	void *get_ngx_handle() const { return ngx_handle; }
 
 private:
@@ -115,12 +115,10 @@ private:
 	Size2i internal_size;
 	Size2i target_size;
 
-#ifdef NGX_DLSS_ENABLED
 	void *ngx_handle = nullptr;
-	void *dlss_sr_handle = nullptr;
-	void *dlss_rr_handle = nullptr;
-	void *dlss_fg_handle = nullptr;
-#endif
+	DLSSContext *dlss_sr_context = nullptr;
+	DLSSContext *dlss_rr_context = nullptr;
+	DLSSContext *dlss_fg_context = nullptr;
 
 	bool context_created = false;
 	bool initialized = false;

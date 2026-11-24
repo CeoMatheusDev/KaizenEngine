@@ -1171,7 +1171,57 @@ if env["disable_physics_3d"]:
     env["builtin_physx_extensions"] = False
     env["builtin_physx_gpu"] = False
 
-# NVIDIA SDK build flags
+# NVIDIA SDK detection and build flags. Defines and include paths are only
+# added when the matching SDK is actually present, so enabling a flag without
+# the SDK installed degrades gracefully instead of breaking the build. This
+# runs before module detection so module can_build() checks see the final
+# values of the builtin_* options.
+nvidia_sdk_dir = str(Dir(env["nvidia_sdk_path"]).abspath)
+physx_sdk_dir = str(Dir(env["physx_sdk_path"]).abspath)
+
+if env["builtin_nvidia_dlss"] or env["builtin_nvidia_ngx"]:
+    if os.path.isfile(os.path.join(nvidia_sdk_dir, "dlss", "include", "nvsdk_ngx.h")):
+        env.Append(CPPPATH=[os.path.join(nvidia_sdk_dir, "dlss", "include")])
+    else:
+        print_warning(
+            "NVIDIA DLSS SDK not found in %s. Run tools/sdk/sdk_manager.py for instructions."
+            % os.path.join(nvidia_sdk_dir, "dlss")
+        )
+        env["builtin_nvidia_dlss"] = False
+        env["builtin_nvidia_ngx"] = False
+
+if env["builtin_nvidia_streamline"] or env["builtin_nvidia_reflex"]:
+    if os.path.isfile(os.path.join(nvidia_sdk_dir, "streamline", "include", "sl.h")):
+        env.Append(CPPPATH=[os.path.join(nvidia_sdk_dir, "streamline", "include")])
+    else:
+        print_warning(
+            "NVIDIA Streamline SDK not found in %s. Run tools/sdk/sdk_manager.py for instructions."
+            % os.path.join(nvidia_sdk_dir, "streamline")
+        )
+        env["builtin_nvidia_streamline"] = False
+        env["builtin_nvidia_reflex"] = False
+
+if env["builtin_nvidia_reflex"]:
+    # Reflex is bundled with Streamline; the headers live in the Streamline SDK.
+    if not os.path.isfile(os.path.join(nvidia_sdk_dir, "streamline", "include", "sl_reflex.h")):
+        print_warning("NVIDIA Reflex headers (sl_reflex.h) not found in the Streamline SDK. Reflex support disabled.")
+        env["builtin_nvidia_reflex"] = False
+
+if env["builtin_physx"]:
+    physx_source_dir = ""
+    for candidate in ("physx/physx", "physx", ""):
+        if os.path.isfile(os.path.join(physx_sdk_dir, candidate, "include", "foundation", "PxFoundation.h")):
+            physx_source_dir = os.path.join(physx_sdk_dir, candidate)
+            break
+    if not physx_source_dir:
+        print_warning(
+            "NVIDIA PhysX SDK sources not found in %s. Clone https://github.com/NVIDIA-Omniverse/PhysX into thirdparty/physx/physx/ first." % physx_sdk_dir
+        )
+        env["builtin_physx"] = False
+        env["builtin_physx_extensions"] = False
+        env["builtin_physx_gpu"] = False
+
+# NVIDIA SDK build flags (only set for SDKs that passed detection above).
 if env["builtin_nvidia_dlss"]:
     env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
 if env["builtin_nvidia_streamline"]:

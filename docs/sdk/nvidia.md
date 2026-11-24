@@ -24,19 +24,19 @@ KaizenEngine supports NVIDIA rendering SDKs for advanced upscaling, ray tracing,
 
 ### NVIDIA Reflex SDK
 - **Purpose**: Low-latency mode for reduced render latency
-- **Acquisition**: [NVIDIA Developer Portal](https://developer.nvidia.com/downloads/nv-reflex-sdk-zip/) (login required) or via Streamline
+- **Acquisition**: Bundled with the [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline)
 - **License**: NVIDIA Reflex SDK License
 - **Redistribution**: Permitted
 - **Build flag**: `REFLEX_ENABLED`
-- **Headers**: `sl_reflex.h` (via Streamline), `nvReflex.h` (standalone)
+- **Headers**: `sl_reflex.h` (via Streamline)
 
 ### NVIDIA NGX SDK
 - **Purpose**: Core neural graphics infrastructure for DLSS and other AI features
-- **Acquisition**: [NVIDIA Developer Portal](https://developer.nvidia.com/ngx-sdk) (login required)
+- **Acquisition**: Bundled with the [DLSS SDK](https://github.com/NVIDIA/DLSS)
 - **License**: NVIDIA NGX License Agreement
 - **Redistribution**: Prohibited (NVIDIA-confidential)
 - **Build flag**: `NGX_ENABLED`
-- **Headers**: `nvsdk_ngx.h`, `nvsdk_ngx_core.h`, `nvsdk_ngx_dlss.h`
+- **Headers**: `nvsdk_ngx.h`, `nvsdk_ngx_defs.h`, `nvsdk_ngx_params.h`
 
 ## Installation
 
@@ -44,6 +44,13 @@ KaizenEngine supports NVIDIA rendering SDKs for advanced upscaling, ray tracing,
 ```bash
 python tools/sdk/sdk_manager.py --list
 ```
+
+### Automatic Download (GitHub mirrors)
+```bash
+python tools/sdk/sdk_manager.py --download nvidia/dlss
+python tools/sdk/sdk_manager.py --validate nvidia/dlss
+```
+Bundled SDKs (NGX, DLSSG, DLSSD, Reflex) are fetched with their parent SDK.
 
 ### Manual Installation
 1. Download the SDK from the official source

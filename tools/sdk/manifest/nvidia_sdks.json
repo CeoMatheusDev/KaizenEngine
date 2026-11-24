@@ -24,8 +24,10 @@
           "nvsdk_ngx_helpers.h",
           "nvsdk_ngx_defs_dlssd.h",
           "nvsdk_ngx_params_dlssd.h",
+          "nvsdk_ngx_helpers_dlssd.h",
           "nvsdk_ngx_defs_dlssg.h",
           "nvsdk_ngx_params_dlssg.h",
+          "nvsdk_ngx_helpers_dlssg.h",
           "nvsdk_ngx_vk.h"
         ],
         "lib": [
