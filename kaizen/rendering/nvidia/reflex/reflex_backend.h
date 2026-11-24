@@ -26,7 +26,6 @@
 
 #ifdef REFLEX_ENABLED
 	#include "sl_reflex.h"
-	#include "nvReflex.h"
 #endif
 
 namespace RendererRD {
@@ -70,10 +69,8 @@ private:
 	bool supported = false;
 	Config config;
 
-#ifdef REFLEX_ENABLED
 	void *reflex_handle = nullptr;
 	void *nvapi_handle = nullptr;
-#endif
 };
 
 } // namespace RendererRD

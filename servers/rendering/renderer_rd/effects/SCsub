@@ -2,7 +2,6 @@
 from misc.utility.scons_hints import *
 
 import methods
-import os
 
 Import("env")
 
@@ -75,21 +74,11 @@ module_obj = []
 
 env_effects.add_source_files(module_obj, "*.cpp")
 
-# NVIDIA DLSS SDK integration
-dlss_dir = "#thirdparty/nvidia/dlss/"
-dlss_sdk_include = os.path.exists(str(File("#thirdparty/nvidia/dlss/include/nvsdk_ngx.h").abspath))
-
-if dlss_sdk_include:
-    env_effects.Prepend(CPPPATH=[dlss_dir + "include"])
-    env.Prepend(CPPPATH=[dlss_dir + "include"])
-    env.EitherAppend("CPPDEFINES", ["NGX_DLSS_ENABLED"])
-    env.EitherAppend("LINKFLAGS", ["-L" + str(Dir(dlss_dir + "lib/Linux_x86_64/rel").abspath)])
-    env.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
-    print("NVIDIA DLSS SDK found - DLSS support enabled")
-else:
-    print("NVIDIA DLSS SDK not found - building in fallback mode (FSR2 will be used on NVIDIA GPUs)")
-
-env_effects.add_source_files(module_obj, "effects/dlss.cpp")
+# NVIDIA DLSS SDK integration: effects/dlss.cpp is compiled in all
+# configurations and degrades gracefully without the SDK. The SDK itself is
+# detected in SConstruct from the builtin_nvidia_dlss option, which adds the
+# NGX_DLSS_ENABLED define and the SDK include path globally, while
+# kaizen/rendering/nvidia/SCsub wires the link libraries.
 
 env.servers_sources += module_obj
 
