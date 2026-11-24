@@ -14,9 +14,9 @@ if env["builtin_nvidia_dlss"]:
     dlss_dir = nvidia_dir + "/dlss/"
     if os.path.exists(dlss_dir + "include/nvsdk_ngx.h"):
         env_nvidia.Prepend(CPPPATH=[dlss_dir + "include"])
-        env_nvidia.EitherAppend(CPPDEFINES, ["NGX_DLSS_ENABLED"])
-        env_nvidia.EitherAppend(LINKFLAGS, ["-L" + dlss_dir + "lib/Linux_x86_64/rel"])
-        env_nvidia.EitherAppend(LIBS, ["nvidia-ngx-dlss"])
+        env_nvidia.EitherAppend("CPPDEFINES", ["NGX_DLSS_ENABLED"])
+        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + dlss_dir + "lib/Linux_x86_64/rel"])
+        env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
         print("NVIDIA DLSS SDK found - DLSS support enabled")
     else:
         print("NVIDIA DLSS SDK not found in " + dlss_dir + " - DLSS support disabled")
@@ -27,12 +27,12 @@ if env["builtin_nvidia_streamline"]:
     streamline_dir = nvidia_dir + "/streamline/"
     if os.path.exists(streamline_dir + "include/sl.h"):
         env_nvidia.Prepend(CPPPATH=[streamline_dir + "include"])
-        env_nvidia.EitherAppend(CPPDEFINES, ["STREAMLINE_ENABLED"])
+        env_nvidia.EitherAppend("CPPDEFINES", ["STREAMLINE_ENABLED"])
         # Streamline is built from source; check for built libraries
         streamline_lib_dir = streamline_dir + "_artifacts/sl.plugin.x64/Release/"
         if os.path.exists(streamline_lib_dir):
-            env_nvidia.EitherAppend(LINKFLAGS, ["-L" + streamline_lib_dir])
-            env_nvidia.EitherAppend(LIBS, ["sl.interposer"])
+            env_nvidia.EitherAppend("LINKFLAGS", ["-L" + streamline_lib_dir])
+            env_nvidia.EitherAppend("LIBS", ["sl.interposer"])
         print("NVIDIA Streamline SDK found - Streamline support enabled")
     else:
         print("NVIDIA Streamline SDK not found in " + streamline_dir + " - Streamline support disabled")
@@ -43,7 +43,7 @@ if env["builtin_nvidia_reflex"]:
     reflex_dir = nvidia_dir + "/streamline/"
     if os.path.exists(reflex_dir + "include/sl_reflex.h"):
         env_nvidia.Prepend(CPPPATH=[reflex_dir + "include"])
-        env_nvidia.EitherAppend(CPPDEFINES, ["REFLEX_ENABLED"])
+        env_nvidia.EitherAppend("CPPDEFINES", ["REFLEX_ENABLED"])
         print("NVIDIA Reflex SDK found - Reflex support enabled")
     else:
         print("NVIDIA Reflex SDK not found - Reflex support disabled")
@@ -54,9 +54,9 @@ if env["builtin_nvidia_ngx"]:
     ngx_dir = nvidia_dir + "/dlss/"
     if os.path.exists(ngx_dir + "include/nvsdk_ngx.h"):
         env_nvidia.Prepend(CPPPATH=[ngx_dir + "include"])
-        env_nvidia.EitherAppend(CPPDEFINES, ["NGX_ENABLED"])
-        env_nvidia.EitherAppend(LINKFLAGS, ["-L" + ngx_dir + "lib/Linux_x86_64/rel"])
-        env_nvidia.EitherAppend(LIBS, ["nvidia-ngx-dlss"])
+        env_nvidia.EitherAppend("CPPDEFINES", ["NGX_ENABLED"])
+        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + ngx_dir + "lib/Linux_x86_64/rel"])
+        env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
         print("NVIDIA NGX SDK found - NGX support enabled")
     else:
         print("NVIDIA NGX SDK not found - NGX support disabled")

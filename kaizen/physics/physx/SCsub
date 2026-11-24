@@ -110,13 +110,13 @@ if env["builtin_physx"]:
     if env["builtin_physx_gpu"]:
         physx_libs.append("PhysXGPU")
 
-    env_physx.EitherAppend(LIBS, physx_libs)
-    env_physx.EitherAppend(CPPDEFINES, ["PHYSX_ENABLED"])
+    env_physx.EitherAppend("LIBS", physx_libs)
+    env_physx.EitherAppend("CPPDEFINES", ["PHYSX_ENABLED"])
 
     if env["builtin_physx_extensions"]:
-        env_physx.EitherAppend(CPPDEFINES, ["PHYSX_EXTENSIONS_ENABLED"])
+        env_physx.EitherAppend("CPPDEFINES", ["PHYSX_EXTENSIONS_ENABLED"])
     if env["builtin_physx_gpu"]:
-        env_physx.EitherAppend(CPPDEFINES, ["PHYSX_GPU_ENABLED"])
+        env_physx.EitherAppend("CPPDEFINES", ["PHYSX_GPU_ENABLED"])
 
     print("NVIDIA PhysX SDK detected - PhysX backend enabled")
 
