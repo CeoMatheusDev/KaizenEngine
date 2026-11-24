@@ -75,10 +75,10 @@ scons builtin_nvidia_dlss=yes builtin_nvidia_streamline=yes builtin_nvidia_refle
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `builtin_nvidia_dlss` | no | Enable NVIDIA DLSS SDK integration |
-| `builtin_nvidia_streamline` | no | Enable NVIDIA Streamline SDK integration |
-| `builtin_nvidia_reflex` | no | Enable NVIDIA Reflex SDK integration |
-| `builtin_nvidia_ngx` | no | Enable NVIDIA NGX SDK integration |
+| `builtin_nvidia_dlss` | yes | Enable NVIDIA DLSS SDK integration |
+| `builtin_nvidia_streamline` | yes | Enable NVIDIA Streamline SDK integration |
+| `builtin_nvidia_reflex` | yes | Enable NVIDIA Reflex SDK integration |
+| `builtin_nvidia_ngx` | yes | Enable NVIDIA NGX SDK integration |
 | `nvidia_sdk_path` | thirdparty/nvidia | Custom path to NVIDIA SDK root |
 
 ## Directory Structure

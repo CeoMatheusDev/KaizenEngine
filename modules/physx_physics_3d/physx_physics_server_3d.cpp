@@ -2453,8 +2453,26 @@ Quaternion PhysXPhysicsServer3D::generic_6dof_joint_get_angular_target_rotation(
 
 void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 	if (shape_owner.owns(p_rid)) {
-		// Shapes still attached to bodies/areas are detached lazily (px_shape
-		// pointers become stale only on rebuild; geometry releases at free).
+		// Detach the shape from every body/area still referencing it so no
+		// PxShape keeps a pointer into the freed geometry.
+		for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+			PhysXBody *body = E.value;
+			for (int i = body->shapes.size() - 1; i >= 0; i--) {
+				if (body->shapes[i].shape_rid == p_rid) {
+					_body_remove_px_shape(body, i);
+					body->shapes.remove_at(i);
+				}
+			}
+		}
+		for (const KeyValue<RID, PhysXArea *> &E : area_map) {
+			PhysXArea *area = E.value;
+			for (int i = area->shapes.size() - 1; i >= 0; i--) {
+				if (area->shapes[i].shape_rid == p_rid) {
+					_area_remove_px_shape(area, i);
+					area->shapes.remove_at(i);
+				}
+			}
+		}
 		shape_owner.free(p_rid);
 		return;
 	}
