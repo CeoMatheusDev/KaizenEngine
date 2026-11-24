@@ -81,8 +81,9 @@ dlss_sdk_include = os.path.exists(str(File("#thirdparty/nvidia/dlss/include/nvsd
 
 if dlss_sdk_include:
     env_effects.Prepend(CPPPATH=[dlss_dir + "include"])
+    env.Prepend(CPPPATH=[dlss_dir + "include"])
     env.EitherAppend("CPPDEFINES", ["NGX_DLSS_ENABLED"])
-    env.EitherAppend("LINKFLAGS", ["-L" + dlss_dir + "lib/Linux_x86_64/rel"])
+    env.EitherAppend("LINKFLAGS", ["-L" + str(Dir(dlss_dir + "lib/Linux_x86_64/rel").abspath)])
     env.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
     print("NVIDIA DLSS SDK found - DLSS support enabled")
 else:

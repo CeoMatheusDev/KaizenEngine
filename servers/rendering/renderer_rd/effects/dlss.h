@@ -27,6 +27,8 @@
 
 // NVIDIA DLSS SDK (NGX) headers.
 #ifdef NGX_DLSS_ENABLED
+// Vulkan headers must be included before NGX VK headers.
+#include <vulkan/vulkan.h>
 #include <nvsdk_ngx.h>
 #include <nvsdk_ngx_defs.h>
 #include <nvsdk_ngx_params.h>

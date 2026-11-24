@@ -15,7 +15,7 @@ if env["builtin_nvidia_dlss"]:
     if os.path.exists(dlss_dir + "include/nvsdk_ngx.h"):
         env_nvidia.Prepend(CPPPATH=[dlss_dir + "include"])
         env_nvidia.EitherAppend("CPPDEFINES", ["NGX_DLSS_ENABLED"])
-        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + dlss_dir + "lib/Linux_x86_64/rel"])
+        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + str(Dir(dlss_dir + "lib/Linux_x86_64/rel").abspath)])
         env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
         print("NVIDIA DLSS SDK found - DLSS support enabled")
     else:
@@ -55,7 +55,7 @@ if env["builtin_nvidia_ngx"]:
     if os.path.exists(ngx_dir + "include/nvsdk_ngx.h"):
         env_nvidia.Prepend(CPPPATH=[ngx_dir + "include"])
         env_nvidia.EitherAppend("CPPDEFINES", ["NGX_ENABLED"])
-        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + ngx_dir + "lib/Linux_x86_64/rel"])
+        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + str(Dir(ngx_dir + "lib/Linux_x86_64/rel").abspath)])
         env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
         print("NVIDIA NGX SDK found - NGX support enabled")
     else:
