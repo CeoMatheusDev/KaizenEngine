@@ -110,16 +110,21 @@ void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_fsr2(Rende
 void RenderForwardClustered::RenderBufferDataForwardClustered::ensure_dlss(RendererRD::DLSSEffect *p_effect) {
 	const int quality = (int)render_buffers->get_dlss_quality();
 	const int rr_mode = render_buffers->get_ray_reconstruction() ? 1 : 0;
-	if (dlss_context != nullptr && (dlss_context_quality != quality || dlss_context_rr_mode != rr_mode)) {
-		// Quality and Ray Reconstruction are create-time parameters: rebuild
-		// the feature when the viewport settings change.
+	const Size2i internal_size = render_buffers->get_internal_size();
+	const Size2i target_size = render_buffers->get_target_size();
+	// Quality, Ray Reconstruction and the render sizes are all create-time
+	// parameters: rebuild the feature when any of them change (a resize would
+	// otherwise keep running a feature created for the old resolution).
+	if (dlss_context != nullptr && (dlss_context_quality != quality || dlss_context_rr_mode != rr_mode || dlss_context_internal_size != internal_size || dlss_context_target_size != target_size)) {
 		memdelete(dlss_context);
 		dlss_context = nullptr;
 	}
 	if (dlss_context == nullptr) {
-		dlss_context = p_effect->create_context(render_buffers->get_internal_size(), render_buffers->get_target_size(), quality, rr_mode);
+		dlss_context = p_effect->create_context(internal_size, target_size, quality, rr_mode);
 		dlss_context_quality = quality;
 		dlss_context_rr_mode = rr_mode;
+		dlss_context_internal_size = internal_size;
+		dlss_context_target_size = target_size;
 	}
 }
 #endif

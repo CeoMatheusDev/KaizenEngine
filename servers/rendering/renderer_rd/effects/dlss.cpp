@@ -240,7 +240,8 @@ bool DLSSEffect::is_ray_reconstruction_enabled() const {
 		return rr_override == 1;
 	}
 	// Default: follow the RTX backend configuration.
-	return RTXBackend::get_singleton()->is_ray_reconstruction_enabled();
+	RTXBackend *rtx = RTXBackend::get_singleton();
+	return rtx ? rtx->is_ray_reconstruction_enabled() : true;
 }
 
 DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size, int p_quality, int p_rr_mode) {

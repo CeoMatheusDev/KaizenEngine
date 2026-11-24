@@ -170,7 +170,16 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 	RID default_space;
 	HashMap<RID, PhysXBody *> body_map; // RID -> body (fast reverse lookup).
 	HashMap<RID, PhysXArea *> area_map;
+	HashMap<RID, PhysXShape *> shape_map;
+	HashMap<RID, PhysXSpace *> space_map;
+	HashMap<RID, PhysXJoint *> joint_map;
+	HashMap<RID, PhysXDirectBodyState *> direct_body_states;
 	HashMap<RID, PhysXDirectSpaceState *> direct_space_states;
+
+	// User callbacks run while stepping; free_rid() defers the actual release
+	// to the end of the step so map iteration and in-flight objects stay valid.
+	bool in_step = false;
+	Vector<RID> pending_frees;
 
 	// Shape cooking helpers.
 	bool _build_shape_geometry(PhysXShape *p_shape);
@@ -181,6 +190,8 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 	void _area_add_px_shape(PhysXArea *p_area, int p_idx);
 	void _area_remove_px_shape(PhysXArea *p_area, int p_idx);
 	void _area_rebuild_shapes(PhysXArea *p_area);
+	void _resync_px_shape_indices(PhysXBody *p_body);
+	void _resync_px_shape_indices(PhysXArea *p_area);
 	void _apply_body_mode(PhysXBody *p_body);
 	void _apply_body_mass(PhysXBody *p_body);
 	void _apply_filter_data(PhysXBody *p_body);
