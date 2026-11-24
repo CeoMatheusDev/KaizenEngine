@@ -1048,9 +1048,13 @@ public static partial class RenderingServer
         /// </summary>
         Nearest = 5,
         /// <summary>
+        /// <para>Use NVIDIA DLSS upscaling for the viewport's 3D buffer. The amount of scaling can be set using <see cref="Kaizen.Viewport.Scaling3DScale"/>. Values less than <c>1.0</c> will result in the viewport being upscaled using DLSS. Values greater than <c>1.0</c> are not supported and bilinear downsampling will be used instead. Uses temporal upscaling similar to FSR2. Requires NVIDIA GPU with DLSS support.</para>
+        /// </summary>
+        Dlss = 6,
+        /// <summary>
         /// <para>Represents the size of the <see cref="Kaizen.RenderingServer.ViewportScaling3DMode"/> enum.</para>
         /// </summary>
-        Max = 6
+        Max = 7
     }
 
     public enum ViewportUpdateMode : long

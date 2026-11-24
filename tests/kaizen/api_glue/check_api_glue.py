@@ -53,6 +53,34 @@ SPECS = [
         "cs_glue": "modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs",
         "cref_root": "Kaizen.RenderingServer.RenderingInfo",
     },
+    # The 3D scaling mode enums exist in two flavours that pass values between
+    # each other through a plain int cast (viewport.cpp), so both are pinned:
+    # a renumber in one and not the other silently routes DLSS to MetalFX.
+    {
+        "enum": "ViewportScaling3DMode",
+        "cs_class": "RenderingServer",
+        "prefix": "VIEWPORT_SCALING_3D_MODE_",
+        "cpp_enums": "servers/rendering/rendering_server_enums.h",
+        "cpp_binds": "servers/rendering/rendering_server.cpp",
+        "doc_xml": "doc/classes/RenderingServer.xml",
+        "cs_glue": "modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/RenderingServer.cs",
+        "cref_root": "Kaizen.RenderingServer.ViewportScaling3DMode",
+        # Member references in these descriptions point at Viewport properties
+        # with a generator name translation this check does not model.
+        "check_doc_text": False,
+    },
+    {
+        "enum": "Scaling3DMode",
+        "cs_enum": "Scaling3DModeEnum",  # Generator suffixes nested Viewport enums.
+        "cs_class": "Viewport",
+        "prefix": "SCALING_3D_MODE_",
+        "cpp_enums": "scene/main/viewport.h",
+        "cpp_binds": "scene/main/viewport.cpp",
+        "doc_xml": "doc/classes/Viewport.xml",
+        "cs_glue": "modules/mono/glue/KaizenSharp/KaizenSharp/Generated/KaizenObjects/Viewport.cs",
+        "cref_root": "Kaizen.Viewport.Scaling3DModeEnum",
+        "check_doc_text": False,
+    },
 ]
 
 _CPP_ENUM_RE = r"enum\s+{enum}\s*\{{(.*?)\}};"
@@ -202,12 +230,13 @@ def check_spec(root: str, spec: dict, verbose: bool) -> list[str]:
             return handle.read()
 
     enum_name = spec["enum"]
+    cs_enum_name = spec.get("cs_enum", enum_name)
     prefix = spec["prefix"]
     cpp = parse_cpp_enum(read(spec["cpp_enums"]), enum_name)
     bound = parse_bound_enums(read(spec["cpp_binds"]), prefix)
     doc = parse_doc_constants(read(spec["doc_xml"]), enum_name)
-    cs = parse_cs_enum(read(spec["cs_glue"]), enum_name)
-    cs_docs = cs_doc_text(read(spec["cs_glue"]), enum_name)
+    cs = parse_cs_enum(read(spec["cs_glue"]), cs_enum_name)
+    cs_docs = cs_doc_text(read(spec["cs_glue"]), cs_enum_name)
 
     value_of = {name: index for index, name in enumerate(cpp)}
 
@@ -267,6 +296,8 @@ def check_spec(root: str, spec: dict, verbose: bool) -> list[str]:
             )
             continue
         if name not in cs_docs:
+            continue
+        if not spec.get("check_doc_text", True):
             continue
         enumerator = next((b for b in bound if pascal(b, prefix) == name), None)
         if enumerator is None or enumerator not in doc:

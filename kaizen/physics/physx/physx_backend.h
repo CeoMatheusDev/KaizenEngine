@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "core/object/ref_counted.h"
-#include "servers/physics/physics_server_3d.h"
+#include "core/math/vector3.h"
+#include "kaizen/physics/backend/physics_backend.h"
 
 #ifdef PHYSX_ENABLED
 	#include "PxPhysicsAPI.h"
@@ -31,12 +31,10 @@
 	#include "PxVehicleDrive.h"
 #endif
 
-namespace RendererRD {
-
 // NVIDIA PhysX physics backend.
-// Implements a physics backend using the NVIDIA PhysX SDK,
-// isolated behind the engine's physics abstraction.
-class PhysXBackend : public RefCounted {
+// Implements the engine's physics backend interface using the NVIDIA
+// PhysX SDK, isolated behind the PhysicsBackend abstraction.
+class PhysXBackend : public PhysicsBackend {
 public:
 	struct Config {
 		bool enabled = false;
@@ -50,24 +48,31 @@ public:
 	};
 
 	struct SceneDesc {
-		Gravity gravity = Vector3(0, -9.81, 0);
+		Vector3 gravity = Vector3(0, -9.81, 0);
 		bool enable_pvd = false;
 	};
 
 	PhysXBackend();
 	~PhysXBackend() override;
 
-	bool is_supported() const { return supported; }
-	bool init();
-	void shutdown();
+	Type get_type() const override { return TYPE_PHYSX; }
+	bool is_supported() const override;
+	bool init() override;
+	void shutdown() override;
 
 	// Simulation.
-	bool simulate(float p_step);
-	bool fetch_results(bool p_wait = true);
+	bool simulate(float p_step) override;
+	bool fetch_results(bool p_wait = true) override;
 
-	// Scene management.
+	// Scene management (PhysicsBackend interface).
+	void *create_scene(const Vector3 &p_gravity) override;
+	void destroy_scene(void *p_scene) override;
+
+	// Scene management with full descriptor (PhysX-specific).
 	void *create_scene(const SceneDesc &p_desc);
-	void destroy_scene(void *p_scene);
+
+	// Clean up all resources.
+	void cleanup() override;
 
 	// Configuration.
 	const Config &get_config() const { return config; }
@@ -82,14 +87,10 @@ private:
 	bool supported = false;
 	Config config;
 
-#ifdef PHYSX_ENABLED
 	void *foundation = nullptr;
 	void *physics = nullptr;
 	void *cooking = nullptr;
 	void *dispatcher = nullptr;
 	void *controller_manager = nullptr;
 	void *vehicle_manager = nullptr;
-#endif
 };
-
-} // namespace RendererRD

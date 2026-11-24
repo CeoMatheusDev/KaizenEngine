@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 
 SOURCE_EXTENSIONS = (
@@ -175,10 +176,30 @@ def fix_file(path):
     return changed
 
 
+def git_visible_files(root):
+    """Relative paths git would show: tracked plus untracked-but-not-ignored.
+
+    Generated artifacts (*.gen.h and friends) are gitignored build outputs whose
+    banner rows are mechanical copies of the source's; scanning them reports
+    generator formatting as licence violations. Returns None when git is not
+    available (the walk then keeps every file).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            capture_output=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return {p.decode("utf-8", "surrogateescape") for p in out.stdout.split(b"\0") if p}
+
+
 def source_files(root, paths):
-    """Every code file under `paths`, minus vendored trees."""
+    """Every code file under `paths`, minus vendored trees and ignored artifacts."""
     selected = []
     seen = set()
+    visible = git_visible_files(root)
     for base in paths:
         if os.path.isfile(base):
             if base.endswith(SOURCE_EXTENSIONS):
@@ -191,6 +212,8 @@ def source_files(root, paths):
                 full = os.path.join(directory, name)
                 rel = os.path.relpath(full, root).replace(os.sep, "/")
                 if rel.startswith("thirdparty/") or "/thirdparty/" in rel or rel in seen:
+                    continue
+                if visible is not None and rel not in visible:
                     continue
                 seen.add(rel)
                 selected.append(full)

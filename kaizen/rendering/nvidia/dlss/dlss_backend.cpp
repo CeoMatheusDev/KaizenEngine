@@ -22,23 +22,13 @@
 #include "dlss_backend.h"
 
 #include "core/os/os.h"
-#include "servers/rendering/rendering_device.h"
-#include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
+#include "servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h"
 
 using namespace RendererRD;
 
 DLSSBackend::DLSSBackend() {
 	internal_size = Size2i(1920, 1080);
 	target_size = Size2i(1920, 1080);
-	initialized = false;
-	context_created = false;
-
-#ifdef NGX_DLSS_ENABLED
-	ngx_handle = nullptr;
-	dlss_sr_handle = nullptr;
-	dlss_rr_handle = nullptr;
-	dlss_fg_handle = nullptr;
-#endif
 }
 
 DLSSBackend::~DLSSBackend() {
@@ -52,8 +42,7 @@ bool DLSSBackend::is_supported() const {
 		return false;
 	}
 
-	String vendor = rd->get_device_vendor_name();
-	if (vendor != "NVIDIA") {
+	if (rd->get_device_vendor_name() != "NVIDIA") {
 		return false;
 	}
 
@@ -109,6 +98,7 @@ void DLSSBackend::process(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_sour
 }
 
 void DLSSBackend::cleanup() {
+	destroy_dlss_context();
 	shutdown_ngx();
 	context_created = false;
 	initialized = false;
@@ -116,17 +106,14 @@ void DLSSBackend::cleanup() {
 
 bool DLSSBackend::init_ngx() {
 #ifdef NGX_DLSS_ENABLED
-	// Load the NGX/Streamline library.
-	// The library path is configured via the build system.
-	ngx_handle = OS::get_singleton()->load_dynamic_library("nvngx_core");
-	if (!ngx_handle) {
-		WARN_PRINT("DLSSBackend: Failed to load nvngx_core library.");
+	// Load the NGX library. The NGX initialization calls
+	// (NVSDK_NGX_VULKAN_Init and friends) are dispatched through the
+	// symbols of this library once the SDK is wired in.
+	Error err = OS::get_singleton()->open_dynamic_library("libnvidia-ngx-dlss.so", ngx_handle);
+	if (err != OK || !ngx_handle) {
+		WARN_PRINT("DLSSBackend: Failed to load the NVIDIA NGX library.");
 		return false;
 	}
-
-	// Initialize NGX.
-	// Actual NGX initialization functions would be called here using
-	// dlsym/GetProcAddress on the loaded library.
 #endif
 	return true;
 }
@@ -134,33 +121,29 @@ bool DLSSBackend::init_ngx() {
 void DLSSBackend::shutdown_ngx() {
 #ifdef NGX_DLSS_ENABLED
 	if (ngx_handle) {
-		OS::get_singleton()->unload_dynamic_library(ngx_handle);
+		OS::get_singleton()->close_dynamic_library(ngx_handle);
 		ngx_handle = nullptr;
 	}
-	dlss_sr_handle = nullptr;
-	dlss_rr_handle = nullptr;
-	dlss_fg_handle = nullptr;
 #endif
 }
 
 bool DLSSBackend::create_dlss_context() {
 #ifdef NGX_DLSS_ENABLED
-	// Create DLSS Super Resolution context via NGX.
-	// This would call nvngx_dlss_create or similar NGX API.
-	dlss_sr_handle = memnew(DLSSContext); // Placeholder using existing DLSSContext
-
-	if (!dlss_sr_handle) {
-		return false;
+	if (!dlss_sr_context) {
+		dlss_sr_context = DLSSEffect::get_singleton()->create_context(internal_size, target_size);
+		if (!dlss_sr_context) {
+			return false;
+		}
 	}
 
 	// If ray reconstruction is enabled, create RR context.
-	if (config.enable_ray_reconstruction) {
-		dlss_rr_handle = memnew(DLSSContext);
+	if (config.enable_ray_reconstruction && !dlss_rr_context) {
+		dlss_rr_context = DLSSEffect::get_singleton()->create_context(internal_size, target_size);
 	}
 
 	// If frame generation is enabled, create FG context.
-	if (config.enable_frame_generation) {
-		dlss_fg_handle = memnew(DLSSContext);
+	if (config.enable_frame_generation && !dlss_fg_context) {
+		dlss_fg_context = DLSSEffect::get_singleton()->create_context(internal_size, target_size);
 	}
 #endif
 	return true;
@@ -168,51 +151,45 @@ bool DLSSBackend::create_dlss_context() {
 
 void DLSSBackend::destroy_dlss_context() {
 #ifdef NGX_DLSS_ENABLED
-	if (dlss_sr_handle) {
-		memdelete(dlss_sr_handle);
-		dlss_sr_handle = nullptr;
+	if (dlss_sr_context) {
+		memdelete(dlss_sr_context);
+		dlss_sr_context = nullptr;
 	}
-	if (dlss_rr_handle) {
-		memdelete(dlss_rr_handle);
-		dlss_rr_handle = nullptr;
+	if (dlss_rr_context) {
+		memdelete(dlss_rr_context);
+		dlss_rr_context = nullptr;
 	}
-	if (dlss_fg_handle) {
-		memdelete(dlss_fg_handle);
-		dlss_fg_handle = nullptr;
+	if (dlss_fg_context) {
+		memdelete(dlss_fg_context);
+		dlss_fg_context = nullptr;
 	}
 #endif
 }
 
 void DLSSBackend::dispatch_super_resolution(Ref<RenderSceneBuffersRD> p_render_buffers, RID p_source_texture, RID p_destination_texture) {
 #ifdef NGX_DLSS_ENABLED
-	// Build DLSS parameters from render buffers.
+	// Build DLSS parameters from render buffers. Camera parameters
+	// (near/far, fovy, jitter, delta time, reprojection) are supplied by
+	// the caller in the full pipeline (see render_forward_clustered.cpp);
+	// here we only fill in what the render buffers expose directly.
 	DLSSEffect::Parameters params;
-	params.context = static_cast<DLSSContext *>(dlss_sr_handle);
+	params.context = dlss_sr_context;
 	params.internal_size = internal_size;
 	params.target_size = target_size;
 	params.color = p_source_texture;
 	params.output = p_destination_texture;
 
-	// Get depth, velocity, reactive, exposure from render buffers.
 	params.depth = p_render_buffers->get_depth_texture();
-	params.velocity = p_render_buffers->get_velocity_texture();
-	params.reactive = p_render_buffers->get_reactive_texture();
-	params.exposure = p_render_buffers->get_exposure_texture();
-
-	// Get camera parameters.
-	params.z_near = p_render_buffers->get_z_near();
-	params.z_far = p_render_buffers->get_z_far();
-	params.fovy = p_render_buffers->get_fovy();
-	params.jitter = p_render_buffers->get_jitter();
-	params.delta_time = p_render_buffers->get_delta_time();
+	params.velocity = p_render_buffers->get_velocity_buffer(false);
+	params.reactive = p_render_buffers->get_internal_texture_reactive(0);
 	params.sharpness = 1.0f; // Default sharpness
-	params.reset_accumulation = false;
-	params.reprojection = p_render_buffers->get_reprojection_matrix();
 
 	// Call DLSS upscale via the existing DLSSEffect singleton.
 	DLSSEffect::get_singleton()->upscale(params);
 #else
-	WARN_PRINT_ONCE("DLSSBackend: DLSS SDK not available. Cannot dispatch super resolution.");
+	(void)p_render_buffers;
+	(void)p_source_texture;
+	(void)p_destination_texture;
 #endif
 }
 
@@ -220,18 +197,20 @@ void DLSSBackend::dispatch_ray_reconstruction(Ref<RenderSceneBuffersRD> p_render
 #ifdef NGX_DLSS_ENABLED
 	// Ray reconstruction uses similar parameters but with ray tracing-specific inputs.
 	DLSSEffect::Parameters params;
-	params.context = static_cast<DLSSContext *>(dlss_rr_handle);
+	params.context = dlss_rr_context;
 	params.internal_size = internal_size;
 	params.target_size = target_size;
 	params.color = p_source_texture;
 	params.output = p_destination_texture;
 	params.depth = p_render_buffers->get_depth_texture();
-	params.velocity = p_render_buffers->get_velocity_texture();
-	params.reactive = p_render_buffers->get_reactive_texture();
+	params.velocity = p_render_buffers->get_velocity_buffer(false);
+	params.reactive = p_render_buffers->get_internal_texture_reactive(0);
 
 	DLSSEffect::get_singleton()->upscale(params);
 #else
-	WARN_PRINT_ONCE("DLSSBackend: DLSS SDK not available. Cannot dispatch ray reconstruction.");
+	(void)p_render_buffers;
+	(void)p_source_texture;
+	(void)p_destination_texture;
 #endif
 }
 
@@ -239,10 +218,13 @@ void DLSSBackend::dispatch_frame_generation(Ref<RenderSceneBuffersRD> p_render_b
 #ifdef NGX_DLSS_ENABLED
 	// Frame Generation is dispatched separately from the main upscaling pass.
 	// It generates a new frame between two rendered frames.
-	if (!dlss_fg_handle) {
+	if (!dlss_fg_context) {
 		return;
 	}
 
 	// FG would use the NGX DLSS-G API to generate intermediate frames.
+	(void)p_render_buffers;
+#else
+	(void)p_render_buffers;
 #endif
 }

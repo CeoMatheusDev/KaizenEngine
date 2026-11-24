@@ -13,3 +13,7 @@ def can_build(env, platform):
     if not env["builtin_physx"]:
         return False
     return True
+
+
+def configure(env):
+    pass
