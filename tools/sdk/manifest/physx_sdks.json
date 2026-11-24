@@ -17,16 +17,14 @@
       "min_version": "5.0.0",
       "expected_structure": {
         "source": [
-          "source/foundation/",
-          "source/common/",
-          "source/core/",
-          "source/physx/"
+          "physx/source/foundation/",
+          "physx/source/common/",
+          "physx/source/physx/"
         ],
         "include": [
-          "include/foundation/",
-          "include/common/",
-          "include/core/",
-          "include/physx/"
+          "physx/include/foundation/",
+          "physx/include/common/",
+          "physx/include/geometry/"
         ]
       },
       "build_from_source": true,
@@ -56,77 +54,60 @@
     },
     "pxshared": {
       "name": "PhysX Shared (PxShared)",
-      "description": "Shared PhysX headers, profiling, and debugging infrastructure",
-      "acquisition": "github",
+      "description": "Shared PhysX headers (bundled with PhysX SDK)",
+      "acquisition": "bundled_with_physx",
       "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
       "license": "Apache-2.0",
       "redistribution": "permitted",
       "developer_account_required": false,
       "current_version": "5.9.1",
       "expected_structure": {
-        "source": [
-          "source/shared/",
-          "source/foundation/",
-          "source/common/"
-        ],
         "include": [
-          "include/foundation/",
-          "include/common/"
+          "include/foundation/PxFoundation.h"
         ]
       },
       "build_from_source": true,
       "cmake_build": true,
       "build_flag": "PHYSX_ENABLED",
-      "notes": "Part of PhysX SDK repository. Provides shared infrastructure."
+      "notes": "Bundled with PhysX SDK."
     },
     "physxextensions": {
       "name": "PhysX Extensions",
-      "description": "PhysX extensions - cooking, character controller, vehicle SDK",
-      "acquisition": "github",
+      "description": "PhysX extensions (bundled with PhysX SDK)",
+      "acquisition": "bundled_with_physx",
       "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
       "license": "Apache-2.0",
       "redistribution": "permitted",
       "developer_account_required": false,
       "current_version": "5.9.1",
       "expected_structure": {
-        "source": [
-          "source/extensions/"
-        ],
         "include": [
-          "include/extensions/"
-        ],
-        "modules": [
-          "physxcooking",
-          "physxcharacterkinematic",
-          "physxvehicle"
+          "include/foundation/PxFoundation.h"
         ]
       },
       "build_from_source": true,
       "cmake_build": true,
       "build_flag": "PHYSX_EXTENSIONS_ENABLED",
-      "notes": "Extensions include cooking, character controller, and vehicle SDK."
+      "notes": "Bundled with PhysX SDK."
     },
     "platform": {
       "name": "PhysX Platform Support",
-      "description": "Platform-specific PhysX build configurations",
-      "acquisition": "github",
+      "description": "Platform-specific PhysX build configurations (bundled with PhysX SDK)",
+      "acquisition": "bundled_with_physx",
       "acquisition_url": "https://github.com/NVIDIA-Omniverse/PhysX",
       "license": "Apache-2.0",
       "redistribution": "permitted",
       "developer_account_required": false,
       "current_version": "5.9.1",
       "expected_structure": {
-        "source": [
-          "source/platform/"
-        ],
         "include": [
-          "include/platform/"
+          "include/foundation/PxFoundation.h"
         ]
       },
       "build_from_source": true,
       "cmake_build": true,
       "build_flag": "PHYSX_ENABLED",
-      "notes": "Platform-specific code for PhysX builds."
+      "notes": "Bundled with PhysX SDK."
     }
   }
 }

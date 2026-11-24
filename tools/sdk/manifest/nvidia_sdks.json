@@ -24,19 +24,14 @@
           "nvsdk_ngx_helpers.h",
           "nvsdk_ngx_defs_dlssd.h",
           "nvsdk_ngx_params_dlssd.h",
-          "nvsdk_ngx_helpers_dlssd.h",
           "nvsdk_ngx_defs_dlssg.h",
           "nvsdk_ngx_params_dlssg.h",
-          "nvsdk_ngx_helpers_dlssg.h",
           "nvsdk_ngx_vk.h"
         ],
         "lib": [
-          "lib/Linux_x86_64/libnvngx_core.so",
-          "lib/Windows_x86_64/nvngx_core.lib"
-        ],
-        "bin": [
-          "bin/Linux_x86_64/libnvngx_core.so",
-          "bin/Windows_x86_64/nvngx_core.dll"
+          "Linux_x86_64/rel/libnvidia-ngx-dlss.so",
+          "Linux_x86_64/rel/libnvidia-ngx-dlssd.so",
+          "Linux_x86_64/rel/libnvidia-ngx-dlssg.so"
         ]
       },
       "required_for_features": [
@@ -73,17 +68,10 @@
           "sl_matrix_helpers.h",
           "sl_appidentity.h",
           "sl_dlss.h",
-          "sl_reflex.h",
-          "sl_nis.h",
-          "sl_deepdvc.h"
+          "sl_reflex.h"
         ],
-        "lib": [
-          "lib/Linux_x86_64/libsl.so",
-          "lib/Windows_x86_64/sl.lib"
-        ],
-        "bin": [
-          "bin/Linux_x86_64/libsl.so",
-          "bin/Windows_x86_64/sl.dll"
+        "source": [
+          "source/"
         ]
       },
       "required_for_features": [
@@ -96,36 +84,30 @@
     },
     "reflex": {
       "name": "NVIDIA Reflex SDK",
-      "description": "Low-latency mode for reduced render latency",
-      "acquisition": "manual_or_streamline",
-      "acquisition_url": "https://developer.nvidia.com/downloads/nv-reflex-sdk-zip/",
-      "streamline_url": "https://github.com/NVIDIA-RTX/Streamline",
+      "description": "Low-latency mode for reduced render latency (bundled with Streamline)",
+      "acquisition": "bundled_with_streamline",
+      "acquisition_url": "https://github.com/NVIDIA-RTX/Streamline",
       "license": "NVIDIA Reflex SDK License",
       "redistribution": "restricted",
-      "developer_account_required": true,
-      "current_version": "1.0.0",
+      "developer_account_required": false,
+      "current_version": "2.14.16",
       "min_version": "1.0.0",
       "expected_structure": {
         "include": [
-          "sl_reflex.h",
-          "nvReflex.h"
-        ],
-        "lib": [
-          "lib/Linux_x86_64/libreflex.so",
-          "lib/Windows_x86_64/reflex.lib"
+          "sl_reflex.h"
         ]
       },
       "required_for_features": [
         "NVIDIA Reflex low-latency"
       ],
       "build_flag": "REFLEX_ENABLED",
-      "notes": "Standalone SDK requires NVIDIA developer login. Reflex can also be integrated via Streamline (sl_reflex.h)."
+      "notes": "Bundled with Streamline SDK. Available at thirdparty/nvidia/streamline/include/sl_reflex.h"
     },
     "ngx": {
       "name": "NVIDIA NGX (Neural Graphics SDK)",
-      "description": "Core neural graphics infrastructure for DLSS and other AI features",
-      "acquisition": "manual",
-      "acquisition_url": "https://developer.nvidia.com/ngx-sdk",
+      "description": "Core neural graphics infrastructure (bundled with DLSS SDK)",
+      "acquisition": "bundled_with_dlss",
+      "acquisition_url": "https://github.com/NVIDIA/DLSS",
       "license": "NVIDIA NGX License Agreement",
       "redistribution": "prohibited",
       "developer_account_required": true,
@@ -133,17 +115,7 @@
       "min_version": "2.0.0",
       "expected_structure": {
         "include": [
-          "nvsdk_ngx.h",
-          "nvsdk_ngx_core.h",
-          "nvsdk_ngx_dlss.h"
-        ],
-        "lib": [
-          "lib/Linux_x86_64/libnvngx_core.so",
-          "lib/Windows_x86_64/nvngx_core.lib"
-        ],
-        "bin": [
-          "bin/Linux_x86_64/libnvngx_core.so",
-          "bin/Windows_x86_64/nvngx_core.dll"
+          "nvsdk_ngx.h"
         ]
       },
       "required_for_features": [
@@ -151,25 +123,24 @@
         "NGX feature detection"
       ],
       "build_flag": "NGX_ENABLED",
-      "notes": "Core DLSS dependency. Required alongside DLSS SDK. NVIDIA-confidential."
+      "notes": "Bundled with DLSS SDK. Available at thirdparty/nvidia/dlss/include/nvsdk_ngx.h"
     },
     "common": {
       "name": "NVIDIA Common Headers",
-      "description": "Common NVIDIA headers and type definitions shared across SDKs",
-      "acquisition": "bundled_with_sdks",
+      "description": "Common NVIDIA headers (bundled with DLSS SDK)",
+      "acquisition": "bundled_with_dlss",
       "license": "NVIDIA",
       "redistribution": "restricted",
       "developer_account_required": false,
       "current_version": "1.0.0",
       "expected_structure": {
         "include": [
-          "nvapi.h",
-          "nv_common.h"
+          "nvsdk_ngx.h"
         ]
       },
       "required_for_features": [],
       "build_flag": null,
-      "notes": "Common headers shared across NVIDIA SDKs. Usually bundled with individual SDKs."
+      "notes": "Bundled with DLSS SDK."
     }
   }
 }

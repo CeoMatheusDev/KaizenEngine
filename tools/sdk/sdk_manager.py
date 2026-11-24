@@ -117,6 +117,18 @@ class SDKManager:
         if group_manifest is None:
             group_manifest = self.manifest.load(group_name)
         sdk_root = group_manifest.get("sdk_root", f"thirdparty/{group_name}")
+
+        # Handle bundled SDKs that share a parent directory
+        acquisition = sdk_info.get("acquisition", "")
+        if acquisition == "bundled_with_dlss":
+            return self.project_root / sdk_root / "dlss"
+        elif acquisition == "bundled_with_streamline":
+            return self.project_root / sdk_root / "streamline"
+        elif acquisition == "bundled_with_physx":
+            return self.project_root / sdk_root / "physx" / "physx"
+        elif acquisition.startswith("bundled_with"):
+            return self.project_root / sdk_root / "physx" / "physx"
+
         return self.project_root / sdk_root / sdk_key.split("/", 1)[1]
 
     def is_installed(self, sdk_key: str) -> bool:
@@ -130,15 +142,13 @@ class SDKManager:
 
         # Check for at least one include file and one lib if specified
         if include_dirs:
-            include_root = sdk_dir / "include"
             for inc in include_dirs:
-                if not (include_root / inc).exists():
+                if not (sdk_dir / inc).exists() and not (sdk_dir / "include" / inc).exists():
                     return False
 
         if lib_dirs:
-            lib_root = sdk_dir / "lib"
             for lib in lib_dirs:
-                if not (lib_root / lib).exists():
+                if not (sdk_dir / lib).exists() and not (sdk_dir / "lib" / lib).exists():
                     return False
 
         # Check source directories for source-built SDKs
@@ -172,17 +182,19 @@ class SDKManager:
 
         expected = sdk_info.get("expected_structure", {})
 
-        # Check include files
-        include_root = sdk_dir / "include"
+        # Check include files (try both with and without include/ prefix)
         for inc_path in expected.get("include", []):
-            full_path = include_root / inc_path
+            full_path = sdk_dir / inc_path
+            if not full_path.exists():
+                full_path = sdk_dir / "include" / inc_path
             if not full_path.exists():
                 issues.append(f"Missing include file: {inc_path}")
 
-        # Check lib files
-        lib_root = sdk_dir / "lib"
+        # Check lib files (try both with and without lib/ prefix)
         for lib_path in expected.get("lib", []):
-            full_path = lib_root / lib_path
+            full_path = sdk_dir / lib_path
+            if not full_path.exists():
+                full_path = sdk_dir / "lib" / lib_path
             if not full_path.exists():
                 issues.append(f"Missing library file: {lib_path}")
 
