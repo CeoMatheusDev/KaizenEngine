@@ -53,7 +53,9 @@ bool PhysXBackend::init() {
 	//   cooking = PxCreateCooking(...) (when config.cooking);
 	//   dispatcher = PxDefaultCpuDispatcherCreate(...);
 	//   controller_manager = PxCreateControllerManager(...) (when config.character_controller);
-	//   PxInitVehicleSDK(...) (when config.vehicle);
+	//   vehicle support (config.vehicle) goes through the PhysX 5 vehicle API
+	//   (physx/include/vehicle/*); the old PxVehicleDrive/PxInitVehicleSDK
+	//   surface does not exist in this SDK version.
 	// Handles are owned as opaque pointers until then.
 
 	supported = true;

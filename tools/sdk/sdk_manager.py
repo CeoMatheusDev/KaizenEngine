@@ -382,7 +382,7 @@ def main():
     )
     parser.add_argument("--list", action="store_true", help="List all SDKs and their status")
     parser.add_argument("--status", action="store_true", help="Same as --list")
-    parser.add_argument("--validate", metavar="SDK_KEY", help="Validate an SDK installation (use 'all' for all)")
+    parser.add_argument("--validate", metavar="SDK_KEY", nargs="+", help="Validate SDK installation(s) (use 'all' for all)")
     parser.add_argument("--install", metavar="SDK_KEY", help="Install SDK from archive (requires --archive)")
     parser.add_argument("--archive", metavar="PATH", help="Path to archive file for --install")
     parser.add_argument("--instructions", metavar="SDK_KEY", help="Show manual download instructions")
@@ -396,19 +396,12 @@ def main():
         manager.list_sdks()
     elif args.validate:
         all_valid = True
-        if args.validate == "all":
-            for key, _, _ in manager.manifest.list_all():
-                valid, issues = manager.validate_installation(key)
-                all_valid = all_valid and valid
-                status = GREEN("VALID") if valid else RED("INVALID")
-                print(f"{key}: {status}")
-                for issue in issues:
-                    print(f"  - {issue}")
-        else:
-            valid, issues = manager.validate_installation(args.validate)
-            all_valid = valid
+        keys = [key for key, _, _ in manager.manifest.list_all()] if "all" in args.validate else args.validate
+        for sdk_key in keys:
+            valid, issues = manager.validate_installation(sdk_key)
+            all_valid = all_valid and valid
             status = GREEN("VALID") if valid else RED("INVALID")
-            print(f"{args.validate}: {status}")
+            print(f"{sdk_key}: {status}")
             for issue in issues:
                 print(f"  - {issue}")
         if not all_valid:

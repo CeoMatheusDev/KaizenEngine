@@ -25,14 +25,15 @@
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h"
 
-// NVIDIA DLSS SDK (NGX) headers.
+// NVIDIA DLSS SDK (NGX) headers. Compile-time only: the SDK library itself is
+// loaded at runtime (see dlss.cpp), so builds work without it installed.
 #ifdef NGX_DLSS_ENABLED
-// Vulkan headers must be included before NGX VK headers.
-#include <vulkan/vulkan.h>
+// Vulkan headers must be included before NGX VK headers. Through the engine's
+// Vulkan umbrella so volk builds define VK_NO_PROTOTYPES first.
+#include <drivers/vulkan/kaizen_vulkan.h>
 #include <nvsdk_ngx.h>
 #include <nvsdk_ngx_defs.h>
 #include <nvsdk_ngx_params.h>
-#include <nvsdk_ngx_loader.h>
 #include <nvsdk_ngx_helpers.h>
 #include <nvsdk_ngx_defs_dlssd.h>
 #include <nvsdk_ngx_params_dlssd.h>
@@ -43,12 +44,17 @@
 
 namespace RendererRD {
 
+// A created DLSS feature (one per viewport resolution pair). The NGX handle is
+// owned by this object: deleting the context releases the feature.
 class DLSSContext {
 public:
-	// DLSS implementation handles (NGX / Streamline handles).
+	// NVSDK_NGX_Handle* when created through NGX; nullptr otherwise.
 	void *handle = nullptr;
+	Size2i internal_size;
+	Size2i target_size;
+	bool created = false;
 
-	DLSSContext();
+	DLSSContext() {}
 	~DLSSContext();
 };
 
@@ -81,12 +87,30 @@ public:
 	DLSSEffect();
 	~DLSSEffect() override;
 
+	// True only when the SDK library loaded and NGX initialised on the active
+	// Vulkan device. When false the caller must fall back (FSR2 / bilinear).
 	bool is_supported() const;
+
+	// Creates the NGX DLSS feature for the given resolution pair. Returns a
+	// context whose `created` flag reports whether the SDK accepted it; the
+	// context object exists either way so callers can retry after a resize.
 	DLSSContext *create_context(Size2i p_internal_size, Size2i p_target_size);
 	void upscale(const Parameters &p_params);
 
 private:
 	bool supported = false;
+
+	bool init_sdk();
+	void shutdown_sdk();
+
+	void *library_handle = nullptr;
+	void *parameters = nullptr; // NVSDK_NGX_Parameter*
+	void *vulkan_instance = nullptr;
+	void *vulkan_device = nullptr;
+	void *command_pool = nullptr;
+	void *command_buffer = nullptr;
+	void *queue = nullptr;
+	uint32_t queue_family = 0;
 };
 
 } // namespace RendererRD

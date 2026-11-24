@@ -1221,15 +1221,18 @@ if env["builtin_physx"]:
         env["builtin_physx_extensions"] = False
         env["builtin_physx_gpu"] = False
 
-# NVIDIA SDK build flags (only set for SDKs that passed detection above).
-if env["builtin_nvidia_dlss"]:
-    env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
-if env["builtin_nvidia_streamline"]:
-    env.Append(CPPDEFINES=["STREAMLINE_ENABLED"])
-if env["builtin_nvidia_reflex"]:
-    env.Append(CPPDEFINES=["REFLEX_ENABLED"])
-if env["builtin_nvidia_ngx"]:
-    env.Append(CPPDEFINES=["NGX_ENABLED"])
+# NVIDIA SDK build flags (only set for SDKs that passed detection above, and
+# only when the Vulkan backend is enabled: every NVIDIA feature here runs
+# through Vulkan).
+if env["vulkan"]:
+    if env["builtin_nvidia_dlss"]:
+        env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
+    if env["builtin_nvidia_streamline"]:
+        env.Append(CPPDEFINES=["STREAMLINE_ENABLED"])
+    if env["builtin_nvidia_reflex"]:
+        env.Append(CPPDEFINES=["REFLEX_ENABLED"])
+    if env["builtin_nvidia_ngx"]:
+        env.Append(CPPDEFINES=["NGX_ENABLED"])
 if env["builtin_physx"]:
     env.Append(CPPDEFINES=["PHYSX_ENABLED"])
 if env["builtin_physx_extensions"]:

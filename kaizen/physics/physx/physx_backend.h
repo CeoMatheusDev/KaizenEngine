@@ -26,9 +26,8 @@
 
 #ifdef PHYSX_ENABLED
 	#include "PxPhysicsAPI.h"
-	#include "PxCooking.h"
-	#include "PxController.h"
-	#include "PxVehicleDrive.h"
+	#include "cooking/PxCooking.h"
+	#include "characterkinematic/PxController.h"
 #endif
 
 // NVIDIA PhysX physics backend.
