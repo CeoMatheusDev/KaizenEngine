@@ -2,7 +2,7 @@
 
 ## Overview
 
-KaizenEngine supports the NVIDIA PhysX SDK as an alternative physics backend. PhysX is integrated locally and can be built from source. The engine's physics abstraction allows PhysX to be used alongside or instead of the default Jolt physics backend.
+KaizenEngine supports the NVIDIA PhysX SDK as an alternative physics backend. PhysX is integrated locally and can be built from source. The engine's physics abstraction allows PhysX to be used alongside or instead of the default Kaizen physics backend.
 
 ## Supported Components
 

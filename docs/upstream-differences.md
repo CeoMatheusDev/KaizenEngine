@@ -105,7 +105,7 @@ lists 12 files and none of them is one of the 2492. No `.patch` file, on purpose
 stored in `patches/` would conflict with the first upstream merge that touches a banner and
 would buy nothing that git does not already record, and the invariant is enforced
 mechanically instead by `tests/kaizen/license_box/check_license_box.py` (`--fix` re-applies
-it; the budget catches regressions). 2469 rows stay deliberately ragged - see
+it; the budget catches regressions). 2382 rows stay deliberately ragged - see
 [licence notice consistency](license-notice-consistency.md), section 4.
 
 ### Shadow filter quality harness (no patch file)

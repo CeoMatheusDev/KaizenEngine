@@ -45,7 +45,6 @@ A renamed module, a configuration file, or a directory with a Kaizen-specific na
 Examples that require this distinction:
 
 - The 2D and 3D physics foundation is inherited. The presence of Kaizen-named physics module directories does not establish a new physics engine.
-- Jolt integration is part of the inherited foundation unless Kaizen-specific implementation changes are explicitly identified.
 - Rendering currently builds on the inherited Godot rendering architecture. A future custom renderer is a roadmap objective, not a description of the current renderer.
 
 ## 4. Rendering subsystem: current boundary

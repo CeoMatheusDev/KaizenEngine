@@ -109,13 +109,6 @@ Copyright: 2007, Starbreeze Studios
  2007-2014, Juan Linietsky, Ariel Manzur
 License: Expat and Zlib
 
-Files: modules/jolt_physics/spaces/jolt_temp_allocator.cpp
-Comment: Jolt Physics
-Copyright: 2021, Jorrit Rouwe
- 2014-present, Kaizen Engine contributors
- 2007-2014, Juan Linietsky, Ariel Manzur
-License: Expat
-
 Files: modules/lightmapper_rd/lm_compute.glsl
 Comment: Joint Non-Local Means (JNLM) denoiser
 Copyright: 2020, Manuel Prandini
@@ -363,11 +356,6 @@ Files: thirdparty/icu4c/*
 Comment: International Components for Unicode
 Copyright: 1991-2026, Unicode, Inc.
 License: Unicode
-
-Files: thirdparty/jolt_physics/*
-Comment: Jolt Physics
-Copyright: 2021, Jorrit Rouwe
-License: Expat
 
 Files: thirdparty/libbacktrace/*
 Comment: libbacktrace

@@ -25,13 +25,12 @@
 #include "core/object/ref_counted.h"
 
 // Engine-owned physics backend interface.
-// All physics backends (Jolt, PhysX, etc.) implement this interface.
+// All physics backends (PhysX, etc.) implement this interface.
 // This keeps physics backend implementations isolated from engine systems.
 class PhysicsBackend : public RefCounted {
 public:
 	enum Type {
 		TYPE_NONE,
-		TYPE_JOLT,
 		TYPE_PHYSX,
 		TYPE_MAX,
 	};

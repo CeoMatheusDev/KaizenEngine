@@ -85,7 +85,7 @@ python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | t
 # ragged too. The budget is the recorded debt of rows that cannot be padded back without
 # touching licence text; lowering it is the point, raising it needs a sentence in
 # docs/license-notice-consistency.md.
-python3 "${SCRIPT_DIR}/license_box/check_license_box.py" --repo-root "${REPO_ROOT}" --max-pending 2469
+python3 "${SCRIPT_DIR}/license_box/check_license_box.py" --repo-root "${REPO_ROOT}" --max-pending 2382
 python3 -m unittest discover -s "${SCRIPT_DIR}/license_box" -p 'test_*.py' 2>&1 | tail -3
 
 "${REPORT_BIN}" "$@"

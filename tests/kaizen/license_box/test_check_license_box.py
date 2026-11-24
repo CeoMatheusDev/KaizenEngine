@@ -28,7 +28,7 @@ SLASH = {"open": b"//", "close": b"//"}
 
 # Recorded debt, and the number docs/license-notice-consistency.md quotes. Lower it when the
 # licence-text decision is taken; never raise it without saying why in that document.
-BUDGET = 2469
+BUDGET = 2382
 
 
 def border(width, style):

@@ -521,22 +521,6 @@ Patches:
 - `0002-tuple-include.patch` ([GH-124792](https://github.com/kaizenengine/kaizen/pull/124792))
 
 
-## jolt_physics
-
-- Upstream: https://github.com/jrouwe/JoltPhysics
-- Version: 5.6.0 (e77f175595e64cb44218cc9d9d56fc365ad0e36a, 2026)
-- License: MIT
-
-Files extracted from upstream source:
-
-- All files in `Jolt/`, except `Jolt/Jolt.cmake`, any files dependent on `ENABLE_OBJECT_STREAM` as seen in `Jolt/Jolt.cmake` and the `Jolt/Physics/Hair/`, `Jolt/Compute/` and `Jolt/Shaders/` folders.
-- `LICENSE`
-
-Patches:
-
-- `0001-backport-upstream-commit-63f2f57.patch` ([GH-121974](https://github.com/kaizenengine/kaizen/pull/121974))
-
-
 ## libbacktrace
 
 - Upstream: https://github.com/ianlancetaylor/libbacktrace

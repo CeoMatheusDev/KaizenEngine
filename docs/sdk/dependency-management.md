@@ -103,7 +103,7 @@ Each SDK is conditionally compiled based on availability:
 
 ### Fallback Behavior
 - Without NVIDIA SDKs, the engine builds successfully with FSR2 fallback
-- Without PhysX, the engine uses Jolt physics
+- Without PhysX, the engine uses Kaizen physics
 - No network connection required during compilation
 
 ## .gitignore

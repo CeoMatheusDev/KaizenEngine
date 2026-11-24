@@ -32,7 +32,7 @@ The project aims to preserve the flexibility and open-source philosophy of its u
 - 🎨 **Integrated editor:** visual creation and management of projects and scenes (inherited Godot infrastructure, with original modifications under development).
 - ⚡ **Rendering:** graphics infrastructure based on Godot's rendering architecture.
 - 🧩 **Scene and node system:** organization of game objects and behaviors (Godot-inherited scene architecture).
-- 🎯 **Physics:** 2D and 3D simulation and collision (Godot-inherited physics; the tree includes the renamed `kaizen_physics_2d`/`kaizen_physics_3d` modules and Jolt — their presence does not represent an independent implementation, only the inherited base).
+- 🎯 **Physics:** 2D and 3D simulation and collision (Godot-inherited physics; the tree ships the renamed `kaizen_physics_2d`/`kaizen_physics_3d` modules as the default engine and the optional NVIDIA PhysX backend).
 - 🔊 **Audio:** playback and management of audio (inherited from Godot).
 - 🛠️ **Extensibility:** ability to work with native code and scripting systems.
 - 📦 **Multiplatform export:** export infrastructure inherited from Godot's architecture, subject to the platforms actually enabled in Kaizen.

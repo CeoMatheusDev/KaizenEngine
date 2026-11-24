@@ -1602,7 +1602,7 @@ void KaizenPhysicsServer3D::generic_6dof_joint_set_angular_target_rotation(RID p
 	KaizenJoint3D *joint = joint_owner.get_or_null(p_joint);
 	ERR_FAIL_NULL(joint);
 	ERR_FAIL_COND(joint->get_type() != PS3DE::JOINT_TYPE_6DOF);
-	WARN_PRINT_ONCE("Quaternion angular target rotations for Generic6DOFJoint3D are only supported by Jolt Physics. This value will be ignored by KaizenPhysics3D.");
+	WARN_PRINT_ONCE("Quaternion angular target rotations for Generic6DOFJoint3D are not supported by KaizenPhysics3D. This value will be ignored.");
 }
 
 Quaternion KaizenPhysicsServer3D::generic_6dof_joint_get_angular_target_rotation(RID p_joint) const {
@@ -1611,7 +1611,7 @@ Quaternion KaizenPhysicsServer3D::generic_6dof_joint_get_angular_target_rotation
 	ERR_FAIL_COND_V(joint->get_type() != PS3DE::JOINT_TYPE_6DOF, Quaternion());
 
 	// KaizenPhysics3D does not apply angular spring equilibrium points, so there is no body-space target to return.
-	WARN_PRINT_ONCE("Quaternion angular target rotations for Generic6DOFJoint3D are only supported by Jolt Physics. KaizenPhysics3D returns the identity quaternion.");
+	WARN_PRINT_ONCE("Quaternion angular target rotations for Generic6DOFJoint3D are not supported by KaizenPhysics3D. The identity quaternion is returned.");
 	return Quaternion();
 }
 
