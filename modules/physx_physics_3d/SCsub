@@ -79,6 +79,11 @@ env.modules_sources += thirdparty_obj
 # PhysX module sources
 module_obj = []
 env_physx.add_source_files(module_obj, "*.cpp")
+# The Kaizen PhysX backend glue (kaizen/physics/physx/*.cpp) compiles into
+# this module's archive as well: its Px* calls and the SDK's PhysXBackend::*
+# callbacks form a circular archive dependency that a single-pass linker
+# cannot resolve across two libraries. One archive ends the cycle.
+env_physx.add_source_files(module_obj, "#kaizen/physics/physx/*.cpp")
 env.modules_sources += module_obj
 
 # Force rebuilding the module files when the SDK sources are updated.

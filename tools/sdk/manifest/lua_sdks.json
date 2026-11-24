@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-11-24",
+  "sdk_group": "lua",
+  "sdk_root": "thirdparty/lua",
+  "sdks": {
+    "lua": {
+      "name": "Lua 5.5",
+      "description": "Lua scripting language - embeddable interpreter and C API. Foundation for the future Lua script module (scripting alongside GDScript and C#).",
+      "acquisition": "github",
+      "acquisition_url": "https://github.com/lua/lua",
+      "acquisition_ref": "v5.5.1",
+      "license": "MIT",
+      "redistribution": "permitted",
+      "developer_account_required": false,
+      "current_version": "5.5.1",
+      "min_version": "5.5.0",
+      "expected_structure": {
+        "include": [
+          "lua.h",
+          "lauxlib.h",
+          "lualib.h",
+          "luaconf.h"
+        ],
+        "source": [
+          "lapi.c",
+          "lstate.c",
+          "lvm.c",
+          "lparser.c",
+          "lbaselib.c"
+        ]
+      },
+      "build_from_source": true
+    }
+  }
+}

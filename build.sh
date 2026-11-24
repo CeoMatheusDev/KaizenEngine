@@ -10,8 +10,9 @@
 #   ./build.sh engine [args]   Build the editor; extra args pass to scons.
 #   ./build.sh release [args]  Build the release template.
 #   ./build.sh physx           Build just the PhysX SDK group.
+#   ./build.sh lua             Build just the Lua script group.
 #   ./build.sh test            Run the test suite (license + engine checks).
-#   ./build.sh smoke           Run the PhysX runtime smoke test.
+#   ./build.sh smoke           Run the runtime smoke tests (PhysX + Lua).
 #   ./build.sh help            Show this help.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -31,16 +32,21 @@ case "${1:-engine}" in
         shift || true
         exec scons $COMMON target=editor physx_physics_3d "$@"
         ;;
+    lua)
+        shift || true
+        exec scons $COMMON target=editor lua_script "$@"
+        ;;
     test)
         shift || true
         exec bash tests/kaizen/run_tests.sh "$@"
         ;;
     smoke)
         shift || true
-        exec bash tests/kaizen/run_physx_smoke.sh "$@"
+        bash tests/kaizen/run_physx_smoke.sh "$@"
+        exec bash tests/kaizen/run_lua_smoke.sh "$@"
         ;;
     help|-h|--help)
-        sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
         exit 0
         ;;
     *)
