@@ -21,8 +21,8 @@
 
 #pragma once
 
+#include "core/math/vector3.h"
 #include "core/object/ref_counted.h"
-#include "servers/physics_3d/physics_server_3d.h"
 
 // Engine-owned physics backend interface.
 // All physics backends (Jolt, PhysX, etc.) implement this interface.

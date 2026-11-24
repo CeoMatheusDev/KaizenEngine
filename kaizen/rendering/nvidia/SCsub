@@ -1,95 +1,74 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+import glob
 import os
 
 Import("env")
 
-env_nvidia = env.Clone()
+# SDK detection (including presence checks and the NGX_DLSS_ENABLED /
+# STREAMLINE_ENABLED / REFLEX_ENABLED / NGX_ENABLED defines and include
+# paths) happens in SConstruct before module detection. By this point the
+# builtin_nvidia_* options only survive as True when the matching SDK is
+# actually installed, so this file only wires up sources and libraries.
 
-nvidia_dir = str(Dir(env["nvidia_sdk_path"]).abspath)
+# Note: "#" anchors the path at the project root; Dir() in an SConscript
+# would otherwise resolve relative paths against this script's directory.
+nvidia_sdk_path = env["nvidia_sdk_path"]
+nvidia_dir = str(Dir("#" + nvidia_sdk_path).abspath) if not os.path.isabs(nvidia_sdk_path) else nvidia_sdk_path
 
-# NVIDIA DLSS SDK
+# NVIDIA DLSS SDK (NGX).
+# Link flags go on the base env so the final program links against them.
+# The library is linked by resolved path: the GitHub SDK ships only
+# version-suffixed files (libnvidia-ngx-dlss.so.310.9.16), which -l cannot
+# find without a symlink.
 if env["builtin_nvidia_dlss"]:
-    dlss_dir = nvidia_dir + "/dlss/"
-    if os.path.exists(dlss_dir + "include/nvsdk_ngx.h"):
-        env_nvidia.Prepend(CPPPATH=[dlss_dir + "include"])
-        env_nvidia.EitherAppend("CPPDEFINES", ["NGX_DLSS_ENABLED"])
-        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + str(Dir(dlss_dir + "lib/Linux_x86_64/rel").abspath)])
-        env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
-        print("NVIDIA DLSS SDK found - DLSS support enabled")
+    dlss_lib_dir = os.path.join(nvidia_dir, "dlss", "lib", "Linux_x86_64", "rel")
+    dlss_libs = sorted(glob.glob(os.path.join(dlss_lib_dir, "libnvidia-ngx-dlss*.so*")))
+    if dlss_libs:
+        for dlss_lib in dlss_libs:
+            env.EitherAppend("LIBS", [env.File(dlss_lib)])
     else:
-        print("NVIDIA DLSS SDK not found in " + dlss_dir + " - DLSS support disabled")
-        env["builtin_nvidia_dlss"] = False
+        print("NVIDIA DLSS SDK found but no libnvidia-ngx-dlss library in " + dlss_lib_dir + " - link may fail")
+    print("NVIDIA DLSS SDK found - DLSS support enabled")
 
-# NVIDIA Streamline SDK (source available, needs build)
+# NVIDIA Streamline SDK (source available, needs build).
 if env["builtin_nvidia_streamline"]:
-    streamline_dir = nvidia_dir + "/streamline/"
-    if os.path.exists(streamline_dir + "include/sl.h"):
-        env_nvidia.Prepend(CPPPATH=[streamline_dir + "include"])
-        env_nvidia.EitherAppend("CPPDEFINES", ["STREAMLINE_ENABLED"])
-        # Streamline is built from source; check for built libraries
-        streamline_lib_dir = streamline_dir + "_artifacts/sl.plugin.x64/Release/"
-        if os.path.exists(streamline_lib_dir):
-            env_nvidia.EitherAppend("LINKFLAGS", ["-L" + streamline_lib_dir])
-            env_nvidia.EitherAppend("LIBS", ["sl.interposer"])
-        print("NVIDIA Streamline SDK found - Streamline support enabled")
-    else:
-        print("NVIDIA Streamline SDK not found in " + streamline_dir + " - Streamline support disabled")
-        env["builtin_nvidia_streamline"] = False
+    streamline_lib_dir = os.path.join(nvidia_dir, "streamline", "_artifacts", "sl.plugin.x64", "Release")
+    if os.path.isdir(streamline_lib_dir):
+        env.EitherAppend("LIBPATH", [streamline_lib_dir])
+        env.EitherAppend("LIBS", ["sl.interposer"])
+    print("NVIDIA Streamline SDK found - Streamline support enabled")
 
-# NVIDIA Reflex SDK (part of Streamline SDK)
+# NVIDIA Reflex SDK (part of the Streamline SDK, header-only integration).
 if env["builtin_nvidia_reflex"]:
-    reflex_dir = nvidia_dir + "/streamline/"
-    if os.path.exists(reflex_dir + "include/sl_reflex.h"):
-        env_nvidia.Prepend(CPPPATH=[reflex_dir + "include"])
-        env_nvidia.EitherAppend("CPPDEFINES", ["REFLEX_ENABLED"])
-        print("NVIDIA Reflex SDK found - Reflex support enabled")
-    else:
-        print("NVIDIA Reflex SDK not found - Reflex support disabled")
-        env["builtin_nvidia_reflex"] = False
+    print("NVIDIA Reflex SDK found - Reflex support enabled")
 
-# NVIDIA NGX SDK (part of DLSS SDK)
+# NVIDIA NGX SDK (part of the DLSS SDK).
 if env["builtin_nvidia_ngx"]:
-    ngx_dir = nvidia_dir + "/dlss/"
-    if os.path.exists(ngx_dir + "include/nvsdk_ngx.h"):
-        env_nvidia.Prepend(CPPPATH=[ngx_dir + "include"])
-        env_nvidia.EitherAppend("CPPDEFINES", ["NGX_ENABLED"])
-        env_nvidia.EitherAppend("LINKFLAGS", ["-L" + str(Dir(ngx_dir + "lib/Linux_x86_64/rel").abspath)])
-        env_nvidia.EitherAppend("LIBS", ["nvidia-ngx-dlss"])
-        print("NVIDIA NGX SDK found - NGX support enabled")
-    else:
-        print("NVIDIA NGX SDK not found - NGX support disabled")
-        env["builtin_nvidia_ngx"] = False
+    print("NVIDIA NGX SDK found - NGX support enabled")
 
-# NVIDIA Common headers
-common_dir = nvidia_dir + "/common/"
-if os.path.exists(common_dir + "include"):
-    env_nvidia.Prepend(CPPPATH=[common_dir + "include"])
-
-# Source files
+# Source files (compiled with the base env, which carries the SDK defines
+# and include paths added by SConstruct).
 module_obj = []
 
 # DLSS backend
 if env["builtin_nvidia_dlss"]:
-    env_nvidia.add_source_files(module_obj, "dlss/*.cpp")
+    env.add_source_files(module_obj, "dlss/*.cpp")
 
 # Streamline backend
 if env["builtin_nvidia_streamline"]:
-    env_nvidia.add_source_files(module_obj, "streamline/*.cpp")
+    env.add_source_files(module_obj, "streamline/*.cpp")
 
 # Reflex backend
 if env["builtin_nvidia_reflex"]:
-    env_nvidia.add_source_files(module_obj, "reflex/*.cpp")
+    env.add_source_files(module_obj, "reflex/*.cpp")
 
 # NGX backend
 if env["builtin_nvidia_ngx"]:
-    env_nvidia.add_source_files(module_obj, "ngx/*.cpp")
+    env.add_source_files(module_obj, "ngx/*.cpp")
 
 # RTX backend (always built when 3D is enabled)
-env_nvidia.add_source_files(module_obj, "rtx_backend.cpp")
-
-# Upscaling interface (built separately in kaizen/SCsub)
-# env_nvidia.add_source_files(module_obj, "upscaling/*.cpp")
+env.add_source_files(module_obj, "rtx_backend.cpp")
 
 env.kaizen_sources += module_obj

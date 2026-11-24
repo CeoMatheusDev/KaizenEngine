@@ -32,10 +32,6 @@ NGXBackend::NGXBackend() {
 	config.dlss_fg = false;
 	config.feature_mask = 0;
 	supported = false;
-
-#ifdef NGX_ENABLED
-	ngx_handle = nullptr;
-#endif
 }
 
 NGXBackend::~NGXBackend() {
@@ -54,21 +50,23 @@ bool NGXBackend::init() {
 	}
 
 #ifdef NGX_ENABLED
-	ngx_handle = OS::get_singleton()->load_dynamic_library("nvngx_core");
-	if (!ngx_handle) {
-		WARN_PRINT("NGXBackend: Failed to load nvngx_core library.");
+	Error err = OS::get_singleton()->open_dynamic_library("libnvidia-ngx-dlss.so", ngx_handle);
+	if (err != OK || !ngx_handle) {
+		WARN_PRINT("NGXBackend: Failed to load the NVIDIA NGX library.");
 		return false;
 	}
-#endif
 
 	supported = true;
 	return true;
+#else
+	return false;
+#endif
 }
 
 void NGXBackend::shutdown() {
 #ifdef NGX_ENABLED
 	if (ngx_handle) {
-		OS::get_singleton()->unload_dynamic_library(ngx_handle);
+		OS::get_singleton()->close_dynamic_library(ngx_handle);
 		ngx_handle = nullptr;
 	}
 #endif

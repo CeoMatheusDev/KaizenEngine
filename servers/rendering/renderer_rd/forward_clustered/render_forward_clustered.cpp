@@ -1897,7 +1897,15 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			break;
 #ifdef NGX_DLSS_ENABLED
 		case RSE::VIEWPORT_SCALING_3D_MODE_DLSS:
-			scale_type = SCALE_DLSS;
+			if (dlss_effect && dlss_effect->is_supported()) {
+				scale_type = SCALE_DLSS;
+			} else {
+				// DLSS chosen but unavailable at runtime (no NVIDIA GPU or SDK
+				// failed to initialise): upscale through FSR2 instead of
+				// leaving the upscaled texture stale.
+				WARN_PRINT_ONCE("DLSS is not available on this system; falling back to FSR2 upscaling.");
+				scale_type = SCALE_FSR2;
+			}
 			break;
 #endif
 		case RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL:

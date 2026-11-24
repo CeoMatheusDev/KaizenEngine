@@ -24,9 +24,8 @@ python tools/sdk/sdk_manager.py --list
 ```
 
 ### Manual Installation (from source)
-1. Clone PhysX 5.x from [GitHub](https://github.com/NVIDIA-Omniverse/PhysX)
-2. Place in `thirdparty/physx/physx/`
-3. The build system will automatically build PhysX from source using CMake
+1. Clone PhysX 5.x from [GitHub](https://github.com/NVIDIA-Omniverse/PhysX) into `thirdparty/physx/physx/`
+2. The build system will automatically build PhysX from source using CMake
 
 ### Build Configuration
 ```bash
@@ -46,12 +45,12 @@ scons builtin_physx=yes builtin_physx_extensions=yes builtin_physx_gpu=no
 ## Directory Structure
 ```
 thirdparty/physx/
-├── physx/              # PhysX SDK source (cloned from GitHub)
-│   ├── source/         # Foundation, Common, Core, Extensions, etc.
-│   └── include/        # Public headers (PxPhysics.h, etc.)
-├── pxshared/           # Shared PhysX headers
-├── build/              # CMake build output (generated)
-└── platform/           # Platform-specific configurations
+├── physx/              # Cloned PhysX repository root
+│   └── physx/          # PhysX SDK source
+│       ├── source/     # Foundation, Common, Core, Extensions, etc.
+│       └── include/    # Public headers (PxPhysics.h, etc.)
+├── pxshared/           # Shared PhysX headers (PhysX 4.x layouts only)
+└── build/              # CMake build output (generated)
 ```
 
 ## Architecture

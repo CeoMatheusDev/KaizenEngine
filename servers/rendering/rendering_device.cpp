@@ -9767,23 +9767,49 @@ bool RenderingDevice::has_feature(const Features p_feature) const {
 			return fsr_capabilities.attachment_supported || fdm_capabilities.attachment_supported;
 		}
 		case SUPPORTS_DLSS: {
-			// DLSS is supported if the vendor is NVIDIA and the SDK is integrated.
+			// DLSS is supported only when the SDK is compiled in and the device is NVIDIA.
+#ifdef NGX_DLSS_ENABLED
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		case SUPPORTS_STREAMLINE: {
+#ifdef STREAMLINE_ENABLED
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		case SUPPORTS_REFLEX: {
+#ifdef REFLEX_ENABLED
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		case SUPPORTS_RAY_RECONSTRUCTION: {
+			// Ray Reconstruction ships as part of the DLSS SDK (DLSS-D).
+#if defined(NGX_DLSS_ENABLED) || defined(STREAMLINE_ENABLED)
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		case SUPPORTS_FRAME_GENERATION: {
+			// Frame Generation ships as part of the DLSS SDK (DLSS-G).
+#if defined(NGX_DLSS_ENABLED) || defined(STREAMLINE_ENABLED)
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		case SUPPORTS_NGX: {
+#ifdef NGX_ENABLED
 			return _get_device_vendor_name(device) == "NVIDIA";
+#else
+			return false;
+#endif
 		}
 		default:
 			return driver->has_feature(p_feature);

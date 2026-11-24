@@ -95,10 +95,10 @@ private:
 
 #ifdef STREAMLINE_ENABLED
 	void *sl_handle = nullptr;
-	SLDevice sl_device = nullptr;
-	SLFeature sl_dlss_feature = nullptr;
-	SLFeature sl_reflex_feature = nullptr;
-	SLContext sl_context = nullptr;
+	void *sl_device = nullptr;
+	void *sl_dlss_feature = nullptr;
+	void *sl_reflex_feature = nullptr;
+	void *sl_context = nullptr;
 #endif
 
 	bool initialized = false;

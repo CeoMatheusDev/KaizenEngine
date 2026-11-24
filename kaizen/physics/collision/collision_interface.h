@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include "core/object/ref_counted.h"
 #include "core/math/transform_3d.h"
 #include "core/math/vector3.h"
-#include "servers/physics/physics_server_3d.h"
+#include "core/object/ref_counted.h"
+#include "core/templates/rid.h"
 
 // Collision detection interface.
 // Abstracts collision shapes, raycasts, and sweep tests across backends.

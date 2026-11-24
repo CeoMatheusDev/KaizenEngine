@@ -8,4 +8,9 @@ if not env["disable_physics_3d"]:
     SConscript("collision/SCsub")
     SConscript("simulation/SCsub")
     SConscript("diagnostics/SCsub")
-    SConscript("physx/SCsub")
+
+    # NVIDIA PhysX physics backend (only when explicitly enabled). Included
+    # here only - kaizen/SCsub must not include physx/SCsub again, or the
+    # sources would be compiled twice.
+    if env["builtin_physx"]:
+        SConscript("physx/SCsub")

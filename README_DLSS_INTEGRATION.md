@@ -9,9 +9,9 @@
 - ✅ All required code changes complete in working tree
 
 ## Required Action
-1. Obtain NVIDIA DLSS SDK from https://developer.nvidia.com/dlss-sdk
-2. Place SDK headers and libraries in `thirdparty/nvidia-dlss/`
-3. Update `dlss.cpp` to include real SDK headers and implement actual DLSS calls
+1. Obtain NVIDIA DLSS SDK from https://developer.nvidia.com/dlss-sdk (or https://github.com/NVIDIA/DLSS)
+2. Place SDK headers and libraries in `thirdparty/nvidia/dlss/` (see `tools/sdk/sdk_manager.py`)
+3. Build with `builtin_nvidia_dlss=yes`; `dlss.cpp` provides the DLSSEffect integration point
 
 ## Verification Steps
 1. Verify build is complete: `ls bin/kaizen*`
@@ -22,7 +22,7 @@
 
 ## Next Steps
 1. Download NVIDIA DLSS SDK
-2. Extract SDK to `thirdparty/nvidia-dlss/`
+2. Extract SDK to `thirdparty/nvidia/dlss/`
 3. Update `dlss.cpp` with real SDK implementation
 4. Test DLSS functionality on NVIDIA GPU
 5. Verify FSR2 fallback works on non-NVIDIA GPU
