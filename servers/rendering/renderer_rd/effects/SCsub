@@ -76,21 +76,19 @@ module_obj = []
 env_effects.add_source_files(module_obj, "*.cpp")
 
 # NVIDIA DLSS SDK integration
-dlss_dir = "#thirdparty/nvidia-dlss/"
-dlss_sdk_include = os.path.exists(dlss_dir + "include/nvDLSS.h")
+dlss_dir = "#thirdparty/nvidia/dlss/"
+dlss_sdk_include = os.path.exists("#thirdparty/nvidia/dlss/include/nvsdk_ngx.h")
 
 if dlss_sdk_include:
     env_effects.Prepend(CPPPATH=[dlss_dir + "include"])
     env.EitherAppend(CPPDEFINES, ["NGX_DLSS_ENABLED"])
-    env.EitherAppend(LINKFLAGS, ["-L" + dlss_dir + "lib/x64"])
-    env.EitherAppend(LIBS, ["nvngx_core"])
+    env.EitherAppend(LINKFLAGS, ["-L" + dlss_dir + "lib/Linux_x86_64/rel"])
+    env.EitherAppend(LIBS, ["nvidia-ngx-dlss"])
     print("NVIDIA DLSS SDK found - DLSS support enabled")
 else:
     print("NVIDIA DLSS SDK not found - building in fallback mode (FSR2 will be used on NVIDIA GPUs)")
 
 env_effects.add_source_files(module_obj, "effects/dlss.cpp")
-if dlss_sdk_include:
-    env_effects.add_source_files(module_obj, "#thirdparty/nvidia-dlss/lib/x64/nvngx_core.lib")
 
 env.servers_sources += module_obj
 

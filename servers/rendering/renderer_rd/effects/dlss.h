@@ -25,11 +25,19 @@
 #include "servers/rendering/rendering_device.h"
 #include "servers/rendering/renderer_rd/storage_rd/render_scene_buffers_rd.h"
 
-// Forward declaration of DLSS SDK structures or engine-side wrappers.
-// Real SDK headers should be included here if present in thirdparty/nvidia-dlss/.
-//
-// This implementation requires NVIDIA DLSS SDK (Streamline/NGX) to be properly integrated.
-// See thirdparty/nvidia-dlss/README.md for setup instructions.
+// NVIDIA DLSS SDK (NGX) headers.
+#ifdef NGX_DLSS_ENABLED
+#include <nvsdk_ngx.h>
+#include <nvsdk_ngx_defs.h>
+#include <nvsdk_ngx_params.h>
+#include <nvsdk_ngx_loader.h>
+#include <nvsdk_ngx_helpers.h>
+#include <nvsdk_ngx_defs_dlssd.h>
+#include <nvsdk_ngx_params_dlssd.h>
+#include <nvsdk_ngx_defs_dlssg.h>
+#include <nvsdk_ngx_params_dlssg.h>
+#include <nvsdk_ngx_vk.h>
+#endif
 
 namespace RendererRD {
 

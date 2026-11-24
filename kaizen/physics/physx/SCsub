@@ -12,8 +12,16 @@ physx_dir = str(Dir(env["physx_sdk_path"]).abspath)
 
 # Only check for PhysX SDK if explicitly enabled.
 if env["builtin_physx"]:
-    physx_source_dir = physx_dir + "/physx/"
-    if not os.path.exists(physx_source_dir + "source/foundation/PxFoundation.h"):
+        # The cloned repo has the PhysX SDK under physx/physx/
+    if os.path.exists(physx_dir + "/physx/physx/CMakeLists.txt"):
+        physx_source_dir = physx_dir + "/physx/physx/"
+    elif os.path.exists(physx_dir + "/physx/CMakeLists.txt"):
+        physx_source_dir = physx_dir + "/physx/"
+    elif os.path.exists(physx_dir + "/CMakeLists.txt"):
+        physx_source_dir = physx_dir + "/"
+    else:
+        physx_source_dir = physx_dir + "/physx/"
+    if not os.path.exists(physx_source_dir + "include/foundation/PxFoundation.h"):
         print("NVIDIA PhysX SDK source not found in " + physx_source_dir)
         print("Please clone https://github.com/NVIDIA-Omniverse/PhysX into thirdparty/physx/physx/")
         env["builtin_physx"] = False
@@ -77,7 +85,7 @@ if env["builtin_physx"]:
 
     # Set up include paths.
     env_physx.Prepend(CPPPATH=[
-        physx_dir + "/physx/include",
+        physx_source_dir + "include",
         physx_dir + "/pxshared/include",
     ])
 

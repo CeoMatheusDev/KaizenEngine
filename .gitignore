@@ -149,3 +149,13 @@ Kaizen.app
 ehthumbs.db
 [Dd]esktop.ini
 .directory
+
+# NVIDIA and PhysX SDKs (downloaded locally, not committed)
+thirdparty/nvidia/dlss/
+thirdparty/nvidia/streamline/
+thirdparty/nvidia/reflex/
+thirdparty/nvidia/ngx/
+thirdparty/nvidia/common/
+thirdparty/physx/physx/
+thirdparty/physx/pxshared/
+thirdparty/physx/build/
