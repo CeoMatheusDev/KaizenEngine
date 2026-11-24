@@ -20,6 +20,7 @@
 //************************************************************************//
 
 #include "dlss.h"
+#include "kaizen/rendering/nvidia/rtx_backend.h"
 
 #include "core/os/os.h"
 
@@ -234,6 +235,14 @@ bool DLSSEffect::is_supported() const {
 	return supported;
 }
 
+bool DLSSEffect::is_ray_reconstruction_enabled() const {
+	if (rr_override >= 0) {
+		return rr_override == 1;
+	}
+	// Default: follow the RTX backend configuration.
+	return RTXBackend::get_singleton()->is_ray_reconstruction_enabled();
+}
+
 DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size) {
 	DLSSContext *ctx = memnew(DLSSContext);
 	ctx->internal_size = p_internal_size;
@@ -258,13 +267,22 @@ DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_
 	params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, create_flags);
 	params->Set(NVSDK_NGX_Parameter_DLSS_Enable_Output_Subrects, 0);
 
+	// Ray Reconstruction (DLSSD) needs its denoise/roughness/depth-mode params.
+	const bool want_rr = is_ray_reconstruction_enabled();
+	if (want_rr) {
+		// Mirrors NGX_VULKAN_CREATE_DLSSD_EXT1 (nvsdk_ngx_helpers_dlssd_vk.h).
+		params->Set(NVSDK_NGX_Parameter_DLSS_Denoise_Mode, (int)NVSDK_NGX_DLSS_Denoise_Mode_DLUnified);
+		params->Set(NVSDK_NGX_Parameter_DLSS_Roughness_Mode, (int)NVSDK_NGX_DLSS_Roughness_Mode_Unpacked);
+		params->Set(NVSDK_NGX_Parameter_Use_HW_Depth, (int)NVSDK_NGX_DLSS_Depth_Type_HW);
+	}
+
 	VkCommandBufferBeginInfo begin_info = { };
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	VkCommandBuffer cmd = (VkCommandBuffer)command_buffer;
 	vkResetCommandBuffer(cmd, 0);
 	vkBeginCommandBuffer(cmd, &begin_info);
-	NVSDK_NGX_Result res = ngx.create_feature(cmd, NVSDK_NGX_Feature_SuperSampling, params, (NVSDK_NGX_Handle **)&ctx->handle);
+	NVSDK_NGX_Result res = ngx.create_feature(cmd, want_rr ? NVSDK_NGX_Feature_RayReconstruction : NVSDK_NGX_Feature_SuperSampling, params, (NVSDK_NGX_Handle **)&ctx->handle);
 	vkEndCommandBuffer(cmd);
 
 	VkSubmitInfo submit = { };
@@ -276,8 +294,18 @@ DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_
 
 	if (res == NVSDK_NGX_Result_Success && ctx->handle) {
 		ctx->created = true;
+		ctx->ray_reconstruction = want_rr;
 	} else {
 		ctx->handle = nullptr;
+		// Ray Reconstruction unavailable (driver/SDK): fall back to Super
+		// Resolution so the caller still gets an upscaler.
+		if (want_rr) {
+			DLSSContext *sr = create_context(p_internal_size, p_target_size);
+			ctx->created = sr->created;
+			ctx->handle = sr->handle;
+			sr->handle = nullptr;
+			memdelete(sr);
+		}
 	}
 	return ctx;
 }
@@ -437,6 +465,10 @@ DLSSEffect::~DLSSEffect() {
 
 bool DLSSEffect::is_supported() const {
 	return supported;
+}
+
+bool DLSSEffect::is_ray_reconstruction_enabled() const {
+	return false;
 }
 
 DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size) {

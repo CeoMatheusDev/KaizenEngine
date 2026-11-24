@@ -38,6 +38,15 @@ RTXBackend::~RTXBackend() {
 	shutdown();
 }
 
+static Ref<RTXBackend> rtx_backend_singleton;
+
+RTXBackend *RTXBackend::get_singleton() {
+	if (rtx_backend_singleton.is_null()) {
+		rtx_backend_singleton = memnew(RTXBackend);
+	}
+	return rtx_backend_singleton.ptr();
+}
+
 bool RTXBackend::init() {
 	rd = RD::get_singleton();
 	if (!rd) {

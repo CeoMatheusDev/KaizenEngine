@@ -44,15 +44,18 @@
 
 namespace RendererRD {
 
-// A created DLSS feature (one per viewport resolution pair). The NGX handle is
-// owned by this object: deleting the context releases the feature.
-class DLSSContext {
-public:
-	// NVSDK_NGX_Handle* when created through NGX; nullptr otherwise.
-	void *handle = nullptr;
-	Size2i internal_size;
-	Size2i target_size;
-	bool created = false;
+	// A created DLSS feature (one per viewport resolution pair). The NGX handle is
+	// owned by this object: deleting the context releases the feature.
+	class DLSSContext {
+	public:
+		// NVSDK_NGX_Handle* when created through NGX; nullptr otherwise.
+		void *handle = nullptr;
+		Size2i internal_size;
+		Size2i target_size;
+		bool created = false;
+		// True when the feature was created as DLSS Ray Reconstruction (DLSSD)
+		// instead of DLSS Super Resolution.
+		bool ray_reconstruction = false;
 
 	DLSSContext() {}
 	~DLSSContext();
@@ -97,8 +100,15 @@ public:
 	DLSSContext *create_context(Size2i p_internal_size, Size2i p_target_size);
 	void upscale(const Parameters &p_params);
 
+	// DLSS Ray Reconstruction (DLSSD) toggle. When enabled, create_context()
+	// creates the Ray Reconstruction feature instead of Super Resolution.
+	// -1 (default) follows RTXBackend::is_ray_reconstruction_enabled().
+	void set_ray_reconstruction(bool p_enabled) { rr_override = p_enabled ? 1 : 0; }
+	bool is_ray_reconstruction_enabled() const;
+
 private:
 	bool supported = false;
+	int rr_override = -1;
 
 	bool init_sdk();
 	void shutdown_sdk();
