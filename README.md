@@ -91,7 +91,19 @@ The [Godot Engine compilation guide](https://docs.godotengine.org/en/latest/engi
 
 ### Build targets
 
-The `SConstruct` explicitly defines three targets:
+The easiest entry point is `./build.sh`, which hides the platform plumbing
+(the engine targets the `linuxbsd` family — one shared POSIX/X11/Wayland
+backend for Linux and the BSDs):
+
+```bash
+./build.sh                 # Editor (produces bin/kaizen.<platform>.editor.<arch>)
+./build.sh release         # Export template (release)
+./build.sh physx           # Just the NVIDIA PhysX SDK group
+./build.sh test            # Test suite (license banners + engine checks)
+./build.sh smoke           # PhysX runtime smoke test
+```
+
+Under the hood the `SConstruct` defines three targets:
 
 ```bash
 # Editor (produces bin/kaizen.<platform>.editor.<arch>)
