@@ -111,6 +111,8 @@ public:
 		RendererRD::DLSSContext *dlss_context = nullptr;
 		int dlss_context_quality = -1;
 		int dlss_context_rr_mode = -1;
+		Size2i dlss_context_internal_size;
+		Size2i dlss_context_target_size;
 #endif
 #ifdef METAL_MFXTEMPORAL_ENABLED
 		RendererRD::MFXTemporalContext *mfx_temporal_context = nullptr;

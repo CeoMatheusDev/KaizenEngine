@@ -593,6 +593,7 @@ RID PhysXPhysicsServer3D::_alloc_shape(PS3DE::ShapeType p_type) {
 	PhysXShape *s = shape_owner.get_or_null(rid);
 	s->rid = rid;
 	s->type = p_type;
+	shape_map[rid] = s;
 	return rid;
 }
 
@@ -611,6 +612,9 @@ void PhysXPhysicsServer3D::_body_add_px_shape(PhysXBody *p_body, int p_idx) {
 			(float)p_body->params[PS3DE::BODY_PARAM_FRICTION],
 			(float)p_body->params[PS3DE::BODY_PARAM_BOUNCE]);
 	PxShape *shape = PxRigidActorExt::createExclusiveShape(*p_body->actor, s->geometry.any(), *material);
+	// The exclusive shape holds its own material reference; drop ours so the
+	// material does not leak one reference per shape attach.
+	material->release();
 	if (!shape) {
 		return;
 	}
@@ -657,6 +661,9 @@ void PhysXPhysicsServer3D::_area_add_px_shape(PhysXArea *p_area, int p_idx) {
 	PxPhysics *px = backend->get_physics();
 	PxMaterial *material = px->createMaterial(0.5f, 0.5f, 0.5f);
 	PxShape *shape = PxRigidActorExt::createExclusiveShape(*p_area->actor, s->geometry.any(), *material);
+	// The exclusive shape holds its own material reference; drop ours so the
+	// material does not leak one reference per shape attach.
+	material->release();
 	if (!shape) {
 		return;
 	}
@@ -689,6 +696,26 @@ void PhysXPhysicsServer3D::_area_rebuild_shapes(PhysXArea *p_area) {
 	}
 	for (int i = 0; i < p_area->shapes.size(); i++) {
 		_area_add_px_shape(p_area, i);
+	}
+}
+
+void PhysXPhysicsServer3D::_resync_px_shape_indices(PhysXBody *p_body) {
+	// PxShape::userData caches the shape instance index (queries report hits
+	// through it); keep it in sync whenever instances shift.
+	for (int i = 0; i < p_body->shapes.size(); i++) {
+		PxShape *px = p_body->shapes[i].px_shape;
+		if (px) {
+			px->userData = (void *)(uintptr_t)i;
+		}
+	}
+}
+
+void PhysXPhysicsServer3D::_resync_px_shape_indices(PhysXArea *p_area) {
+	for (int i = 0; i < p_area->shapes.size(); i++) {
+		PxShape *px = p_area->shapes[i].px_shape;
+		if (px) {
+			px->userData = (void *)(uintptr_t)i;
+		}
 	}
 }
 
@@ -784,8 +811,14 @@ void PhysXPhysicsServer3D::_destroy_joint(PhysXJoint *p_joint) {
 
 void PhysXPhysicsServer3D::_check_area_overlaps() {
 	// Per-step overlap diffing: covers body<->area and area<->area monitors.
+	// Snapshot the areas first: monitor callbacks run below and may create
+	// areas (map growth would invalidate a live iterator).
+	Vector<PhysXArea *> areas;
 	for (const KeyValue<RID, PhysXArea *> &E : area_map) {
-		PhysXArea *area = E.value;
+		areas.push_back(E.value);
+	}
+	for (int ai = 0; ai < areas.size(); ai++) {
+		PhysXArea *area = areas[ai];
 		if (!area->actor || !area->monitorable) {
 			continue;
 		}
@@ -1007,6 +1040,7 @@ RID PhysXPhysicsServer3D::space_create() {
 	PhysXSpace *sp = space_owner.get_or_null(rid);
 	sp->rid = rid;
 	sp->scene = (PxScene *)backend->create_scene(sp->gravity);
+	space_map[rid] = sp;
 	if (!default_space.is_valid()) {
 		default_space = rid;
 	}
@@ -1167,6 +1201,7 @@ void PhysXPhysicsServer3D::area_remove_shape(RID p_area, int p_shape_idx) {
 	ERR_FAIL_INDEX(p_shape_idx, area->shapes.size());
 	_area_remove_px_shape(area, p_shape_idx);
 	area->shapes.remove_at(p_shape_idx);
+	_resync_px_shape_indices(area);
 }
 
 void PhysXPhysicsServer3D::area_clear_shapes(RID p_area) {
@@ -1437,6 +1472,7 @@ void PhysXPhysicsServer3D::body_remove_shape(RID p_body, int p_shape_idx) {
 	ERR_FAIL_INDEX(p_shape_idx, body->shapes.size());
 	_body_remove_px_shape(body, p_shape_idx);
 	body->shapes.remove_at(p_shape_idx);
+	_resync_px_shape_indices(body);
 	_apply_body_mass(body);
 }
 
@@ -1909,10 +1945,14 @@ void PhysXPhysicsServer3D::body_set_ray_pickable(RID p_body, bool p_enable) {
 PhysicsDirectBodyState3D *PhysXPhysicsServer3D::body_get_direct_state(RID p_body) {
 	PhysXBody *body = body_owner.get_or_null(p_body);
 	ERR_FAIL_NULL_V(body, nullptr);
-	static PhysXDirectBodyState *state = nullptr;
-	if (!state) {
-		state = memnew(PhysXDirectBodyState);
+	// One state object per body: nested callback use of another body's direct
+	// state must not re-point a shared instance.
+	if (!direct_body_states.has(p_body)) {
+		PhysXDirectBodyState *state = memnew(PhysXDirectBodyState);
+		state->body = body;
+		direct_body_states[p_body] = state;
 	}
+	PhysXDirectBodyState *state = direct_body_states[p_body];
 	state->body = body;
 	return state;
 }
@@ -2000,6 +2040,7 @@ RID PhysXPhysicsServer3D::joint_create() {
 	const RID rid = joint_owner.make_rid();
 	PhysXJoint *joint = joint_owner.get_or_null(rid);
 	joint->rid = rid;
+	joint_map[rid] = joint;
 	return rid;
 }
 
@@ -2452,6 +2493,15 @@ Quaternion PhysXPhysicsServer3D::generic_6dof_joint_get_angular_target_rotation(
 // ---------------------------------------------------------------------------
 
 void PhysXPhysicsServer3D::free_rid(RID p_rid) {
+	// User code can free objects from inside step() callbacks; defer the
+	// release to the end of the step so map iteration and in-flight objects
+	// stay valid.
+	if (in_step) {
+		if (!pending_frees.has(p_rid)) {
+			pending_frees.push_back(p_rid);
+		}
+		return;
+	}
 	if (shape_owner.owns(p_rid)) {
 		// Detach the shape from every body/area still referencing it so no
 		// PxShape keeps a pointer into the freed geometry.
@@ -2461,6 +2511,7 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 				if (body->shapes[i].shape_rid == p_rid) {
 					_body_remove_px_shape(body, i);
 					body->shapes.remove_at(i);
+					_resync_px_shape_indices(body);
 				}
 			}
 		}
@@ -2470,9 +2521,11 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 				if (area->shapes[i].shape_rid == p_rid) {
 					_area_remove_px_shape(area, i);
 					area->shapes.remove_at(i);
+					_resync_px_shape_indices(area);
 				}
 			}
 		}
+		shape_map.erase(p_rid);
 		shape_owner.free(p_rid);
 		return;
 	}
@@ -2487,6 +2540,11 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 		}
 		if (body->actor) {
 			body->actor->release();
+			body->actor = nullptr;
+		}
+		if (direct_body_states.has(p_rid)) {
+			memdelete(direct_body_states[p_rid]);
+			direct_body_states.erase(p_rid);
 		}
 		body_map.erase(p_rid);
 		body_owner.free(p_rid);
@@ -2503,6 +2561,7 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 		}
 		if (area->actor) {
 			area->actor->release();
+			area->actor = nullptr;
 		}
 		area_map.erase(p_rid);
 		area_owner.free(p_rid);
@@ -2511,22 +2570,44 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 	if (joint_owner.owns(p_rid)) {
 		PhysXJoint *joint = joint_owner.get_or_null(p_rid);
 		_destroy_joint(joint);
+		joint_map.erase(p_rid);
 		joint_owner.free(p_rid);
 		return;
 	}
 	if (space_owner.owns(p_rid)) {
 		PhysXSpace *sp = space_owner.get_or_null(p_rid);
+		// Detach bodies/areas still in this space so nothing keeps a dangling
+		// scene pointer after the PxScene is destroyed.
+		for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+			PhysXBody *body = E.value;
+			if (body->space == p_rid) {
+				if (sp && sp->scene && body->actor) {
+					sp->scene->removeActor(*body->actor);
+				}
+				body->space = RID();
+			}
+		}
+		for (const KeyValue<RID, PhysXArea *> &E : area_map) {
+			PhysXArea *area = E.value;
+			if (area->space == p_rid) {
+				if (sp && sp->scene && area->actor) {
+					sp->scene->removeActor(*area->actor);
+				}
+				area->space = RID();
+			}
+		}
 		if (direct_space_states.has(p_rid)) {
 			memdelete(direct_space_states[p_rid]);
 			direct_space_states.erase(p_rid);
 		}
-		if (sp->scene) {
+		if (sp && sp->scene) {
 			backend->destroy_scene(sp->scene);
 			sp->scene = nullptr;
 		}
 		if (default_space == p_rid) {
 			default_space = RID();
 		}
+		space_map.erase(p_rid);
 		space_owner.free(p_rid);
 		return;
 	}
@@ -2578,9 +2659,22 @@ void PhysXPhysicsServer3D::step(real_t p_step) {
 	backend->simulate((float)p_step);
 	backend->fetch_results(true);
 
-	// State sync + force integration callbacks after the step.
+	// State sync + force integration callbacks after the step. Snapshot the
+	// RIDs first: callbacks can create bodies (map growth would invalidate a
+	// live iterator) and free_rid() is deferred while in_step, so the
+	// snapshot stays valid.
+	in_step = true;
+	Vector<RID> callback_bodies;
 	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
-		PhysXBody *body = E.value;
+		if (E.value->state_sync_callback.is_valid() || (E.value->force_integration_callback.is_valid() && !E.value->omit_force_integration)) {
+			callback_bodies.push_back(E.key);
+		}
+	}
+	for (int i = 0; i < callback_bodies.size(); i++) {
+		PhysXBody *body = body_owner.get_or_null(callback_bodies[i]);
+		if (!body) {
+			continue;
+		}
 		if (body->state_sync_callback.is_valid()) {
 			body->state_sync_callback.call(body->rid, body->object_id);
 		}
@@ -2590,6 +2684,14 @@ void PhysXPhysicsServer3D::step(real_t p_step) {
 	}
 
 	_check_area_overlaps();
+
+	// Releases requested by callbacks during this step, now that iteration is
+	// done.
+	in_step = false;
+	for (int i = 0; i < pending_frees.size(); i++) {
+		free_rid(pending_frees[i]);
+	}
+	pending_frees.clear();
 }
 
 void PhysXPhysicsServer3D::sync() {
@@ -2602,7 +2704,15 @@ void PhysXPhysicsServer3D::end_sync() {
 }
 
 void PhysXPhysicsServer3D::finish() {
-	// Free all resources; RID owners destruct their entries.
+	// Free all resources in dependency order: joints reference bodies, bodies
+	// and areas hold shapes, spaces host the actors.
+	Vector<RID> all_joints;
+	for (const KeyValue<RID, PhysXJoint *> &E : joint_map) {
+		all_joints.push_back(E.key);
+	}
+	for (int i = 0; i < all_joints.size(); i++) {
+		free_rid(all_joints[i]);
+	}
 	Vector<RID> all_bodies;
 	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
 		all_bodies.push_back(E.key);
@@ -2618,12 +2728,18 @@ void PhysXPhysicsServer3D::finish() {
 		free_rid(all_areas[i]);
 	}
 	Vector<RID> all_spaces;
-	// Collect space RIDs from direct state map + owner (spaces tracked by iterating owner is not exposed; track via scenes list).
-	for (const KeyValue<RID, PhysXDirectSpaceState *> &E : direct_space_states) {
+	for (const KeyValue<RID, PhysXSpace *> &E : space_map) {
 		all_spaces.push_back(E.key);
 	}
 	for (int i = 0; i < all_spaces.size(); i++) {
 		free_rid(all_spaces[i]);
+	}
+	Vector<RID> all_shapes;
+	for (const KeyValue<RID, PhysXShape *> &E : shape_map) {
+		all_shapes.push_back(E.key);
+	}
+	for (int i = 0; i < all_shapes.size(); i++) {
+		free_rid(all_shapes[i]);
 	}
 	if (backend.is_valid()) {
 		backend->shutdown();
