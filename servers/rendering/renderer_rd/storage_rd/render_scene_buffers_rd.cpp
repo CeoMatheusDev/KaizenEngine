@@ -84,6 +84,8 @@ void RenderSceneBuffersRD::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_internal_size"), &RenderSceneBuffersRD::get_internal_size);
 	ClassDB::bind_method(D_METHOD("get_target_size"), &RenderSceneBuffersRD::get_target_size);
 	ClassDB::bind_method(D_METHOD("get_scaling_3d_mode"), &RenderSceneBuffersRD::get_scaling_3d_mode);
+	ClassDB::bind_method(D_METHOD("get_dlss_quality"), &RenderSceneBuffersRD::get_dlss_quality);
+	ClassDB::bind_method(D_METHOD("get_ray_reconstruction"), &RenderSceneBuffersRD::get_ray_reconstruction);
 	ClassDB::bind_method(D_METHOD("get_fsr_sharpness"), &RenderSceneBuffersRD::get_fsr_sharpness);
 	ClassDB::bind_method(D_METHOD("get_msaa_3d"), &RenderSceneBuffersRD::get_msaa_3d);
 	ClassDB::bind_method(D_METHOD("get_texture_samples"), &RenderSceneBuffersRD::get_texture_samples);
@@ -181,6 +183,9 @@ void RenderSceneBuffersRD::configure(const RenderSceneBuffersConfiguration *p_co
 	anisotropic_filtering_level = p_config->get_anisotropic_filtering_level();
 	use_taa = p_config->get_use_taa();
 	use_debanding = p_config->get_use_debanding();
+
+	dlss_quality = p_config->get_dlss_quality();
+	ray_reconstruction = p_config->get_ray_reconstruction();
 
 	ERR_FAIL_COND_MSG(view_count == 0, "Must have at least 1 view");
 

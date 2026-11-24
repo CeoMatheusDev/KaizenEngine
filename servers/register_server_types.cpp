@@ -72,6 +72,7 @@
 #include "servers/display/native_menu.h"
 #include "servers/movie_writer/movie_writer.h"
 #include "servers/movie_writer/movie_writer_pngwav.h"
+#include "kaizen/rendering/nvidia/rtx_backend.h"
 #ifdef RD_ENABLED
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/render_data_rd.h"
@@ -426,6 +427,11 @@ void register_server_singletons() {
 	Engine::get_singleton()->add_singleton(Engine::Singleton("DisplayServer", DisplayServer::get_singleton(), "DisplayServer"));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("NativeMenu", NativeMenu::get_singleton(), "NativeMenu"));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("RenderingServer", RenderingServer::get_singleton(), "RenderingServer"));
+
+	// NVIDIA RTX backend: ray tracing capability queries and DLSS Ray
+	// Reconstruction configuration (see docs/sdk/nvidia.md).
+	GDREGISTER_CLASS(RTXBackend);
+	Engine::get_singleton()->add_singleton(Engine::Singleton("RTXBackend", RTXBackend::get_singleton(), "RTXBackend"));
 #ifndef NAVIGATION_2D_DISABLED
 	Engine::get_singleton()->add_singleton(Engine::Singleton("NavigationServer2D", NavigationServer2D::get_singleton(), "NavigationServer2D"));
 #endif // NAVIGATION_2D_DISABLED

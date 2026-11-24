@@ -328,10 +328,12 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 			rb_config.set_fsr_sharpness(p_viewport->fsr_sharpness);
 			rb_config.set_texture_mipmap_bias(texture_mipmap_bias);
 			rb_config.set_anisotropic_filtering_level(p_viewport->anisotropic_filtering_level);
-			rb_config.set_use_taa(use_taa);
-			rb_config.set_use_debanding(p_viewport->use_debanding);
+		rb_config.set_use_taa(use_taa);
+		rb_config.set_use_debanding(p_viewport->use_debanding);
+		rb_config.set_dlss_quality(p_viewport->dlss_quality);
+		rb_config.set_ray_reconstruction(p_viewport->ray_reconstruction);
 
-			p_viewport->render_buffers->configure(&rb_config);
+		p_viewport->render_buffers->configure(&rb_config);
 		}
 	}
 }
@@ -1119,6 +1121,22 @@ void RendererViewport::viewport_set_fsr_sharpness(RID p_viewport, float p_sharpn
 	ERR_FAIL_NULL(viewport);
 
 	viewport->fsr_sharpness = p_sharpness;
+	_configure_3d_render_buffers(viewport);
+}
+
+void RendererViewport::viewport_set_dlss_quality(RID p_viewport, RSE::ViewportDLSSQuality p_quality) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	viewport->dlss_quality = p_quality;
+	_configure_3d_render_buffers(viewport);
+}
+
+void RendererViewport::viewport_set_ray_reconstruction(RID p_viewport, bool p_enabled) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	viewport->ray_reconstruction = p_enabled;
 	_configure_3d_render_buffers(viewport);
 }
 

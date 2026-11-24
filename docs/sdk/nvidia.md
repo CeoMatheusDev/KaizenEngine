@@ -11,7 +11,13 @@ KaizenEngine supports NVIDIA rendering SDKs for advanced upscaling, ray tracing,
 - **Acquisition**: Manual download from [NVIDIA Developer Portal](https://developer.nvidia.com/dlss-sdk) or [GitHub](https://github.com/NVIDIA/DLSS)
 - **License**: NVIDIA SDK License Agreement (proprietary, NDA)
 - **Redistribution**: Restricted (no watermarked DLLs in shipping builds)
-- **Ray Reconstruction (DLSSD)**: `DLSSEffect` creates the Ray Reconstruction feature (`NVSDK_NGX_Feature_RayReconstruction`) when the RTX backend enables it (`RTXBackend::set_ray_reconstruction_enabled`); falls back to Super Resolution when unavailable.
+- **Ray Reconstruction (DLSSD)**: `DLSSEffect` creates the Ray Reconstruction feature (`NVSDK_NGX_Feature_RayReconstruction`) when enabled, with automatic fallback to Super Resolution when unavailable.
+
+Configuration surfaces:
+
+- **Project settings**: `rendering/ray_tracing/enabled`, `rendering/ray_tracing/ray_reconstruction`, `rendering/ray_tracing/denoising`, `rendering/ray_tracing/hardware_acceleration`, `rendering/ray_tracing/max_recursion_depth`, and `rendering/scaling_3d/dlss_quality` (Ultra Performance / Performance / Balanced / Max Quality / DLAA). These seed the `RTXBackend` configuration and the per-viewport defaults.
+- **Viewport** (also visible in the Inspector): `scaling_3d_mode = Viewport.SCALING_3D_MODE_DLSS` selects DLSS; `dlss_quality` and `use_ray_reconstruction` tune it per viewport. Quality and Ray Reconstruction changes rebuild the DLSS feature on the fly.
+- **Script**: the `RTXBackend` singleton exposes `is_supported()`, `init()`, `shutdown()`, `load_settings()`, `is_ray_tracing_supported()`, `is_ray_query_supported()`, `is_hardware_acceleration_available()` and the `enabled`, `ray_reconstruction_enabled`, `denoising_enabled`, `hardware_acceleration_enabled`, `max_recursion_depth` properties. The `Viewport` properties above are script-visible, and `RenderingServer.viewport_set_dlss_quality()` / `viewport_set_ray_reconstruction()` drive the renderer directly (`RenderSceneBuffers.get_dlss_quality()` / `get_ray_reconstruction()` report the active values).
 - **Build flag**: `NGX_DLSS_ENABLED`
 - **Headers**: `nvsdk_ngx.h`, `nvsdk_ngx_defs.h`, `nvsdk_ngx_params.h`, etc.
 

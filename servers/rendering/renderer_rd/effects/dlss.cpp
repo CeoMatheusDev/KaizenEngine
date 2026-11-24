@@ -243,12 +243,23 @@ bool DLSSEffect::is_ray_reconstruction_enabled() const {
 	return RTXBackend::get_singleton()->is_ray_reconstruction_enabled();
 }
 
-DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size) {
+DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size, int p_quality, int p_rr_mode) {
 	DLSSContext *ctx = memnew(DLSSContext);
 	ctx->internal_size = p_internal_size;
 	ctx->target_size = p_target_size;
 	if (!supported || p_internal_size.x <= 0 || p_internal_size.y <= 0 || p_target_size.x <= 0 || p_target_size.y <= 0) {
 		return ctx; // created == false; caller falls back.
+	}
+
+	// Map the ViewportDLSSQuality value to NVSDK_NGX_PerfQuality_Value.
+	int ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_MaxQuality;
+	switch (p_quality) {
+		case 0: ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_UltraPerformance; break;
+		case 1: ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_MaxPerf; break;
+		case 2: ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_Balanced; break;
+		case 3: ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_MaxQuality; break;
+		case 4: ngx_quality = (int)NVSDK_NGX_PerfQuality_Value_DLAA; break;
+		default: break;
 	}
 
 	NVSDK_NGX_Parameter *params = (NVSDK_NGX_Parameter *)parameters;
@@ -259,7 +270,7 @@ DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_
 	params->Set(NVSDK_NGX_Parameter_Height, (unsigned int)p_internal_size.y);
 	params->Set(NVSDK_NGX_Parameter_OutWidth, (unsigned int)p_target_size.x);
 	params->Set(NVSDK_NGX_Parameter_OutHeight, (unsigned int)p_target_size.y);
-	params->Set(NVSDK_NGX_Parameter_PerfQualityValue, (int)NVSDK_NGX_PerfQuality_Value_MaxQuality);
+	params->Set(NVSDK_NGX_Parameter_PerfQualityValue, ngx_quality);
 
 	int create_flags = NVSDK_NGX_DLSS_Feature_Flags_IsHDR | // Internal buffers are HDR.
 			NVSDK_NGX_DLSS_Feature_Flags_MVLowRes | // Velocity matches the render resolution.
@@ -268,7 +279,7 @@ DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_
 	params->Set(NVSDK_NGX_Parameter_DLSS_Enable_Output_Subrects, 0);
 
 	// Ray Reconstruction (DLSSD) needs its denoise/roughness/depth-mode params.
-	const bool want_rr = is_ray_reconstruction_enabled();
+	const bool want_rr = (p_rr_mode >= 0) ? (p_rr_mode == 1) : is_ray_reconstruction_enabled();
 	if (want_rr) {
 		// Mirrors NGX_VULKAN_CREATE_DLSSD_EXT1 (nvsdk_ngx_helpers_dlssd_vk.h).
 		params->Set(NVSDK_NGX_Parameter_DLSS_Denoise_Mode, (int)NVSDK_NGX_DLSS_Denoise_Mode_DLUnified);
@@ -300,7 +311,7 @@ DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_
 		// Ray Reconstruction unavailable (driver/SDK): fall back to Super
 		// Resolution so the caller still gets an upscaler.
 		if (want_rr) {
-			DLSSContext *sr = create_context(p_internal_size, p_target_size);
+			DLSSContext *sr = create_context(p_internal_size, p_target_size, p_quality, 0);
 			ctx->created = sr->created;
 			ctx->handle = sr->handle;
 			sr->handle = nullptr;
@@ -471,7 +482,9 @@ bool DLSSEffect::is_ray_reconstruction_enabled() const {
 	return false;
 }
 
-DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size) {
+DLSSContext *DLSSEffect::create_context(Size2i p_internal_size, Size2i p_target_size, int p_quality, int p_rr_mode) {
+	(void)p_quality;
+	(void)p_rr_mode;
 	DLSSContext *ctx = memnew(DLSSContext);
 	ctx->internal_size = p_internal_size;
 	ctx->target_size = p_target_size;

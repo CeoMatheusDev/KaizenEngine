@@ -21,6 +21,7 @@
 
 #include "physx_physics_server_3d.h"
 
+#include "core/config/project_settings.h"
 #include "core/math/geometry_3d.h"
 #include "core/os/mutex.h"
 
@@ -2514,6 +2515,25 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 }
 
 void PhysXPhysicsServer3D::init() {
+	// Apply the physics/physx_physics_3d/* project settings before startup.
+	PhysXBackend::Config &cfg = backend->get_config();
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	if (ps) {
+		auto get_bool = [&](const char *p_name, bool p_current) -> bool {
+			return ps->has_setting(p_name) ? (bool)ps->get_setting(p_name) : p_current;
+		};
+		cfg.gpu_acceleration = get_bool("physics/physx_physics_3d/gpu_acceleration", cfg.gpu_acceleration);
+		cfg.cooking = get_bool("physics/physx_physics_3d/cooking", cfg.cooking);
+		cfg.character_controller = get_bool("physics/physx_physics_3d/character_controller", cfg.character_controller);
+		cfg.vehicle = get_bool("physics/physx_physics_3d/vehicle", cfg.vehicle);
+		cfg.broadphase_mbp = get_bool("physics/physx_physics_3d/broadphase_mbp", cfg.broadphase_mbp);
+		if (ps->has_setting("physics/physx_physics_3d/simulation_step")) {
+			cfg.simulation_step = (real_t)ps->get_setting("physics/physx_physics_3d/simulation_step");
+		}
+		if (ps->has_setting("physics/physx_physics_3d/max_sub_steps")) {
+			cfg.max_sub_steps = (int)ps->get_setting("physics/physx_physics_3d/max_sub_steps");
+		}
+	}
 	backend->init();
 }
 

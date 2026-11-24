@@ -21,6 +21,8 @@
 
 #include "rtx_backend.h"
 
+#include "core/config/project_settings.h"
+#include "core/object/class_db.h"
 #include "servers/rendering/rendering_device.h"
 
 RTXBackend::RTXBackend() {
@@ -43,8 +45,54 @@ static Ref<RTXBackend> rtx_backend_singleton;
 RTXBackend *RTXBackend::get_singleton() {
 	if (rtx_backend_singleton.is_null()) {
 		rtx_backend_singleton = memnew(RTXBackend);
+		rtx_backend_singleton->load_settings();
 	}
 	return rtx_backend_singleton.ptr();
+}
+
+void RTXBackend::load_settings() {
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	if (!ps) {
+		return;
+	}
+	// Tolerate running before the settings are registered (init order).
+	auto get_bool = [&](const char *p_name, bool p_current) -> bool {
+		return ps->has_setting(p_name) ? (bool)ps->get_setting(p_name) : p_current;
+	};
+	config.enabled = get_bool("rendering/ray_tracing/enabled", config.enabled);
+	config.ray_reconstruction = get_bool("rendering/ray_tracing/ray_reconstruction", config.ray_reconstruction);
+	config.denoising = get_bool("rendering/ray_tracing/denoising", config.denoising);
+	config.hardware_acceleration = get_bool("rendering/ray_tracing/hardware_acceleration", config.hardware_acceleration);
+	if (ps->has_setting("rendering/ray_tracing/max_recursion_depth")) {
+		config.max_recursion_depth = (int)ps->get_setting("rendering/ray_tracing/max_recursion_depth");
+	}
+}
+
+void RTXBackend::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_enabled", "enabled"), &RTXBackend::set_enabled);
+	ClassDB::bind_method(D_METHOD("is_enabled"), &RTXBackend::is_enabled);
+	ClassDB::bind_method(D_METHOD("set_ray_reconstruction_enabled", "enabled"), &RTXBackend::set_ray_reconstruction_enabled);
+	ClassDB::bind_method(D_METHOD("is_ray_reconstruction_enabled"), &RTXBackend::is_ray_reconstruction_enabled);
+	ClassDB::bind_method(D_METHOD("set_denoising_enabled", "enabled"), &RTXBackend::set_denoising_enabled);
+	ClassDB::bind_method(D_METHOD("is_denoising_enabled"), &RTXBackend::is_denoising_enabled);
+	ClassDB::bind_method(D_METHOD("set_hardware_acceleration_enabled", "enabled"), &RTXBackend::set_hardware_acceleration_enabled);
+	ClassDB::bind_method(D_METHOD("is_hardware_acceleration_enabled"), &RTXBackend::is_hardware_acceleration_enabled);
+	ClassDB::bind_method(D_METHOD("set_max_recursion_depth", "depth"), &RTXBackend::set_max_recursion_depth);
+	ClassDB::bind_method(D_METHOD("get_max_recursion_depth"), &RTXBackend::get_max_recursion_depth);
+
+	ClassDB::bind_method(D_METHOD("is_supported"), &RTXBackend::is_supported);
+	ClassDB::bind_method(D_METHOD("init"), &RTXBackend::init);
+	ClassDB::bind_method(D_METHOD("shutdown"), &RTXBackend::shutdown);
+	ClassDB::bind_method(D_METHOD("load_settings"), &RTXBackend::load_settings);
+	ClassDB::bind_method(D_METHOD("is_ray_tracing_supported"), &RTXBackend::is_ray_tracing_supported);
+	ClassDB::bind_method(D_METHOD("is_ray_query_supported"), &RTXBackend::is_ray_query_supported);
+	ClassDB::bind_method(D_METHOD("is_hardware_acceleration_available"), &RTXBackend::is_hardware_acceleration_available);
+
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "enabled"), "set_enabled", "is_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "ray_reconstruction_enabled"), "set_ray_reconstruction_enabled", "is_ray_reconstruction_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "denoising_enabled"), "set_denoising_enabled", "is_denoising_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "hardware_acceleration_enabled"), "set_hardware_acceleration_enabled", "is_hardware_acceleration_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_recursion_depth", PROPERTY_HINT_RANGE, "1,64,1"), "set_max_recursion_depth", "get_max_recursion_depth");
 }
 
 bool RTXBackend::init() {

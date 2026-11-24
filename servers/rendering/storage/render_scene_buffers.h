@@ -63,6 +63,9 @@ private:
 	bool use_taa = false;
 	bool use_debanding = false;
 
+	RSE::ViewportDLSSQuality dlss_quality = RSE::VIEWPORT_DLSS_QUALITY_MAX_QUALITY;
+	bool ray_reconstruction = false;
+
 protected:
 	static void _bind_methods();
 
@@ -102,6 +105,12 @@ public:
 
 	bool get_use_debanding() const { return use_debanding; }
 	void set_use_debanding(bool p_use_debanding) { use_debanding = p_use_debanding; }
+
+	RSE::ViewportDLSSQuality get_dlss_quality() const { return dlss_quality; }
+	void set_dlss_quality(RSE::ViewportDLSSQuality p_dlss_quality) { dlss_quality = p_dlss_quality; }
+
+	bool get_ray_reconstruction() const { return ray_reconstruction; }
+	void set_ray_reconstruction(bool p_ray_reconstruction) { ray_reconstruction = p_ray_reconstruction; }
 
 	RenderSceneBuffersConfiguration() {}
 	virtual ~RenderSceneBuffersConfiguration() {}

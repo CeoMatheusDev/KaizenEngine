@@ -5121,6 +5121,34 @@ Viewport::Scaling3DMode Viewport::get_scaling_3d_mode() const {
 	return scaling_3d_mode;
 }
 
+void Viewport::set_dlss_quality(DLSSQuality p_dlss_quality) {
+	ERR_MAIN_THREAD_GUARD;
+	if (dlss_quality == p_dlss_quality) {
+		return;
+	}
+	dlss_quality = p_dlss_quality;
+	RS::get_singleton()->viewport_set_dlss_quality(viewport, (RenderingServerEnums::ViewportDLSSQuality)(int)dlss_quality);
+}
+
+Viewport::DLSSQuality Viewport::get_dlss_quality() const {
+	ERR_READ_THREAD_GUARD_V(DLSS_QUALITY_MAX_QUALITY);
+	return dlss_quality;
+}
+
+void Viewport::set_use_ray_reconstruction(bool p_enabled) {
+	ERR_MAIN_THREAD_GUARD;
+	if (use_ray_reconstruction == p_enabled) {
+		return;
+	}
+	use_ray_reconstruction = p_enabled;
+	RS::get_singleton()->viewport_set_ray_reconstruction(viewport, use_ray_reconstruction);
+}
+
+bool Viewport::is_using_ray_reconstruction() const {
+	ERR_READ_THREAD_GUARD_V(false);
+	return use_ray_reconstruction;
+}
+
 void Viewport::set_scaling_3d_scale(float p_scaling_3d_scale) {
 	ERR_MAIN_THREAD_GUARD;
 	// Clamp to reasonable values that are actually useful.
@@ -5432,6 +5460,8 @@ void Viewport::_bind_methods() {
 	ADD_GROUP("Scaling 3D", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "scaling_3d_mode", PROPERTY_HINT_ENUM, "Nearest (Fastest):5,Bilinear (Fastest):0,FSR 1.0 (Fast):1,FSR 2.2 (Slow):2,MetalFX (Spatial - Fast):3,MetalFX (Temporal - Slow):4,DLSS (NVIDIA):6"), "set_scaling_3d_mode", "get_scaling_3d_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "scaling_3d_scale", PROPERTY_HINT_RANGE, "0.1,2.0,0.0001"), "set_scaling_3d_scale", "get_scaling_3d_scale");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "dlss_quality", PROPERTY_HINT_ENUM, "Ultra Performance,Performance,Balanced,Max Quality,DLAA"), "set_dlss_quality", "get_dlss_quality");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_ray_reconstruction"), "set_use_ray_reconstruction", "is_using_ray_reconstruction");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "texture_mipmap_bias", PROPERTY_HINT_RANGE, "-2,2,0.001"), "set_texture_mipmap_bias", "get_texture_mipmap_bias");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "anisotropic_filtering_level", PROPERTY_HINT_ENUM, String::utf8("Disabled (Fastest),2× (Faster),4× (Fast),8× (Average),16x (Slow)")), "set_anisotropic_filtering_level", "get_anisotropic_filtering_level");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "fsr_sharpness", PROPERTY_HINT_RANGE, "0,2,0.01"), "set_fsr_sharpness", "get_fsr_sharpness");
@@ -5498,6 +5528,13 @@ void Viewport::_bind_methods() {
 	BIND_ENUM_CONSTANT(SCALING_3D_MODE_METALFX_TEMPORAL);
 	BIND_ENUM_CONSTANT(SCALING_3D_MODE_NEAREST);
 	BIND_ENUM_CONSTANT(SCALING_3D_MODE_MAX);
+
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_ULTRA_PERFORMANCE);
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_PERFORMANCE);
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_BALANCED);
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_MAX_QUALITY);
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_DLAA);
+	BIND_ENUM_CONSTANT(DLSS_QUALITY_MAX);
 
 	BIND_ENUM_CONSTANT(MSAA_DISABLED);
 	BIND_ENUM_CONSTANT(MSAA_2X);
@@ -5641,6 +5678,8 @@ Viewport::Viewport() {
 #ifndef _3D_DISABLED
 	set_scaling_3d_mode((Viewport::Scaling3DMode)(int)GLOBAL_GET("rendering/scaling_3d/mode"));
 	set_scaling_3d_scale(GLOBAL_GET("rendering/scaling_3d/scale"));
+	set_dlss_quality((Viewport::DLSSQuality)(int)GLOBAL_GET("rendering/scaling_3d/dlss_quality"));
+	set_use_ray_reconstruction(GLOBAL_GET("rendering/ray_tracing/ray_reconstruction"));
 	set_fsr_sharpness((float)GLOBAL_GET("rendering/scaling_3d/fsr_sharpness"));
 	set_texture_mipmap_bias((float)GLOBAL_GET("rendering/textures/default_filters/texture_mipmap_bias"));
 	set_anisotropic_filtering_level((Viewport::AnisotropicFiltering)(int)GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"));

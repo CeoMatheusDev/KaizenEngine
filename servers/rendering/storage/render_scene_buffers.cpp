@@ -83,6 +83,14 @@ void RenderSceneBuffersConfiguration::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_anisotropic_filtering_level"), &RenderSceneBuffersConfiguration::get_anisotropic_filtering_level);
 	ClassDB::bind_method(D_METHOD("set_anisotropic_filtering_level", "anisotropic_filtering_level"), &RenderSceneBuffersConfiguration::set_anisotropic_filtering_level);
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "anisotropic_filtering_level"), "set_anisotropic_filtering_level", "get_anisotropic_filtering_level");
+
+	ClassDB::bind_method(D_METHOD("get_dlss_quality"), &RenderSceneBuffersConfiguration::get_dlss_quality);
+	ClassDB::bind_method(D_METHOD("set_dlss_quality", "dlss_quality"), &RenderSceneBuffersConfiguration::set_dlss_quality);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "dlss_quality", PROPERTY_HINT_ENUM, "Ultra Performance,Performance,Balanced,Max Quality,DLAA"), "set_dlss_quality", "get_dlss_quality");
+
+	ClassDB::bind_method(D_METHOD("get_ray_reconstruction"), &RenderSceneBuffersConfiguration::get_ray_reconstruction);
+	ClassDB::bind_method(D_METHOD("set_ray_reconstruction", "ray_reconstruction"), &RenderSceneBuffersConfiguration::set_ray_reconstruction);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "ray_reconstruction"), "set_ray_reconstruction", "get_ray_reconstruction");
 }
 
 void RenderSceneBuffers::_bind_methods() {
