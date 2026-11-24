@@ -11,15 +11,11 @@
 #include "servers/physics_3d/physics_server_3d.h"
 #include "servers/physics_3d/physics_server_3d_manager.h"
 
-#include "kaizen/physics/physx/physx_backend.h"
+#include "physx_physics_server_3d.h"
 
 static PhysicsServer3D *_create_physx_physics_server() {
-	// PhysX physics server creation.
-	// When PhysX SDK is available, this would create a PhysicsServer3D
-	// implementation that uses the PhysX backend internally.
-	// For now, returns nullptr as the full implementation requires
-	// the PhysX SDK and a complete PhysicsServer3D implementation.
-	return nullptr;
+	// Real PhysX 5 backed PhysicsServer3D.
+	return memnew(PhysXPhysicsServer3D);
 }
 
 void initialize_physx_physics_3d_module(ModuleInitializationLevel p_level) {

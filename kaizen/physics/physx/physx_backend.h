@@ -21,75 +21,85 @@
 
 #pragma once
 
-#include "core/math/vector3.h"
+#include "core/object/ref_counted.h"
 #include "kaizen/physics/backend/physics_backend.h"
 
-#ifdef PHYSX_ENABLED
-	#include "PxPhysicsAPI.h"
-	#include "cooking/PxCooking.h"
-	#include "characterkinematic/PxController.h"
-#endif
+#include <PxPhysicsAPI.h>
 
-// NVIDIA PhysX physics backend.
-// Implements the engine's physics backend interface using the NVIDIA
-// PhysX SDK, isolated behind the PhysicsBackend abstraction.
+/// @brief PhysX backend for the physics system.
+/// Real PhysX 5 implementation: foundation, physics, cooking, dispatcher and
+/// scene lifecycle with fixed-step simulation. Owned by the "PhysX Physics"
+/// PhysicsServer3D (modules/physx_physics_3d), which drives simulate()/fetch_results().
 class PhysXBackend : public PhysicsBackend {
+	GDCLASS(PhysXBackend, PhysicsBackend);
+
 public:
+	/// @brief Configuration for the PhysX backend.
 	struct Config {
-		bool enabled = false;
-		bool gpu_acceleration = false;
-		bool cooking = true;
-		bool character_controller = true;
-		bool vehicle = true;
-		float simulation_step = 1.0f / 60.0f;
-		int max_sub_steps = 4;
-		bool broadphase_mbp = true;
+		bool gpu_acceleration = true; // Use GPU acceleration when available.
+		bool cooking = true; // Enable mesh cooking for convex/triangle meshes.
+		bool character_controller = true; // Initialize the character controller manager.
+		bool vehicle = true; // Vehicle API available to clients.
+		real_t simulation_step = 1.0 / 60.0; // Fixed simulation step.
+		int max_sub_steps = 4; // Maximum sub-steps per simulate() call.
+		bool broadphase_mbp = true; // Use MBP broadphase instead of SAP.
+
+		Config() = default;
 	};
 
-	struct SceneDesc {
-		Vector3 gravity = Vector3(0, -9.81, 0);
-		bool enable_pvd = false;
-	};
+private:
+	Config config;
+	void *foundation = nullptr; // PxFoundation.
+	void *physics = nullptr; // PxPhysics.
+	void *dispatcher = nullptr; // PxDefaultCpuDispatcher.
+	void *controller_manager = nullptr; // PxControllerManager of the first scene.
+	Vector<void *> controller_managers; // Per-scene PxControllerManager instances.
+	Vector<void *> scenes; // Created PxScene instances.
+	real_t step_accumulator = 0; // Fixed-step accumulator.
 
-	PhysXBackend();
+public:
+	PhysXBackend() = default;
 	~PhysXBackend() override;
+
+	// ---- PhysicsBackend interface ----
 
 	Type get_type() const override { return TYPE_PHYSX; }
 	bool is_supported() const override;
 	bool init() override;
 	void shutdown() override;
-
-	// Simulation.
 	bool simulate(float p_step) override;
 	bool fetch_results(bool p_wait = true) override;
-
-	// Scene management (PhysicsBackend interface).
 	void *create_scene(const Vector3 &p_gravity) override;
 	void destroy_scene(void *p_scene) override;
-
-	// Scene management with full descriptor (PhysX-specific).
-	void *create_scene(const SceneDesc &p_desc);
-
-	// Clean up all resources.
 	void cleanup() override;
 
-	// Configuration.
+	// ---- SDK accessors for the PhysX physics server ----
+
+	physx::PxPhysics *get_physics() const { return (physx::PxPhysics *)physics; }
+	physx::PxFoundation *get_foundation() const { return (physx::PxFoundation *)foundation; }
+	physx::PxControllerManager *get_controller_manager() const { return (physx::PxControllerManager *)controller_manager; }
+	const Vector<void *> &get_scenes() const { return scenes; }
+
+	Config &get_config() { return config; }
 	const Config &get_config() const { return config; }
-	void set_config(const Config &p_config) { config = p_config; }
 
-	// PhysX SDK access.
-	void *get_physics() const { return physics; }
-	void *get_cooking() const { return cooking; }
-	void *get_dispatcher() const { return dispatcher; }
+	// ---- Conversion helpers ----
 
-private:
-	bool supported = false;
-	Config config;
+	static physx::PxVec3 to_px(const Vector3 &p_v) { return physx::PxVec3(p_v.x, p_v.y, p_v.z); }
+	static Vector3 from_px(const physx::PxVec3 &p_v) { return Vector3(p_v.x, p_v.y, p_v.z); }
+	static physx::PxTransform to_px(const Transform3D &p_t);
+	static Transform3D from_px(const physx::PxTransform &p_t);
 
-	void *foundation = nullptr;
-	void *physics = nullptr;
-	void *cooking = nullptr;
-	void *dispatcher = nullptr;
-	void *controller_manager = nullptr;
-	void *vehicle_manager = nullptr;
+	// ---- Simulation filter (layer/mask + collision exceptions) ----
+
+	/// @brief Custom PxSimulationFilterShader used by every created scene.
+	/// Filter data layout: word0 = collision layer, word1 = collision mask,
+	/// word2/word3 = owner pointer halves (for exception lookup).
+	static physx::PxFilterFlags filter_shader(physx::PxFilterObjectAttributes p_attr_0, physx::PxFilterData p_data_0,
+			physx::PxFilterObjectAttributes p_attr_1, physx::PxFilterData p_data_1,
+			physx::PxPairFlags &r_pair_flags, const void *p_constant_block, physx::PxU32 p_constant_block_size);
+
+	/// @brief Register/unregister a collision exception between two owners.
+	static void add_collision_exception(const void *p_owner_a, const void *p_owner_b);
+	static void remove_collision_exception(const void *p_owner_a, const void *p_owner_b);
 };

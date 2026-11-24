@@ -11,6 +11,7 @@ KaizenEngine supports NVIDIA rendering SDKs for advanced upscaling, ray tracing,
 - **Acquisition**: Manual download from [NVIDIA Developer Portal](https://developer.nvidia.com/dlss-sdk) or [GitHub](https://github.com/NVIDIA/DLSS)
 - **License**: NVIDIA SDK License Agreement (proprietary, NDA)
 - **Redistribution**: Restricted (no watermarked DLLs in shipping builds)
+- **Ray Reconstruction (DLSSD)**: `DLSSEffect` creates the Ray Reconstruction feature (`NVSDK_NGX_Feature_RayReconstruction`) when the RTX backend enables it (`RTXBackend::set_ray_reconstruction_enabled`); falls back to Super Resolution when unavailable.
 - **Build flag**: `NGX_DLSS_ENABLED`
 - **Headers**: `nvsdk_ngx.h`, `nvsdk_ngx_defs.h`, `nvsdk_ngx_params.h`, etc.
 

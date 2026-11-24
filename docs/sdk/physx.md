@@ -100,3 +100,26 @@ PhysX is built from source using CMake with the following options:
 - PhysX is only enabled when `builtin_physx=yes` is set during build
 - GPU acceleration requires a CUDA-capable GPU
 - The backend gracefully degrades if PhysX is not available
+
+### Implementation Status (modules/physx_physics_3d)
+
+The "PhysX Physics" PhysicsServer3D runs on the real PhysX 5 SDK
+(`PhysXPhysicsServer3D`, driven by `PhysXBackend`):
+
+- **Spaces**: per-space `PxScene` with gravity and fixed-step simulation
+  (accumulator with a sub-step cap).
+- **Shapes**: world boundary, sphere, box, capsule, cylinder (convex hull),
+  convex polygon, concave polygon (cooked triangle mesh), heightmap (cooked),
+  separation ray (thin-box approximation).
+- **Bodies**: static/kinematic/rigid/rigid-linear modes, mass properties,
+  velocities, forces/impulses, axis locking, CCD, collision layer/mask and
+  collision exceptions (custom `PxSimulationFilterShader`).
+- **Areas**: trigger bodies with body/area monitor callbacks (per-step overlap
+  diffing, covering both body and area overlaps).
+- **Queries**: raycast, point/shape overlap, shape collide, rest info and
+  motion tests through the direct space state.
+- **Joints**: pin (spherical), hinge (revolute), slider (prismatic), cone-twist
+  and generic 6DOF (D6) with limits, motors and drive velocities.
+
+Not covered (documented, loud no-op where applicable): soft bodies, custom
+shapes, per-sample heightmap editing, area wind and override-mode gravity.

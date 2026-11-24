@@ -40,6 +40,10 @@ public:
 	RTXBackend();
 	~RTXBackend() override;
 
+	// Lazy singleton used by consumers (e.g. DLSSEffect) to read the RTX
+	// configuration. Created on first access and destroyed at shutdown().
+	static RTXBackend *get_singleton();
+
 	bool is_supported() const { return supported; }
 	bool init();
 	void shutdown();
@@ -52,6 +56,11 @@ public:
 	// Configuration.
 	const Config &get_config() const { return config; }
 	void set_config(const Config &p_config) { config = p_config; }
+
+	// Feature toggles (config shortcuts).
+	bool is_ray_reconstruction_enabled() const { return config.ray_reconstruction; }
+	void set_ray_reconstruction_enabled(bool p_enabled) { config.ray_reconstruction = p_enabled; }
+	bool is_denoising_enabled() const { return config.denoising; }
 
 	// Capabilities.
 	uint32_t get_max_recursion_depth() const { return config.max_recursion_depth; }
