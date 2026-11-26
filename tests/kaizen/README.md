@@ -240,31 +240,6 @@ requiring the former, and accepts `KAIZEN_SANITIZERS=address,undefined` to build
 under sanitizers and tell the report so. Without that variable the report says the
 sanitizers were not built; it can no longer claim otherwise.
 
-## C# glue and class-reference consistency
-
-`api_glue/check_api_glue.py` compares four sources that have to agree for every enum the
-fork extends: the C++ declaration order (which is the value), the `BIND_ENUM_CONSTANT`
-list (which is what ClassDB exposes), `doc/classes/<Class>.xml` (which is the
-documentation), and the generated C# enum in `modules/mono/glue/.../Generated/`. It exists
-because `087edfa7` added four `RenderingInfo` counters, hand-edited the generated C# enum
-to match, and added no doc XML and no `<summary>` blocks - a state in which C# callers get
-four undocumented values and the next regeneration deletes them. Running the checker
-against that state reports 8 failures; against the tree as it is now it reports none.
-
-`test_check_api_glue.py` (18 tests) drives the checker over a synthetic four-file tree
-with one source broken at a time, so a checker that passes for the wrong reason shows up
-here: a doc value that no longer matches the C++ position, an entry inserted in the middle
-without renumbering, a glue entry with nothing bound behind it, a glue entry with no
-summary, doc text drifting from the XML, a `[constant X]` reference that was not
-translated to a `<see cref>`, and a doc entry for an enumerator that is not bound (which
-must *not* be reported). `run_tests.sh` runs both the checker and the tests.
-
-The rule it enforces is worth stating, because it is a design constraint on whoever extends
-one of these enums next: the C++ declaration order is the value, and the XML is the doc
-source, so the correct sequence is enumerator -> bind -> XML entry -> regenerate the glue.
-Hand-editing the glue is only acceptable because this fork tracks it, and then only with
-this checker saying the four sources still agree.
-
 ## Lua and PhysX engine tests (requires the engine)
 
 Lua 5.5 is the primary script language, so the engine-level checks are written in Lua.
@@ -284,6 +259,24 @@ reporting, `new()`, singletons, class constants, `preload("res://...")` (helper 
 `lua_preload_helper.lua`) and the global Variant constructors. The churn and pipeline
 projects under `churn_project/`, `p251_dedup_project/` and `pipeline_churn_project/` are Lua
 ports; their GPU telemetry needs a GPU and a pipeline cache, so it is not checked here.
+
+## C++ script tests
+
+`test_cpp_script_api.cpp` runs in `run_tests.sh` with no engine. It builds a sample script
+against the API header the engine writes next to each script (`-Wall -Wextra -Werror`), loads
+it with `dlopen`, and drives the `KAIZEN_CPP_SCRIPT` entry points through the lifecycle.
+
+`run_cpp_engine_test.sh` needs the editor binary built with the `cpp_script` module and a C++
+compiler (clang++ or g++, or `KAIZEN_CPP_COMPILER`). It writes three fixtures into a temporary
+project: a working script, one that does not compile, and one without `KAIZEN_CPP_SCRIPT`. It
+runs `cpp_engine_probe.lua` headless, which loads them, instantiates the script on a node,
+reloads it with a broken and then a fixed source, and frees the node. The runner checks the
+`[C++] ...` lines the scripts print, in order, and fails on any unexpected engine error.
+
+```bash
+bash tests/kaizen/run_tests.sh                 # includes test_cpp_script_api
+bash tests/kaizen/run_cpp_engine_test.sh       # needs the engine binary
+```
 
 ## Pipeline lifetime report helpers
 

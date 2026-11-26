@@ -44,7 +44,7 @@ struct NamedColor {
 };
 
 // NOTE: This data is duplicated in the file:
-// modules/mono/glue/KaizenSharp/KaizenSharp/Core/Colors.cs
+// Colour names as listed by the upstream Godot Engine colour table.
 
 static NamedColor named_colors[] = {
 	{ "ALICE_BLUE", Color::hex(0xF0F8FFFF) },

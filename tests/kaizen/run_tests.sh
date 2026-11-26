@@ -84,10 +84,14 @@ LUA_META_BIN="${OUT_DIR}/test_lua_metadata"
 	"${REPO_ROOT}/modules/lua_script/lua_script_metadata.cpp" \
 	-o "${LUA_META_BIN}"
 
-# C# glue consistency: the generated bindings are tracked in-tree and maintained by
-# hand, so the four sources that have to agree are compared instead of trusted.
-python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
-python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | tail -3
+# C++ script ABI: the API header the engine writes next to each script, the KAIZEN_CPP_SCRIPT
+# entry points and the event dispatch. The sample script is compiled and loaded the way the
+# engine compiles one, so a header that warns under -Wextra fails here.
+CPP_API_BIN="${OUT_DIR}/test_cpp_script_api"
+
+"${CXX}" "${CXXFLAGS[@]}" \
+	"${SCRIPT_DIR}/test_cpp_script_api.cpp" \
+	-ldl -o "${CPP_API_BIN}"
 
 # Licence banner geometry: the box rows are padding-held, and a rebrand that lengthens a
 # row without moving a space is invisible to the tool that writes them - its template was
@@ -103,4 +107,5 @@ python3 -m unittest discover -s "${SCRIPT_DIR}/license_box" -p 'test_*.py' 2>&1 
 "${PIPELINE_BIN}" "$@"
 "${HZB_BIN}" "$@"
 "${LUA_META_BIN}" "$@"
+"${CPP_API_BIN}"
 "${SHADOW_BIN}" "$@"

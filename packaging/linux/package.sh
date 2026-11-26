@@ -8,16 +8,14 @@
 # Output layout (relative to the archive root, "Kaizen/"):
 #
 #   Engine/Binaries/Linux/           engine launcher, canonical binary, portable data
-#   Engine/Managed/KaizenSharp/      .NET API + tools (mono builds)
-#   Engine/Managed/dotnet/           private .NET SDK + runtime (optional)
 #   Engine/Source/                   only with --with-source
 #   ExportTemplates/Linux/{Release,Debug}/
 #   Templates/<version>/             install-ready symlink view (no duplication)
-#   Build/Config/                    build-info.json, package-info.env, dotnet-info.env
+#   Build/Config/                    build-info.json, package-info.env
 #   Build/Toolchains/                toolchain notes
 #   Config/linux/                    desktop entry, AppStream, MIME, man page, icons
-#   LICENSES/                        Kaizen and bundled .NET licenses
-#   Samples/                         Lua and C# samples
+#   LICENSES/                        Kaizen licenses
+#   Samples/                         Lua sample project
 #   Setup/                           installer, uninstaller, selector, dependency check
 #   README.txt
 #   MANIFEST.sha256
@@ -29,10 +27,6 @@
 #       --version X.Y.Z        Package version base (default: version.py)
 #       --channel NAME         stable|beta|rc|dev (default: version.py status)
 #       --channel-revision N   Pre-release number (default: 1)
-#       --mono / --no-mono     Select the build variant (default: auto-detect)
-#       --dotnet-bundle MODE   auto|yes|no (default: auto -> yes for mono)
-#       --dotnet-root DIR      .NET installation to bundle (default: detect)
-#       --dotnet-version VER   Expected SDK version (default: detect)
 #   -o, --output DIR           Directory distribution (default: dist/Kaizen)
 #       --tarball-out DIR      Archive output directory (default: dist/)
 #       --no-dir               Do not write the directory distribution
@@ -57,7 +51,6 @@ usage() {
 }
 
 # --- Defaults ------------------------------------------------------------
-MONO="auto"
 OUTPUT="${KZ_DIST_DIR}"
 TARBALL_OUT=""
 WRITE_DIR="yes"
@@ -69,9 +62,6 @@ DRY_RUN="no"
 REPRODUCIBLE="no"
 XZ_PRESET="6"
 JOBS="$(kz_nproc)"
-DOTNET_BUNDLE="auto"
-DOTNET_ROOT_OVERRIDE=""
-DOTNET_VERSION_OVERRIDE=""
 VERSION_BASE=""
 CHANNEL=""
 CHANNEL_REVISION="1"
@@ -104,41 +94,6 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--channel-revision=*)
 		CHANNEL_REVISION="${1#*=}"
-		shift
-		;;
-	--mono)
-		MONO="yes"
-		shift
-		;;
-	--no-mono)
-		MONO="no"
-		shift
-		;;
-	--dotnet-bundle)
-		[[ $# -ge 2 ]] || kz_die "--dotnet-bundle requires a value."
-		DOTNET_BUNDLE="$2"
-		shift 2
-		;;
-	--dotnet-bundle=*)
-		DOTNET_BUNDLE="${1#*=}"
-		shift
-		;;
-	--dotnet-root)
-		[[ $# -ge 2 ]] || kz_die "--dotnet-root requires a value."
-		DOTNET_ROOT_OVERRIDE="$2"
-		shift 2
-		;;
-	--dotnet-root=*)
-		DOTNET_ROOT_OVERRIDE="${1#*=}"
-		shift
-		;;
-	--dotnet-version)
-		[[ $# -ge 2 ]] || kz_die "--dotnet-version requires a value."
-		DOTNET_VERSION_OVERRIDE="$2"
-		shift 2
-		;;
-	--dotnet-version=*)
-		DOTNET_VERSION_OVERRIDE="${1#*=}"
 		shift
 		;;
 	-o | --output)
@@ -230,20 +185,6 @@ kz_need_cmd python3 find sort sha256sum xz
 [[ "${XZ_PRESET}" =~ ^[0-9]$ ]] || kz_die "--xz-preset must be 0-9."
 [[ "${JOBS}" =~ ^[1-9][0-9]*$ ]] || kz_die "--jobs must be a positive integer."
 [[ "${CHANNEL_REVISION}" =~ ^[1-9][0-9]*$ ]] || kz_die "--channel-revision must be a positive integer."
-case "${DOTNET_BUNDLE}" in
-auto | yes | no) ;;
-*) kz_die "--dotnet-bundle must be auto, yes or no." ;;
-esac
-
-# --- Resolve build variant ----------------------------------------------
-if [[ "${MONO}" == "auto" ]]; then
-	if [[ -f "${KZ_REPO_ROOT}/bin/kaizen.${KZ_PLATFORM}.editor.${KZ_ARCH}.mono" ]]; then
-		MONO="yes"
-	else
-		MONO="no"
-	fi
-fi
-
 # --- Explicit version/channel metadata ----------------------------------
 read -r PY_MAJOR PY_MINOR PY_PATCH PY_STATUS <<<"$(
 	python3 - "${KZ_REPO_ROOT}" <<'PY'
@@ -271,11 +212,11 @@ else
 	PACKAGE_VERSION="$(kz_package_version "${VERSION_BASE}" "${CHANNEL}" "${CHANNEL_REVISION}")"
 fi
 
-kz_info "Packaging Kaizen (mono=${MONO})"
+kz_info "Packaging Kaizen"
 
-EDITOR_BIN="$(kz_resolve_binary editor "${MONO}")" || kz_die "Editor binary not found. Run ./packaging/linux/build.sh first."
-RELEASE_BIN="$(kz_resolve_binary template_release "${MONO}")" || kz_die "Release template not found. Run ./packaging/linux/build.sh first."
-DEBUG_BIN="$(kz_resolve_binary template_debug "${MONO}")" || kz_die "Debug template not found. Run ./packaging/linux/build.sh first."
+EDITOR_BIN="$(kz_resolve_binary editor)" || kz_die "Editor binary not found. Run ./packaging/linux/build.sh first."
+RELEASE_BIN="$(kz_resolve_binary template_release)" || kz_die "Release template not found. Run ./packaging/linux/build.sh first."
+DEBUG_BIN="$(kz_resolve_binary template_debug)" || kz_die "Debug template not found. Run ./packaging/linux/build.sh first."
 
 FULL_BUILD="$(kz_version_full_build "${EDITOR_BIN}")" || kz_die "Could not determine the engine version from ${EDITOR_BIN}."
 FULL_CONFIG="$(kz_version_full_config "${FULL_BUILD}")"
@@ -300,37 +241,6 @@ if [[ -n "${ENGINE_MM}" && "${ENGINE_MM}" != "${PKG_MM}" && "${ALLOW_MISMATCH}" 
 	kz_die "Version mismatch: engine is ${ENGINE_MM}.x but package version is ${VERSION_BASE}. Use --allow-channel-mismatch to override."
 fi
 
-if [[ "${MONO}" == "yes" ]]; then
-	[[ -f "${KZ_REPO_ROOT}/bin/KaizenSharp/Api/Release/KaizenSharp.dll" ]] ||
-		kz_die "Managed API not found at bin/KaizenSharp/Api/Release. Run ./packaging/linux/build.sh --mono --target editor first."
-	[[ -f "${KZ_REPO_ROOT}/bin/KaizenSharp/Tools/KaizenTools.dll" ]] ||
-		kz_die "Managed tools not found at bin/KaizenSharp/Tools."
-fi
-
-# --- .NET bundle selection ----------------------------------------------
-if [[ "${MONO}" != "yes" ]]; then
-	[[ "${DOTNET_BUNDLE}" == "yes" ]] && kz_die "--dotnet-bundle=yes requires a mono build."
-	DOTNET_BUNDLE="no"
-elif [[ "${DOTNET_BUNDLE}" == "auto" ]]; then
-	DOTNET_BUNDLE="yes"
-fi
-
-DOTNET_SRC=""
-DOTNET_SDK=""
-DOTNET_RUNTIME=""
-if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then
-	if [[ -n "${DOTNET_ROOT_OVERRIDE}" ]]; then
-		DOTNET_SRC="${DOTNET_ROOT_OVERRIDE}"
-	else
-		DOTNET_SRC="$(kz_dotnet_root)" || kz_die "No .NET installation found. Install the .NET SDK 10.0.100+ or pass --dotnet-root."
-	fi
-	[[ -x "${DOTNET_SRC}/dotnet" ]] || kz_die "No 'dotnet' executable in ${DOTNET_SRC}."
-	DOTNET_SDK="$(kz_dotnet_sdk_version "${DOTNET_SRC}")" || kz_die "Could not read the .NET SDK version from ${DOTNET_SRC}."
-	DOTNET_RUNTIME="$(kz_dotnet_runtime_version "${DOTNET_SRC}")" || kz_die "Could not read the Microsoft.NETCore.App runtime version from ${DOTNET_SRC}."
-	[[ -n "${DOTNET_VERSION_OVERRIDE}" ]] && DOTNET_SDK="${DOTNET_VERSION_OVERRIDE}"
-	[[ -n "${DOTNET_SDK}" && -n "${DOTNET_RUNTIME}" ]] || kz_die "Incomplete .NET SDK/runtime detection in ${DOTNET_SRC}."
-fi
-
 PACKAGE_NAME="$(kz_package_name "${PACKAGE_VERSION}")"
 [[ -n "${TARBALL_NAME}" ]] || TARBALL_NAME="${PACKAGE_NAME}.tar.xz"
 [[ "${TARBALL_NAME}" == *.tar.xz ]] || kz_die "--tarball-name must end with .tar.xz."
@@ -342,7 +252,6 @@ kz_info "  version    : ${PACKAGE_VERSION}"
 kz_info "  channel    : ${CHANNEL}${CHANNEL_REVISION:+ (revision ${CHANNEL_REVISION})}"
 kz_info "  engine     : ${FULL_BUILD}"
 kz_info "  templates  : ${FULL_CONFIG}"
-kz_info "  dotnet     : ${DOTNET_BUNDLE}${DOTNET_SDK:+ (SDK ${DOTNET_SDK}/runtime ${DOTNET_RUNTIME})}"
 kz_info "  directory  : $([[ "${WRITE_DIR}" == "yes" ]] && echo "${OUTPUT}" || echo "(skipped)")"
 kz_info "  archive    : $([[ "${WRITE_TARBALL}" == "yes" ]] && echo "${TARBALL_OUT%/}/${TARBALL_NAME}" || echo "(skipped)")"
 
@@ -360,9 +269,8 @@ if [[ "${WRITE_TARBALL}" == "yes" && -e "${TARBALL_OUT%/}/${TARBALL_NAME}" && "$
 fi
 
 mkdir -p "$(dirname "${OUTPUT}")"
-# Stage outside the repository: editors (e.g. VS Code C# Dev Kit) watching the
-# workspace would otherwise auto-evaluate any .csproj that appears inside the
-# staged tree and pollute it with build output before the manifest is made.
+# Stage outside the repository so that tools watching the workspace do not pick up
+# files from the staged tree before the manifest is written.
 STAGE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/kaizen-package.XXXXXX")"
 STAGE="${STAGE_ROOT}/Kaizen"
 TARBALL_TMP=""
@@ -389,8 +297,8 @@ BIN_DIR="${STAGE}/Engine/Binaries/${KZ_OS_DIR}"
 EDITOR_NAME="$(basename "${EDITOR_BIN}")"
 install -m 0755 "${EDITOR_BIN}" "${BIN_DIR}/${EDITOR_NAME}"
 
-# Portable/installed launcher. It resolves symlinks, prefers a bundled .NET
-# installation and never depends on the current working directory.
+# Portable/installed launcher. It resolves symlinks and never depends on the
+# current working directory.
 cat >"${BIN_DIR}/kaizen" <<EOF
 #!/bin/sh
 # Kaizen Engine launcher (generated by package.sh).
@@ -405,13 +313,6 @@ while [ -L "\$self" ]; do
 	esac
 done
 dir=\$(cd -P "\$(dirname "\$self")" >/dev/null 2>&1 && pwd)
-dotnet_root="\${KAIZEN_DOTNET_ROOT:-\$dir/../../Managed/dotnet}"
-if [ -x "\$dotnet_root/dotnet" ]; then
-	DOTNET_ROOT="\$dotnet_root"
-	export DOTNET_ROOT
-	PATH="\$dotnet_root:\$PATH"
-	export PATH
-fi
 exec "\$dir/${EDITOR_NAME}" "\$@"
 EOF
 chmod 0755 "${BIN_DIR}/kaizen"
@@ -440,52 +341,6 @@ ln -sfn "../../ExportTemplates/${KZ_OS_DIR}/Release/linux_release.${KZ_ARCH}" \
 ln -sfn "../../ExportTemplates/${KZ_OS_DIR}/Debug/linux_debug.${KZ_ARCH}" \
 	"${STAGE}/Templates/${FULL_CONFIG}/linux_debug.${KZ_ARCH}"
 
-# --- Managed (.NET) assemblies ------------------------------------------
-MANAGED_DEST="${STAGE}/Engine/Managed/KaizenSharp"
-if [[ "${MONO}" == "yes" ]]; then
-	mkdir -p "${MANAGED_DEST}"
-	cp -a "${KZ_REPO_ROOT}/bin/KaizenSharp/." "${MANAGED_DEST}/"
-	# The editor resolves KaizenSharp/ relative to its own executable.
-	ln -sfn "../../Managed/KaizenSharp" "${BIN_DIR}/KaizenSharp"
-fi
-
-# --- Private .NET SDK + runtime -----------------------------------------
-if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then
-	DOTNET_DEST="${STAGE}/Engine/Managed/dotnet"
-	mkdir -p "${DOTNET_DEST}"
-	kz_info "Bundling .NET SDK ${DOTNET_SDK} / runtime ${DOTNET_RUNTIME} from ${DOTNET_SRC} ..."
-	for entry in dotnet host metadata sdk sdk-manifests library-packs; do
-		if [[ -e "${DOTNET_SRC}/${entry}" ]]; then
-			cp -a "${DOTNET_SRC}/${entry}" "${DOTNET_DEST}/"
-		fi
-	done
-	mkdir -p "${DOTNET_DEST}/shared"
-	if [[ -d "${DOTNET_SRC}/shared/Microsoft.NETCore.App" ]]; then
-		cp -a "${DOTNET_SRC}/shared/Microsoft.NETCore.App" "${DOTNET_DEST}/shared/"
-	fi
-	if [[ -d "${DOTNET_SRC}/packs/Microsoft.NETCore.App.Ref" ]]; then
-		mkdir -p "${DOTNET_DEST}/packs"
-		cp -a "${DOTNET_SRC}/packs/Microsoft.NETCore.App.Ref" "${DOTNET_DEST}/packs/"
-	fi
-	for doc in LICENSE.txt ThirdPartyNotices.txt; do
-		if [[ -f "${DOTNET_SRC}/${doc}" ]]; then
-			cp -a "${DOTNET_SRC}/${doc}" "${DOTNET_DEST}/"
-		fi
-	done
-	chmod 0755 "${DOTNET_DEST}/dotnet"
-	mkdir -p "${STAGE}/LICENSES/dotnet"
-	if [[ -f "${DOTNET_SRC}/LICENSE.txt" ]]; then
-		install -m 0644 "${DOTNET_SRC}/LICENSE.txt" "${STAGE}/LICENSES/dotnet/LICENSE.txt"
-	fi
-	if [[ -f "${DOTNET_SRC}/ThirdPartyNotices.txt" ]]; then
-		install -m 0644 "${DOTNET_SRC}/ThirdPartyNotices.txt" "${STAGE}/LICENSES/dotnet/ThirdPartyNotices.txt"
-	fi
-	# Smoke-test the bundled runtime with the system PATH removed.
-	if ! env -i PATH="/usr/bin:/bin" HOME="${STAGE_ROOT}" "${DOTNET_DEST}/dotnet" --info >/dev/null 2>&1; then
-		kz_die "The bundled .NET installation does not run from ${DOTNET_DEST}."
-	fi
-fi
-
 # --- Desktop integration, icons, licenses -------------------------------
 DIST_DIR="${KZ_REPO_ROOT}/misc/dist/linux"
 CONFIG_LINUX="${STAGE}/Config/linux"
@@ -512,9 +367,6 @@ copy_sample() { # <source-dir> <destination-name>
 }
 
 copy_sample "${KZ_REPO_ROOT}/packaging/samples/hello-kaizen" "hello-kaizen"
-if [[ "${MONO}" == "yes" ]]; then
-	copy_sample "${KZ_REPO_ROOT}/packaging/samples/hello-kaizen-csharp" "hello-kaizen-csharp"
-fi
 
 # --- Installer / uninstaller --------------------------------------------
 for helper in install.sh uninstall.sh select.sh check-deps.sh; do
@@ -545,7 +397,7 @@ sudo ./Setup/install.sh --system
 Installed layout (per-user mode):
 
 ```text
-~/.local/opt/kaizen/<channel>/<version>/   engine, managed assemblies, licenses
+~/.local/opt/kaizen/<channel>/<version>/   engine, licenses
 ~/.local/opt/kaizen/<channel>/current -> <version>
 ~/.local/bin/kaizen                        default channel
 ~/.local/bin/kaizen-<channel>              per-channel launcher
@@ -608,29 +460,15 @@ System-wide (optional, requires root):
 After installation the 'kaizen' command starts the selected default channel.
 See Setup/README.md for coexistence, selection and removal.
 
-.NET
-----
-$(if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then
-	echo "This package bundles a private .NET SDK ${DOTNET_SDK} and runtime ${DOTNET_RUNTIME}"
-	echo "under Engine/Managed/dotnet/. It does not modify or require the system .NET"
-	echo "installation. NuGet restore still needs network access or a local feed for"
-	echo "third-party packages."
-else
-	echo "This package contains the .NET/mono build but does not bundle the .NET SDK."
-	echo "Install .NET SDK 10.0.100+ (runtime 10.0) to compile or export C# projects."
-fi)
-
 Layout
 ------
   Engine/Binaries/Linux/     engine executables and portable data
-  Engine/Managed/KaizenSharp/ managed API and tools
-$(if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then echo "  Engine/Managed/dotnet/     private .NET SDK and runtime"; fi)
   ExportTemplates/           Linux export templates (Release/Debug)
   Templates/${FULL_CONFIG}/  install-ready template view (symlinks)
   Build/Config/              build and package metadata
   Config/linux/              desktop entry, MIME, AppStream, man page, icons
-  LICENSES/                  Kaizen and bundled third-party licenses
-  Samples/                   Lua and C# sample projects
+  LICENSES/                  Kaizen and third-party licenses
+  Samples/                   Lua sample project
   Setup/                     installer, uninstaller, selector, dependency check
 EOF
 
@@ -665,13 +503,11 @@ Linux (validated in this repository):
 
 - GCC >= 11 or Clang >= 9 (`use_llvm=yes`)
 - SCons >= 4.x and Python 3.9+
-- .NET SDK 10.0.100+ (only to rebuild the .NET/mono variant)
 
 Windows (prepared, not validated here):
 
 - Visual Studio 2022+ (MSVC 14.3x) or MinGW-w64 (`use_mingw=yes`)
 - Python 3.9+ and SCons >= 4.x
-- .NET SDK 10.0.100+ (only for the .NET/mono variant)
 
 The Windows package must be produced on Windows (native toolchain); SCons can
 cross-compile with MinGW-w64, but that path is not validated by this project.
@@ -687,10 +523,6 @@ CHANNEL=${CHANNEL}
 CHANNEL_REVISION=${CHANNEL_REVISION}
 ENGINE_VERSION=${FULL_BUILD}
 TEMPLATES_CONFIG=${FULL_CONFIG}
-MONO=${MONO}
-DOTNET_BUNDLED=${DOTNET_BUNDLE}
-DOTNET_SDK=${DOTNET_SDK}
-DOTNET_RUNTIME=${DOTNET_RUNTIME}
 SOURCE_INCLUDED=${WITH_SOURCE}
 ARCH=${KZ_ARCH}
 PLATFORM=linux
@@ -698,26 +530,11 @@ FORMAT=tar.xz
 ROOT=Kaizen
 EOF
 
-if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then
-	if [[ "${REPRODUCIBLE}" == "yes" ]]; then
-		DOTNET_SOURCE_RECORD="(bundled; path omitted for reproducibility)"
-	else
-		DOTNET_SOURCE_RECORD="${DOTNET_SRC}"
-	fi
-	cat >"${STAGE}/Build/Config/dotnet-info.env" <<EOF
-DOTNET_BUNDLED=yes
-DOTNET_SDK=${DOTNET_SDK}
-DOTNET_RUNTIME=${DOTNET_RUNTIME}
-DOTNET_SOURCE=${DOTNET_SOURCE_RECORD}
-DOTNET_LICENSE=MIT
-EOF
-fi
 
 export KZ_MANIFEST_OUT="${STAGE}/Build/Config/build-info.json"
 export KZ_MANIFEST_ROOT="${STAGE}"
 export KZ_MANIFEST_FULL_BUILD="${FULL_BUILD}"
 export KZ_MANIFEST_FULL_CONFIG="${FULL_CONFIG}"
-export KZ_MANIFEST_MONO="${MONO}"
 export KZ_MANIFEST_PLATFORM="${KZ_PLATFORM}"
 export KZ_MANIFEST_OS_DIR="${KZ_OS_DIR}"
 export KZ_MANIFEST_ARCH="${KZ_ARCH}"
@@ -739,7 +556,6 @@ from pathlib import Path
 
 root = Path(os.environ["KZ_MANIFEST_ROOT"])
 repo = Path(os.environ["KZ_MANIFEST_REPO"])
-mono = os.environ["KZ_MANIFEST_MONO"] == "yes"
 reproducible = os.environ["KZ_MANIFEST_REPRODUCIBLE"] == "yes"
 
 cc = cxx = "unknown"
@@ -781,7 +597,6 @@ manifest = {
         "short_name": "kaizen",
         "version_full_build": os.environ["KZ_MANIFEST_FULL_BUILD"],
         "version_full_config": os.environ["KZ_MANIFEST_FULL_CONFIG"],
-        "mono": mono,
     },
     "build": {
         "platform": os.environ["KZ_MANIFEST_PLATFORM"],
@@ -862,5 +677,5 @@ if [[ "${WRITE_TARBALL}" == "yes" ]]; then
 	kz_info "Verify with: sha256sum -c ${TARBALL_OUT%/}/${TARBALL_NAME}.sha256"
 fi
 if [[ "${WRITE_DIR}" == "yes" ]]; then
-	kz_info "Validate with: ./packaging/linux/validate.sh $([[ "${MONO}" == "yes" ]] && echo --mono || echo --no-mono)"
+	kz_info "Validate with: ./packaging/linux/validate.sh"
 fi

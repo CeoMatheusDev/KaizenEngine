@@ -852,9 +852,6 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	if (ClassDB::class_exists("LuaScript")) {
 		extensions.push_back("lua");
 	}
-	if (ClassDB::class_exists("CSharpScript")) {
-		extensions.push_back("cs");
-	}
 	extensions.push_back("gdshader");
 	_initial_set("text_editor/behavior/general/find_in_file_extensions", extensions);
 

@@ -236,10 +236,10 @@ class TestRepoAgreement(Fixture):
         # guard to #pragma once and drop the matching #endif: 17 tracked files corrupted, and
         # undone by the next generation run.
         copied = []
-        # coreclr_delegates.h has no banner at all and no generated-marker, so it needs the
+        # minizip/crypt.h is a vendored header with its own licence block, so it needs the
         # thirdparty half of the rule rather than the generated half.
         for relative in ("drivers/alsa/asound-so_wrap.h", "drivers/pulseaudio/pulse-so_wrap.h",
-                         "modules/mono/thirdparty/coreclr_delegates.h"):
+                         "thirdparty/minizip/crypt.h"):
             source, target = self.copy(relative)
             copied.append((source, target))
         result = self.run_script("header_guards.py", *[target for _s, target in copied])

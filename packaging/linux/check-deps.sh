@@ -2,9 +2,9 @@
 #
 # Kaizen Engine — dependency report.
 #
-# Reports the external requirements of a Kaizen distribution: the .NET
-# runtime/SDK (bundled or system), dynamically loaded graphics/audio libraries
-# and the display server. It never installs anything.
+# Reports the external requirements of a Kaizen distribution: the C++ compiler used
+# by C++ scripts, dynamically loaded graphics/audio libraries and the display server.
+# It never installs anything.
 #
 # Usage:
 #   ./Setup/check-deps.sh [--app-dir DIR] [--quiet] [--strict]
@@ -85,7 +85,6 @@ warn() { say "  [warn] $*"; }
 
 BIN_DIR="${APP_DIR}/Engine/Binaries/Linux"
 LAUNCHER="${BIN_DIR}/kaizen"
-DOTNET_DIR="${APP_DIR}/Engine/Managed/dotnet"
 
 [[ -d "${APP_DIR}" ]] || {
 	echo "[fail] Application directory not found: ${APP_DIR}" >&2
@@ -104,63 +103,20 @@ else
 	bad "launcher missing or not executable: ${LAUNCHER}"
 fi
 
-# --- .NET ----------------------------------------------------------------
+# --- C++ scripts --------------------------------------------------------
 say ""
-say ".NET"
-RUNTIME_OK="no"
-SDK_OK="no"
-
-check_dotnet() { # <label> <dotnet-executable> [env...]
-	local label="$1" exe="$2"
-	shift 2
-	[[ -x "${exe}" ]] || return 1
-	local sdks runtimes runtime_version sdk_version
-	sdks="$(env "$@" "${exe}" --list-sdks 2>/dev/null || true)"
-	runtimes="$(env "$@" "${exe}" --list-runtimes 2>/dev/null || true)"
-	runtime_version="$(printf '%s\n' "${runtimes}" | awk '$1 == "Microsoft.NETCore.App" {print $2}' | sort -V | tail -n1)"
-	sdk_version="$(printf '%s\n' "${sdks}" | tail -n1 | awk '{print $1}')"
-
-	if [[ -n "${runtime_version}" ]]; then
-		RUNTIME_OK="yes"
-		good "${label} runtime: Microsoft.NETCore.App ${runtime_version}"
-	else
-		bad "${label}: no Microsoft.NETCore.App runtime found"
+say "C++ scripts"
+CXX_FOUND=""
+for candidate in "${KAIZEN_CPP_COMPILER:-}" "${CXX:-}" clang++ g++ c++; do
+	if [[ -n "${candidate}" ]] && command -v "${candidate}" >/dev/null 2>&1; then
+		CXX_FOUND="${candidate}"
+		break
 	fi
-
-	if [[ -n "${sdk_version}" ]]; then
-		SDK_OK="yes"
-		good "${label} SDK: ${sdk_version}"
-	else
-		warn "${label}: no SDK found (C# builds and C# exports will not work)"
-	fi
-	return 0
-}
-
-if [[ -x "${DOTNET_DIR}/dotnet" ]]; then
-	check_dotnet "bundled" "${DOTNET_DIR}/dotnet" "DOTNET_ROOT=${DOTNET_DIR}" "PATH=/usr/bin:/bin"
+done
+if [[ -n "${CXX_FOUND}" ]]; then
+	good "C++ compiler: ${CXX_FOUND}"
 else
-	SDKS="$(dotnet --list-sdks 2>/dev/null || true)"
-	RUNTIMES="$(dotnet --list-runtimes 2>/dev/null || true)"
-	DOTNET_RUNTIME_VERSION="$(printf '%s\n' "${RUNTIMES}" | awk '$1 == "Microsoft.NETCore.App" {print $2}' | sort -V | tail -n1)"
-	DOTNET_SDK_VERSION="$(printf '%s\n' "${SDKS}" | tail -n1 | awk '{print $1}')"
-
-	if [[ -n "${DOTNET_RUNTIME_VERSION}" ]]; then
-		RUNTIME_OK="yes"
-		good "system runtime: Microsoft.NETCore.App ${DOTNET_RUNTIME_VERSION}"
-	else
-		bad "system .NET runtime not found (required for the .NET/mono build)"
-	fi
-	if [[ -n "${DOTNET_SDK_VERSION}" ]]; then
-		SDK_OK="yes"
-		good "system SDK: ${DOTNET_SDK_VERSION}"
-	else
-		warn "system .NET SDK not found (required to compile/export C# projects)"
-	fi
-fi
-
-if [[ "${RUNTIME_OK}" != "yes" && "${SDK_OK}" != "yes" ]]; then
-	warn "install the .NET SDK 10.0.100+; on Fedora: sudo dnf install dotnet-sdk-10.0"
-	warn "or use a package with the bundled SDK (DOTNET_BUNDLED=yes)."
+	warn "no C++ compiler found (C++ scripts need clang++ or g++, or set KAIZEN_CPP_COMPILER)"
 fi
 
 # --- Dynamically loaded system libraries ---------------------------------
