@@ -265,6 +265,26 @@ source, so the correct sequence is enumerator -> bind -> XML entry -> regenerate
 Hand-editing the glue is only acceptable because this fork tracks it, and then only with
 this checker saying the four sources still agree.
 
+## Lua and PhysX engine tests (requires the engine)
+
+Lua 5.5 is the primary script language, so the engine-level checks are written in Lua.
+Each runner starts the editor binary headless and runs a probe as the main loop; the runner
+fails on any `[FAIL]` line, a non-zero exit status, or an unexpected script error.
+
+```bash
+./build.sh lua -j2                             # or ./build.sh physx -j2 (includes Lua)
+bash tests/kaizen/run_lua_smoke.sh             # Lua VM only, no engine
+bash tests/kaizen/run_lua_engine_test.sh       # Variant, Object, singleton, preload checks
+bash tests/kaizen/run_physx_smoke.sh           # PhysX server only
+bash tests/kaizen/run_physx_engine_test.sh     # PhysX scene run through the engine
+```
+
+`lua_engine_probe.lua` covers Variant arithmetic, table and Callable round trips, error
+reporting, `new()`, singletons, class constants, `preload("res://...")` (helper file
+`lua_preload_helper.lua`) and the global Variant constructors. The churn and pipeline
+projects under `churn_project/`, `p251_dedup_project/` and `pipeline_churn_project/` are Lua
+ports; their GPU telemetry needs a GPU and a pipeline cache, so it is not checked here.
+
 ## Pipeline lifetime report helpers
 
 `vulkan/pipeline_lifetime_report.h` holds the summary printing for the device-level

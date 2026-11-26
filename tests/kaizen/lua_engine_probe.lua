@@ -132,6 +132,22 @@ local function check_lua_error_keeps_instance_alive()
 	check(self ~= nil, "owner still reachable after a caught error")
 end
 
+local function check_preload_and_variant_constructors()
+	local helper = preload("res://lua_preload_helper.lua")
+	check(helper.answer == 42, "preload(res://) returns the chunk's return value")
+	check(helper.make_vector().y == 4, "preload()ed functions can build Variants")
+	local ok = pcall(preload, "res://no_such_preload_file_xyz.lua")
+	check(not ok, "preload() of a missing file raises a Lua error")
+	local v3 = Vector3(1, 2, 3)
+	check(v3.z == 3.0, "Vector3(...) global constructor")
+	check(PackedFloat32Array():size() == 0, "PackedFloat32Array() global constructor")
+	check(StringName("kaizen") == "kaizen", "StringName(...) global constructor")
+	check(vector2 == nil, "lowercase Variant names are not globals")
+	local plain = Object.new()
+	check(plain:get_class() == "Object", "Object resolves to the class, not a Variant constructor")
+	plain:free()
+end
+
 -- A check that raises must count as a failure, not stop the probe before it quits.
 local function run_check(name, fn)
 	local ok, err = pcall(fn)
@@ -155,6 +171,7 @@ function _initialize()
 	run_check("callable error", check_callable_error_returns_nil)
 	run_check("concat", check_concat_rejects_nil)
 	run_check("error recovery", check_lua_error_keeps_instance_alive)
+	run_check("preload and constructors", check_preload_and_variant_constructors)
 
 	print(string.format("LUA_ENGINE_PROBE: %s (%d failure(s))", failures == 0 and "PASS" or "FAIL", failures))
 	self:quit(failures == 0 and 0 or 1)

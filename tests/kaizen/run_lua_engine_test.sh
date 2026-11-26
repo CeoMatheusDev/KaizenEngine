@@ -28,7 +28,7 @@ config_version=5
 [application]
 config/name="lua_engine_probe"
 EOF
-cp "$ROOT/tests/kaizen/lua_engine_probe.lua" "$WORK/"
+cp "$ROOT/tests/kaizen/lua_engine_probe.lua" "$ROOT/tests/kaizen/lua_preload_helper.lua" "$WORK/"
 
 LOG="$WORK/run.log"
 timeout 120 "$BIN" --headless --path "$WORK" --script "$WORK/lua_engine_probe.lua" > "$LOG" 2>&1
