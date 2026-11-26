@@ -28,7 +28,7 @@ SLASH = {"open": b"//", "close": b"//"}
 
 # Recorded debt, and the number docs/license-notice-consistency.md quotes. Lower it when the
 # licence-text decision is taken; never raise it without saying why in that document.
-BUDGET = 2382
+BUDGET = 0
 
 
 def border(width, style):
@@ -248,7 +248,7 @@ class TestRepoAgreement(Fixture):
         for source, target in copied:
             self.assertEqual(self.read(target), self.read(source), f"{target} was rewritten")
 
-    def test_template_box_is_rectangular_except_the_licence_line(self):
+    def test_template_box_is_rectangular(self):
         with open(os.path.join(REPO_ROOT, "misc", "scripts", "copyright_headers.py"), "rb") as handle:
             lines = handle.read().split(b"\n")
         start = next(i for i, line in enumerate(lines) if check_license_box.SHAPES[0]["border"].match(line))
@@ -259,10 +259,10 @@ class TestRepoAgreement(Fixture):
                 break
             if len(lines[index]) != width:
                 offenders.append(index - start)
-        # Exactly one row may exceed the box, and only because it cannot be padded: the
-        # contributors line. A second offender means the banner grew again.
-        self.assertEqual(offenders, [7], offenders)
-        self.assertTrue(lines[start + 7].endswith(b"(see AUTHORS.md). */"), lines[start + 7])
+        # The attribution line is the upstream Godot line (76 columns), so the template box is
+        # rectangular. Any offender means a row grew again.
+        self.assertEqual(offenders, [], offenders)
+        self.assertIn(b"Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */", lines[start + 7])
 
     def test_tree_banners_are_within_budget(self):
         with contextlib.redirect_stdout(io.StringIO()) as out:

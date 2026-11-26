@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -36,10 +36,6 @@
 #include "core/object/class_db.h"
 #include "core/object/script_language.h"
 #include "scene/debugger/scene_debugger_object.h"
-
-#if defined(MODULE_GDSCRIPT_ENABLED) && defined(DEBUG_ENABLED)
-#include "modules/gdscript/gdscript.h"
-#endif
 
 #include <zlib.h>
 
@@ -168,13 +164,7 @@ String SnapshotDataObject::get_node_path() {
 }
 
 String SnapshotDataObject::_get_script_name(Ref<Script> p_script) {
-#if defined(MODULE_GDSCRIPT_ENABLED) && defined(DEBUG_ENABLED)
-	// GDScripts have more specific names than base scripts, so use those names if possible.
-	return GDScript::debug_get_script_name(p_script);
-#else
-	// Otherwise fallback to the base script's name.
 	return p_script->get_global_name();
-#endif
 }
 
 String SnapshotDataObject::get_name() {

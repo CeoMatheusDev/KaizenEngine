@@ -190,7 +190,7 @@ require_dir "${DIST}/Config/linux" "Linux integration directory"
 require_dir "${DIST}/Config/linux/icons/hicolor/scalable/apps" "scalable icon directory"
 require_dir "${DIST}/Config/linux/icons/hicolor/256x256/apps" "256x256 icon directory"
 require_dir "${DIST}/LICENSES" "licenses directory"
-require_dir "${DIST}/Samples/hello-kaizen" "GDScript sample directory"
+require_dir "${DIST}/Samples/hello-kaizen" "Lua sample directory"
 require_dir "${DIST}/Setup" "setup directory"
 require_file "${DIST}/README.txt" "root README"
 require_file "${DIST}/LICENSES/LICENSE.txt" "Kaizen license"
@@ -200,7 +200,7 @@ require_file "${DIST}/Config/linux/org.kaizenengine.Kaizen.xml" "MIME definition
 require_file "${DIST}/Config/linux/kaizen.6" "manual page"
 require_file "${DIST}/Config/linux/icons/hicolor/scalable/apps/kaizen.svg" "scalable icon"
 require_file "${DIST}/Config/linux/icons/hicolor/256x256/apps/kaizen.png" "256x256 icon"
-require_file "${DIST}/Samples/hello-kaizen/project.kaizen" "GDScript sample project"
+require_file "${DIST}/Samples/hello-kaizen/project.kaizen" "Lua sample project"
 
 for helper in install.sh uninstall.sh select.sh check-deps.sh; do
 	require_exec "${DIST}/Setup/${helper}" "Setup/${helper} is executable"

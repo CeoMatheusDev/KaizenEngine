@@ -50,7 +50,8 @@
         "PhysXVehicle"
       ],
       "build_flag": "PHYSX_ENABLED",
-      "notes": "PhysX 5 is Apache 2.0, fully open source. Can be cloned and built from source. No developer account required."
+      "notes": "PhysX 5 is Apache 2.0, fully open source. Can be cloned and built from source. No developer account required.",
+      "acquisition_ref": "110.3-omni-and-physx-5.9.1"
     },
     "pxshared": {
       "name": "PhysX Shared (PxShared)",

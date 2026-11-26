@@ -17,7 +17,7 @@
 #   Build/Toolchains/                toolchain notes
 #   Config/linux/                    desktop entry, AppStream, MIME, man page, icons
 #   LICENSES/                        Kaizen and bundled .NET licenses
-#   Samples/                         GDScript and C# samples
+#   Samples/                         Lua and C# samples
 #   Setup/                           installer, uninstaller, selector, dependency check
 #   README.txt
 #   MANIFEST.sha256
@@ -630,7 +630,7 @@ $(if [[ "${DOTNET_BUNDLE}" == "yes" ]]; then echo "  Engine/Managed/dotnet/     
   Build/Config/              build and package metadata
   Config/linux/              desktop entry, MIME, AppStream, man page, icons
   LICENSES/                  Kaizen and bundled third-party licenses
-  Samples/                   GDScript and C# sample projects
+  Samples/                   Lua and C# sample projects
   Setup/                     installer, uninstaller, selector, dependency check
 EOF
 

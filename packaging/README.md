@@ -22,7 +22,7 @@ packaging/
 │   └── validate.sh        # full validation (tarball, installation, coexistence)
 ├── windows/               # Windows equivalent (NOT validated on this host)
 └── samples/
-    ├── hello-kaizen/          # GDScript project
+    ├── hello-kaizen/          # Lua project
     └── hello-kaizen-csharp/   # C# project (.NET)
 ```
 

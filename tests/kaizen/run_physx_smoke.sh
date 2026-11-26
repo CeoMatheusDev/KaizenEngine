@@ -32,7 +32,9 @@ OUT="${TMPDIR:-/tmp}/kaizen_physx_smoke"
 # The module TUs (modules/physx_physics_3d) depend on engine symbols; the
 # smoke test links only the self-contained SDK objects.
 # shellcheck disable=SC2046
-"$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB \
+# The defines must match modules/physx_physics_3d/SCsub: the SDK headers change their class
+# layouts with PX_SUPPORT_GPU_PHYSX and PX_PUBLIC_RELEASE, so a mismatch is an ABI error.
+"$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB -DPX_PUBLIC_RELEASE=1 -DDISABLE_CUDA_PHYSX \
     -I thirdparty/physx/physx/physx/include \
     tests/kaizen/physx_smoke.cpp \
     $(find thirdparty/physx -name '*.o') \

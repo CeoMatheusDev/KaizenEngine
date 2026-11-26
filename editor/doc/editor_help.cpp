@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -64,12 +64,6 @@
 #include "servers/display/display_server.h"
 
 #include "modules/modules_enabled.gen.h" // For gdscript, mono.
-
-// For syntax highlighting.
-#ifdef MODULE_GDSCRIPT_ENABLED
-#include "modules/gdscript/editor/gdscript_highlighter.h"
-#include "modules/gdscript/gdscript.h"
-#endif
 
 // For syntax highlighting.
 #ifdef MODULE_MONO_ENABLED
@@ -2803,13 +2797,6 @@ static void _add_text_to_rt(const String &p_bbcode, RichTextLabel *p_rt, const C
 
 			bool codeblock_printed = false;
 
-#ifdef MODULE_GDSCRIPT_ENABLED
-			if (!codeblock_printed && (lang.is_empty() || lang == "gdscript")) {
-				EditorHelpHighlighter::get_singleton()->highlight(p_rt, EditorHelpHighlighter::LANGUAGE_GDSCRIPT, codeblock_text, is_native);
-				codeblock_printed = true;
-			}
-#endif
-
 #ifdef MODULE_MONO_ENABLED
 			if (!codeblock_printed && lang == "csharp") {
 				EditorHelpHighlighter::get_singleton()->highlight(p_rt, EditorHelpHighlighter::LANGUAGE_CSHARP, codeblock_text, is_native);
@@ -3362,7 +3349,7 @@ void EditorHelp::_notification(int p_what) {
 			if (EditorSettings::get_singleton()->check_changed_settings_in_group("text_editor/help")) {
 				need_update = true;
 			}
-#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
+#if defined(MODULE_MONO_ENABLED)
 			if (!need_update && EditorSettings::get_singleton()->check_changed_settings_in_group("text_editor/theme/highlighting")) {
 				need_update = true;
 			}
@@ -5196,10 +5183,7 @@ EditorHelpHighlighter *EditorHelpHighlighter::get_singleton() {
 EditorHelpHighlighter::HighlightData EditorHelpHighlighter::_get_highlight_data(Language p_language, const String &p_source, bool p_use_cache) {
 	switch (p_language) {
 		case LANGUAGE_GDSCRIPT:
-#ifndef MODULE_GDSCRIPT_ENABLED
-			ERR_FAIL_V_MSG(HighlightData(), "GDScript module is disabled.");
-#endif
-			break;
+			ERR_FAIL_V_MSG(HighlightData(), "The GDScript module was removed from this build.");
 		case LANGUAGE_CSHARP:
 #ifndef MODULE_MONO_ENABLED
 			ERR_FAIL_V_MSG(HighlightData(), "Mono module is disabled.");
@@ -5278,11 +5262,6 @@ void EditorHelpHighlighter::highlight(RichTextLabel *p_rich_text_label, Language
 void EditorHelpHighlighter::clear_cache() {
 	const Color text_color = EDITOR_GET("text_editor/theme/highlighting/text_color");
 
-#ifdef MODULE_GDSCRIPT_ENABLED
-	highlight_data_caches[LANGUAGE_GDSCRIPT].clear();
-	text_edits[LANGUAGE_GDSCRIPT]->add_theme_color_override(SceneStringName(font_color), text_color);
-#endif
-
 #ifdef MODULE_MONO_ENABLED
 	highlight_data_caches[LANGUAGE_CSHARP].clear();
 	text_edits[LANGUAGE_CSHARP]->add_theme_color_override(SceneStringName(font_color), text_color);
@@ -5291,23 +5270,6 @@ void EditorHelpHighlighter::clear_cache() {
 
 EditorHelpHighlighter::EditorHelpHighlighter() {
 	const Color text_color = EDITOR_GET("text_editor/theme/highlighting/text_color");
-
-#ifdef MODULE_GDSCRIPT_ENABLED
-	TextEdit *gdscript_text_edit = memnew(TextEdit);
-	gdscript_text_edit->add_theme_color_override(SceneStringName(font_color), text_color);
-
-	Ref<GDScript> gdscript;
-	gdscript.instantiate();
-
-	Ref<GDScriptSyntaxHighlighter> gdscript_highlighter;
-	gdscript_highlighter.instantiate();
-	gdscript_highlighter->set_text_edit(gdscript_text_edit);
-	gdscript_highlighter->_set_edited_resource(gdscript);
-
-	text_edits[LANGUAGE_GDSCRIPT] = gdscript_text_edit;
-	scripts[LANGUAGE_GDSCRIPT] = gdscript;
-	highlighters[LANGUAGE_GDSCRIPT] = gdscript_highlighter;
-#endif
 
 #ifdef MODULE_MONO_ENABLED
 	TextEdit *csharp_text_edit = memnew(TextEdit);
@@ -5330,10 +5292,6 @@ EditorHelpHighlighter::EditorHelpHighlighter() {
 }
 
 EditorHelpHighlighter::~EditorHelpHighlighter() {
-#ifdef MODULE_GDSCRIPT_ENABLED
-	memdelete(text_edits[LANGUAGE_GDSCRIPT]);
-#endif
-
 #ifdef MODULE_MONO_ENABLED
 	memdelete(text_edits[LANGUAGE_CSHARP]);
 #endif

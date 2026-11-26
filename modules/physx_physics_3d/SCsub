@@ -19,7 +19,17 @@ physx_base = "#thirdparty/physx/physx/physx"
 env_physx.Prepend(CPPPATH=[physx_base + "/include", physx_base + "/source"])
 # OmniPvd runtime headers (sibling of source/ inside the physx/ subtree).
 env_physx.Prepend(CPPPATH=[physx_base + "/pvdruntime/include"])
-env_physx.Append(CPPDEFINES=["PX_PHYSX_STATIC_LIB"])
+# Build the way NVIDIA builds its public release: PX_PUBLIC_RELEASE drops the internal
+# device telemetry (PhysXIndicator), which is not part of the public source tree.
+env_physx.Append(CPPDEFINES=["PX_PHYSX_STATIC_LIB", "PX_PUBLIC_RELEASE=1"])
+
+# GPU simulation is opt-in. Its sources (gpu*, cudamanager, physxgpu) are not compiled here,
+# so the CUDA paths are switched off unless someone asks for them, and asking is an error
+# rather than a link failure.
+if env["builtin_physx_gpu"]:
+    print("ERROR: builtin_physx_gpu=yes is not supported yet: the PhysX GPU sources are not built by modules/physx_physics_3d/SCsub.")
+    Exit(1)
+env_physx.Append(CPPDEFINES=["DISABLE_CUDA_PHYSX"])
 
 # Internal headers live in per-library include/src folders (mirroring the SDK's
 # own CMake include paths); add every source subdirectory so cross-library
@@ -47,6 +57,7 @@ physx_source_dirs = [
     "lowleveldynamics",
     "physx",
     "physxcharacterkinematic",
+    "physxcooking",
     "physxextensions",
     "physxmetadata",
     "physxvehicle",

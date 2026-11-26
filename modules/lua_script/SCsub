@@ -5,9 +5,8 @@ Import("env_modules")
 
 # Bundled Lua 5.5 sources, downloaded via:
 #   python3 tools/sdk/sdk_manager.py --download lua/lua
-# This module builds the embeddable library; the Lua script language
-# (ScriptLanguage implementation on par with GDScript and C#) will be
-# registered in a later round.
+# This module builds the embeddable library and the Lua script language
+# (ScriptLanguage implementation, registered in register_types.cpp).
 
 lua_root = "#thirdparty/lua/lua"
 
