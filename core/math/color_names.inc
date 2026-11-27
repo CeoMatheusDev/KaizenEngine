@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -44,7 +44,7 @@ struct NamedColor {
 };
 
 // NOTE: This data is duplicated in the file:
-// modules/mono/glue/KaizenSharp/KaizenSharp/Core/Colors.cs
+// Colour names as listed by the upstream Godot Engine colour table.
 
 static NamedColor named_colors[] = {
 	{ "ALICE_BLUE", Color::hex(0xF0F8FFFF) },

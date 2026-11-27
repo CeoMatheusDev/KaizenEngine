@@ -49,6 +49,9 @@ public:
 	// Lazy singleton used by consumers (e.g. DLSSEffect) to read the RTX
 	// configuration. Created on first access and destroyed at shutdown().
 	static RTXBackend *get_singleton();
+	// Releases the singleton. Called from the servers unregister step, while the ObjectDB is
+	// still alive; the engine must drop its raw pointer to it first (see register_server_types).
+	static void destroy_singleton();
 
 	bool is_supported() const { return supported; }
 	bool init();

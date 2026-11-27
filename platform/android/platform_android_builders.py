@@ -19,10 +19,7 @@ def generate_android_binaries(target, source, env):
     if env["target"] == "editor":
         gradle_process += ["generateKaizenEditor", "generateKaizenHorizonOSEditor", "generateKaizenPicoOSEditor"]
     else:
-        if env["module_mono_enabled"]:
-            gradle_process += ["generateKaizenMonoTemplates"]
-        else:
-            gradle_process += ["generateKaizenTemplates"]
+        gradle_process += ["generateKaizenTemplates"]
     gradle_process += ["--quiet"]
 
     if env["debug_symbols"] and not env["separate_debug_symbols"]:

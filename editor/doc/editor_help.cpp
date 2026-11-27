@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -63,54 +63,8 @@
 #include "scene/gui/line_edit.h"
 #include "servers/display/display_server.h"
 
-#include "modules/modules_enabled.gen.h" // For gdscript, mono.
-
-// For syntax highlighting.
-#ifdef MODULE_GDSCRIPT_ENABLED
-#include "modules/gdscript/editor/gdscript_highlighter.h"
-#include "modules/gdscript/gdscript.h"
-#endif
-
-// For syntax highlighting.
-#ifdef MODULE_MONO_ENABLED
-#include "modules/mono/csharp_script.h"
-#endif
 
 #define CONTRIBUTE_URL "https://contributing.godotengine.org/en/latest/development/documentation/class_reference.html"
-
-#ifdef MODULE_MONO_ENABLED
-// Sync with the types mentioned in https://docs.godotengine.org/en/stable/tutorials/scripting/c_sharp/c_sharp_differences.html
-const Vector<String> classes_with_csharp_differences = {
-	"@GlobalScope",
-	"String",
-	"NodePath",
-	"Signal",
-	"Callable",
-	"RID",
-	"Basis",
-	"Transform2D",
-	"Transform3D",
-	"Rect2",
-	"Rect2i",
-	"AABB",
-	"Quaternion",
-	"Projection",
-	"Color",
-	"Array",
-	"Dictionary",
-	"PackedByteArray",
-	"PackedColorArray",
-	"PackedFloat32Array",
-	"PackedFloat64Array",
-	"PackedInt32Array",
-	"PackedInt64Array",
-	"PackedStringArray",
-	"PackedVector2Array",
-	"PackedVector3Array",
-	"PackedVector4Array",
-	"Variant",
-};
-#endif
 
 const Vector<String> packed_array_types = {
 	"PackedByteArray",
@@ -1130,21 +1084,6 @@ void EditorHelp::_update_doc() {
 		_pop_normal_font();
 	}
 
-#ifdef MODULE_MONO_ENABLED
-	if (classes_with_csharp_differences.has(cd.name)) {
-		class_desc->add_newline();
-
-		const String &csharp_differences_url = vformat("%s/tutorials/scripting/c_sharp/c_sharp_differences.html", KAIZEN_VERSION_DOCS_URL);
-
-		_push_normal_font();
-		class_desc->push_color(theme_cache.text_color);
-
-		class_desc->append_text("[b]" + TTR("Note:") + "[/b] " + vformat(TTR("There are notable differences when using this API with C#. See [url=%s]C# API differences to GDScript[/url] for more information."), csharp_differences_url));
-
-		class_desc->pop(); // color
-		_pop_normal_font();
-	}
-#endif
 
 	// Online tutorials
 	if (!cd.tutorials.is_empty()) {
@@ -2803,20 +2742,6 @@ static void _add_text_to_rt(const String &p_bbcode, RichTextLabel *p_rt, const C
 
 			bool codeblock_printed = false;
 
-#ifdef MODULE_GDSCRIPT_ENABLED
-			if (!codeblock_printed && (lang.is_empty() || lang == "gdscript")) {
-				EditorHelpHighlighter::get_singleton()->highlight(p_rt, EditorHelpHighlighter::LANGUAGE_GDSCRIPT, codeblock_text, is_native);
-				codeblock_printed = true;
-			}
-#endif
-
-#ifdef MODULE_MONO_ENABLED
-			if (!codeblock_printed && lang == "csharp") {
-				EditorHelpHighlighter::get_singleton()->highlight(p_rt, EditorHelpHighlighter::LANGUAGE_CSHARP, codeblock_text, is_native);
-				codeblock_printed = true;
-			}
-#endif
-
 			if (!codeblock_printed) {
 				p_rt->add_text(_fix_newlines(codeblock_text));
 				codeblock_printed = true;
@@ -3362,11 +3287,6 @@ void EditorHelp::_notification(int p_what) {
 			if (EditorSettings::get_singleton()->check_changed_settings_in_group("text_editor/help")) {
 				need_update = true;
 			}
-#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
-			if (!need_update && EditorSettings::get_singleton()->check_changed_settings_in_group("text_editor/theme/highlighting")) {
-				need_update = true;
-			}
-#endif
 			if (!need_update && EditorSettings::get_singleton()->check_changed_settings_in_group("text_editor/help/show_property_setters_and_getters")) {
 				need_update = true;
 			}
@@ -5172,171 +5092,6 @@ EditorHelpBitTooltip::EditorHelpBitTooltip(Control *p_target, bool p_shortcut) {
 	p_target->connect(SceneStringName(gui_input), callable_mp(this, &EditorHelpBitTooltip::_target_gui_input));
 
 	set_process_internal(true);
-}
-
-/// EditorHelpHighlighter ///
-
-EditorHelpHighlighter *EditorHelpHighlighter::singleton = nullptr;
-
-void EditorHelpHighlighter::create_singleton() {
-	ERR_FAIL_COND(singleton != nullptr);
-	singleton = memnew(EditorHelpHighlighter);
-}
-
-void EditorHelpHighlighter::free_singleton() {
-	ERR_FAIL_NULL(singleton);
-	memdelete(singleton);
-	singleton = nullptr;
-}
-
-EditorHelpHighlighter *EditorHelpHighlighter::get_singleton() {
-	return singleton;
-}
-
-EditorHelpHighlighter::HighlightData EditorHelpHighlighter::_get_highlight_data(Language p_language, const String &p_source, bool p_use_cache) {
-	switch (p_language) {
-		case LANGUAGE_GDSCRIPT:
-#ifndef MODULE_GDSCRIPT_ENABLED
-			ERR_FAIL_V_MSG(HighlightData(), "GDScript module is disabled.");
-#endif
-			break;
-		case LANGUAGE_CSHARP:
-#ifndef MODULE_MONO_ENABLED
-			ERR_FAIL_V_MSG(HighlightData(), "Mono module is disabled.");
-#endif
-			break;
-		default:
-			ERR_FAIL_V_MSG(HighlightData(), "Invalid parameter \"p_language\".");
-	}
-
-	if (p_use_cache) {
-		const HashMap<String, HighlightData>::ConstIterator E = highlight_data_caches[p_language].find(p_source);
-		if (E) {
-			return E->value;
-		}
-	}
-
-	text_edits[p_language]->set_text(p_source);
-	if (scripts[p_language].is_valid()) { // See GH-89610.
-		scripts[p_language]->set_source_code(p_source);
-	}
-	highlighters[p_language]->_update_cache();
-
-	HighlightData result;
-
-	int source_offset = 0;
-	int result_index = 0;
-	for (int i = 0; i < text_edits[p_language]->get_line_count(); i++) {
-		const Dictionary dict = highlighters[p_language]->_get_line_syntax_highlighting_impl(i);
-
-		result.resize(result.size() + dict.size());
-
-		const Variant *key = nullptr;
-		int prev_column = -1;
-		while ((key = dict.next(key)) != nullptr) {
-			const int column = *key;
-			ERR_FAIL_COND_V(column <= prev_column, HighlightData());
-			prev_column = column;
-
-			const Color color = dict[*key].operator Dictionary().get("color", Color());
-
-			result.write[result_index] = { source_offset + column, color };
-			result_index++;
-		}
-
-		source_offset += text_edits[p_language]->get_line(i).length() + 1; // Plus newline.
-	}
-
-	if (p_use_cache) {
-		highlight_data_caches[p_language][p_source] = result;
-	}
-
-	return result;
-}
-
-void EditorHelpHighlighter::highlight(RichTextLabel *p_rich_text_label, Language p_language, const String &p_source, bool p_use_cache) {
-	ERR_FAIL_NULL(p_rich_text_label);
-
-	const HighlightData highlight_data = _get_highlight_data(p_language, p_source, p_use_cache);
-
-	if (!highlight_data.is_empty()) {
-		for (int i = 1; i < highlight_data.size(); i++) {
-			const Pair<int, Color> &prev = highlight_data[i - 1];
-			const Pair<int, Color> &curr = highlight_data[i];
-			p_rich_text_label->push_color(prev.second);
-			p_rich_text_label->add_text(_fix_newlines(p_source.substr(prev.first, curr.first - prev.first)));
-			p_rich_text_label->pop(); // color
-		}
-
-		const Pair<int, Color> &last = highlight_data[highlight_data.size() - 1];
-		p_rich_text_label->push_color(last.second);
-		p_rich_text_label->add_text(p_source.substr(last.first));
-		p_rich_text_label->pop(); // color
-	}
-}
-
-void EditorHelpHighlighter::clear_cache() {
-	const Color text_color = EDITOR_GET("text_editor/theme/highlighting/text_color");
-
-#ifdef MODULE_GDSCRIPT_ENABLED
-	highlight_data_caches[LANGUAGE_GDSCRIPT].clear();
-	text_edits[LANGUAGE_GDSCRIPT]->add_theme_color_override(SceneStringName(font_color), text_color);
-#endif
-
-#ifdef MODULE_MONO_ENABLED
-	highlight_data_caches[LANGUAGE_CSHARP].clear();
-	text_edits[LANGUAGE_CSHARP]->add_theme_color_override(SceneStringName(font_color), text_color);
-#endif
-}
-
-EditorHelpHighlighter::EditorHelpHighlighter() {
-	const Color text_color = EDITOR_GET("text_editor/theme/highlighting/text_color");
-
-#ifdef MODULE_GDSCRIPT_ENABLED
-	TextEdit *gdscript_text_edit = memnew(TextEdit);
-	gdscript_text_edit->add_theme_color_override(SceneStringName(font_color), text_color);
-
-	Ref<GDScript> gdscript;
-	gdscript.instantiate();
-
-	Ref<GDScriptSyntaxHighlighter> gdscript_highlighter;
-	gdscript_highlighter.instantiate();
-	gdscript_highlighter->set_text_edit(gdscript_text_edit);
-	gdscript_highlighter->_set_edited_resource(gdscript);
-
-	text_edits[LANGUAGE_GDSCRIPT] = gdscript_text_edit;
-	scripts[LANGUAGE_GDSCRIPT] = gdscript;
-	highlighters[LANGUAGE_GDSCRIPT] = gdscript_highlighter;
-#endif
-
-#ifdef MODULE_MONO_ENABLED
-	TextEdit *csharp_text_edit = memnew(TextEdit);
-	csharp_text_edit->add_theme_color_override(SceneStringName(font_color), text_color);
-
-	// See GH-89610.
-	//Ref<CSharpScript> csharp;
-	//csharp.instantiate();
-
-	Ref<EditorStandardSyntaxHighlighter> csharp_highlighter;
-	csharp_highlighter.instantiate();
-	csharp_highlighter->set_text_edit(csharp_text_edit);
-	//csharp_highlighter->_set_edited_resource(csharp);
-	csharp_highlighter->_set_script_language(CSharpLanguage::get_singleton());
-
-	text_edits[LANGUAGE_CSHARP] = csharp_text_edit;
-	//scripts[LANGUAGE_CSHARP] = csharp;
-	highlighters[LANGUAGE_CSHARP] = csharp_highlighter;
-#endif
-}
-
-EditorHelpHighlighter::~EditorHelpHighlighter() {
-#ifdef MODULE_GDSCRIPT_ENABLED
-	memdelete(text_edits[LANGUAGE_GDSCRIPT]);
-#endif
-
-#ifdef MODULE_MONO_ENABLED
-	memdelete(text_edits[LANGUAGE_CSHARP]);
-#endif
 }
 
 /// FindBar ///

@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -220,7 +220,6 @@
 #include "editor/export/android_sdk_manager.h"
 #endif // ANDROID_ENABLED
 
-#include "modules/modules_enabled.gen.h" // For gdscript, mono.
 
 #include <cstdlib>
 
@@ -761,12 +760,6 @@ void EditorNode::_update_theme(bool p_skip_creation) {
 		theme = EditorThemeManager::generate_theme(theme);
 		DisplayServer::set_early_window_clear_color_override(true, theme->get_color(SNAME("background"), EditorStringName(Editor)));
 
-#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
-		if (EditorHelpHighlighter::get_singleton()) {
-			// Update syntax colors.
-			EditorHelpHighlighter::get_singleton()->clear_cache();
-		}
-#endif
 	}
 
 	Vector<Ref<Theme>> editor_themes;
@@ -942,9 +935,6 @@ void EditorNode::_notification(int p_what) {
 
 		case NOTIFICATION_POSTINITIALIZE: {
 			EditorHelp::generate_doc();
-#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
-			EditorHelpHighlighter::create_singleton();
-#endif
 		} break;
 
 		case NOTIFICATION_PROCESS: {
@@ -4372,7 +4362,6 @@ void EditorNode::_discard_changes(const String &p_str) {
 			files_to_delete_on_exit = LocalVector<String>{
 				"res://.kaizen/imported",
 				"res://.kaizen/exported",
-				"res://.kaizen/mono",
 				"res://.kaizen/extension_list.cfg",
 				"res://.kaizen/global_script_class_cache.cfg",
 				"res://.kaizen/scene_groups_cache.cfg",
@@ -6733,8 +6722,8 @@ void EditorNode::run_editor_script(const Ref<Script> &p_script) {
 
 		if (p_script->get_class() == "GDScript") {
 			EditorToaster::get_singleton()->popup_str(TTR("Cannot run the script because it's not a tool script (add the @tool annotation at the top)."), EditorToaster::SEVERITY_WARNING);
-		} else if (p_script->get_class() == "CSharpScript") {
-			EditorToaster::get_singleton()->popup_str(TTR("Cannot run the script because it's not a tool script (add the [Tool] attribute above the class definition)."), EditorToaster::SEVERITY_WARNING);
+		} else if (p_script->get_class() == "LuaScript") {
+			EditorToaster::get_singleton()->popup_str(TTR("Cannot run the script because it's not a tool script (add the --@tool line at the top)."), EditorToaster::SEVERITY_WARNING);
 		} else {
 			EditorToaster::get_singleton()->popup_str(TTR("Cannot run the script because it's not a tool script."), EditorToaster::SEVERITY_WARNING);
 		}
@@ -9893,9 +9882,6 @@ EditorNode::~EditorNode() {
 
 	remove_print_handler(&print_handler);
 	EditorHelp::cleanup_doc();
-#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
-	EditorHelpHighlighter::free_singleton();
-#endif
 	memdelete(editor_selection);
 	memdelete(editor_plugins_over);
 	memdelete(editor_plugins_force_over);

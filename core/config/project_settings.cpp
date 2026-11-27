@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -51,7 +51,6 @@
 #ifdef TOOLS_ENABLED
 #include "core/config/engine.h"
 
-#include "modules/modules_enabled.gen.h" // IWYU pragma: keep. For mono.
 #endif // TOOLS_ENABLED
 
 ProjectSettings *ProjectSettings::get_singleton() {
@@ -95,9 +94,6 @@ const PackedStringArray ProjectSettings::_get_supported_features() {
 	features.append("LibKaizen");
 #endif
 
-#ifdef MODULE_MONO_ENABLED
-	features.append("C#");
-#endif
 	// Allow pinning to a specific patch number or build type by marking
 	// them as supported. They're only used if the user adds them manually.
 	features.append(KAIZEN_VERSION_BRANCH "." _MKSTR(KAIZEN_VERSION_PATCH));

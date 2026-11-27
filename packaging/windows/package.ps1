@@ -12,12 +12,10 @@
     distributing.
 
 .EXAMPLE
-    .\packaging\windows\package.ps1 -Mono yes -Output dist\Kaizen -Force
+    .\packaging\windows\package.ps1 -Output dist\Kaizen -Force
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("auto", "yes", "no")]
-    [string]$Mono = "auto",
     [string]$Output = "",
     [switch]$Force,
     [switch]$WithSource,
@@ -30,17 +28,11 @@ $ErrorActionPreference = "Stop"
 Assert-KzRepo
 if (-not $Output) { $Output = $KzDefaultDist }
 
-if ($Mono -eq "auto") {
-    $monoEditor = Get-KzBinaryPath "editor" $true
-    $Mono = if (Test-Path $monoEditor) { "yes" } else { "no" }
-}
-$isMono = ($Mono -eq "yes")
+Write-KzInfo "Packaging Kaizen"
 
-Write-KzInfo "Packaging Kaizen (mono=$isMono)"
-
-$editor = Get-KzBinaryPath "editor" $isMono
-$release = Get-KzBinaryPath "template_release" $isMono
-$debug = Get-KzBinaryPath "template_debug" $isMono
+$editor = Get-KzBinaryPath "editor"
+$release = Get-KzBinaryPath "template_release"
+$debug = Get-KzBinaryPath "template_debug"
 foreach ($f in @($editor, $release, $debug)) {
     if (-not (Test-Path $f)) { Stop-Kz "Missing build artifact: $f. Run build.ps1 first." }
 }
@@ -49,12 +41,6 @@ $fullBuild = Get-KzVersionFullBuild $editor
 if (-not $fullBuild) { Stop-Kz "Could not determine the engine version from $editor." }
 $fullConfig = Get-KzVersionFullConfig $fullBuild
 
-if ($isMono) {
-    $api = Join-Path $KzRepoRoot "bin\KaizenSharp\Api\Release\KaizenSharp.dll"
-    $tools = Join-Path $KzRepoRoot "bin\KaizenSharp\Tools\KaizenTools.dll"
-    if (-not (Test-Path $api)) { Stop-Kz "Managed API missing: $api" }
-    if (-not (Test-Path $tools)) { Stop-Kz "Managed tools missing: $tools" }
-}
 
 Write-KzInfo "  version  : $fullBuild"
 Write-KzInfo "  templates: $fullConfig"
@@ -73,7 +59,6 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 $binDir = Join-Path $stage "Engine\Binaries\$KzOsDir"
 $tplDir = Join-Path $stage "Engine\ExportTemplates\$KzOsDir"
 $cfgDir = Join-Path $stage "Engine\Config\windows"
-$managed = Join-Path $stage "Engine\Managed\KaizenSharp"
 $buildCfg = Join-Path $stage "Engine\Build\Config"
 $buildTools = Join-Path $stage "Engine\Build\Toolchains"
 
@@ -97,12 +82,6 @@ New-Item -ItemType Directory -Force -Path $portableTpl | Out-Null
 Copy-Item $release (Join-Path $portableTpl "windows_release_$KzArch.exe") -Force
 Copy-Item $debug (Join-Path $portableTpl "windows_debug_$KzArch.exe") -Force
 
-# Managed assemblies.
-if ($isMono) {
-    New-Item -ItemType Directory -Force -Path $managed | Out-Null
-    Copy-Item (Join-Path $KzRepoRoot "bin\KaizenSharp\*") $managed -Recurse -Force
-    Copy-Item $managed (Join-Path $binDir "KaizenSharp") -Recurse -Force
-}
 
 # Licenses and sample project.
 $legal = Join-Path $stage "Engine\Config\legal"
@@ -115,13 +94,6 @@ $sampleSrc = Join-Path $KzRepoRoot "packaging\samples\hello-kaizen"
 if (Test-Path $sampleSrc) {
     Copy-Item $sampleSrc (Join-Path $stage "Samples\hello-kaizen") -Recurse -Force
     Remove-Item (Join-Path $stage "Samples\hello-kaizen\.kaizen") -Recurse -Force -ErrorAction SilentlyContinue
-}
-if ($isMono) {
-    $csharpSrc = Join-Path $KzRepoRoot "packaging\samples\hello-kaizen-csharp"
-    if (Test-Path $csharpSrc) {
-        Copy-Item $csharpSrc (Join-Path $stage "Samples\hello-kaizen-csharp") -Recurse -Force
-        Remove-Item (Join-Path $stage "Samples\hello-kaizen-csharp\.kaizen") -Recurse -Force -ErrorAction SilentlyContinue
-    }
 }
 
 # Setup notes.
@@ -150,7 +122,6 @@ $manifest = [pscustomobject]@{
         short_name = "kaizen"
         version_full_build = $fullBuild
         version_full_config = $fullConfig
-        mono = $isMono
     }
     build = [pscustomobject]@{
         platform = $KzPlatform
@@ -181,4 +152,4 @@ if (Test-Path $Output) { Remove-Item -Recurse -Force $Output }
 Move-Item $stage $Output
 
 Write-KzOk "Distribution ready: $Output"
-Write-KzInfo "Validate with: .\packaging\windows\validate.ps1 -Dist $Output -Mono $Mono"
+Write-KzInfo "Validate with: .\packaging\windows\validate.ps1 -Dist $Output"

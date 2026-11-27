@@ -6,8 +6,8 @@ here is a count produced by reading files in this repository, not an inference: 
 measurement script is `tests/kaizen/license_box/check_license_box.py` and it is run by
 `./tests/kaizen/run_tests.sh`.
 
-This document records facts and one open decision. It does not change any licence text,
-and it makes no legal claim; the differences below are stated as textual facts about the
+This document records facts and one decision. The decision (section 4) has been applied:
+the style A attribution line is now the upstream one. It makes no legal claim; the differences below are stated as textual facts about the
 tree, and the decision of which notice the project ships belongs to the maintainers.
 
 ## 1. Two banner styles, both current
@@ -24,7 +24,7 @@ A source file in this repository opens with one of two banners:
 /*                             KAIZEN ENGINE                               */   <- 77 wide
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */   <- 77 wide
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */   <- 77 wide
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
    ... MIT permission text ...
 ```
@@ -117,14 +117,30 @@ and 19 rows in `tests/kaizen/vulkan/pipeline_lifetime_report.h` and its `.cpp`, 
 in code this fork added two commits earlier. The guard found that last class on its first run,
 which is the argument for it existing.
 
-**2382 rows are left ragged on purpose** - the contributors line in Style A files (and the
+**Before the section 4 decision, 2382 rows were left ragged on purpose** - the contributors line in Style A files (and the
 equivalent line at row 8 of the seven `.kt` files, whose box is 75). Padding cannot reach
 them; see section 4. The number is not free-floating: it is the budget in
-`tests/kaizen/run_tests.sh` (`--max-pending 2382`) and the `BUDGET` in
+`tests/kaizen/run_tests.sh` (`--max-pending 0`) and the `BUDGET` in
 `tests/kaizen/license_box/test_check_license_box.py`, so growing it fails CI and paying it
 down passes with a smaller number.
 
-## 4. The open decision
+## 4. The decision (applied)
+
+**Chosen: option 1.** The style A attribution line is restored to the upstream wording
+`/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */`, which is 76
+columns and fills the 76-column box. Applied to the 2386 style A `/* */` banners and to
+`misc/scripts/copyright_headers.py`, which writes them. `git diff -w` shows the same
+change size, so the edit is one word per banner and no layout moved.
+
+Not changed by this decision: the seven `.kt` banners under `platform/android/`, which
+carry `2014-2022 Kaizen Engine contributors (cf. AUTHORS.md).` in a 75-column box. They
+are separate text with their own year and `cf.`, and fixing them means re-boxing the seven
+files. Two hand-written rows in `tests/kaizen/vulkan/` that were 77 columns were reworded
+by one word each so the box is rectangular.
+
+Result: 0 pending rows (was 2382). The budget in `run_tests.sh` and the test `BUDGET` is 0.
+
+The options as they were considered:
 
 Three ways to close the last 2476 rows. All are mechanical once one is chosen, and none
 changes a line of engine behaviour:
@@ -179,7 +195,7 @@ a quality pass; `git show 0f541294` is the source of the current wording.
 
 | Rule | Where |
 |---|---|
-| Every banner row equals the file's own border width, or is a recorded pending row | `tests/kaizen/license_box/check_license_box.py`, run by `./tests/kaizen/run_tests.sh` with `--max-pending 2382` |
+| Every banner row equals the file's own border width, or is a recorded pending row | `tests/kaizen/license_box/check_license_box.py`, run by `./tests/kaizen/run_tests.sh` with `--max-pending 0` |
 | `--fix` may only move spaces | the tool re-reads the file and compares with all spaces removed before writing; a non-space difference aborts |
 | The generator template matches the tree | `test_generator_is_a_noop_on_a_box_file` |
 | The generator leaves Style B alone | `test_generator_does_not_touch_slash_banner_files` |

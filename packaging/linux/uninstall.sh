@@ -331,7 +331,7 @@ while IFS= read -r cfg; do
 	fi
 done < <(printf '%s\n' ${REMOVED_CFG[@]+"${REMOVED_CFG[@]}"} | sort -u)
 
-# Shared private .NET.
+# Legacy: a shared .NET copy left by packages that bundled one (no longer produced).
 while IFS= read -r sdk; do
 	[[ -n "${sdk}" ]] || continue
 	if remaining_has_sdk "${sdk}"; then

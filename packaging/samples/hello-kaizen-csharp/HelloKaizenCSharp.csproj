@@ -1,6 +1,0 @@
-<Project Sdk="Kaizen.NET.Sdk/4.8.0-beta">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-  </PropertyGroup>
-</Project>

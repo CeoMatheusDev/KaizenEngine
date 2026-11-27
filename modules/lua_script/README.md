@@ -1,14 +1,92 @@
 # Lua Script Module
 
-Lua 5.5 scripting for KaizenEngine — intended to work alongside GDScript and
-C# as a first-class script language.
+Lua 5.5 scripting for KaizenEngine. Lua is the engine's primary script language:
+the GDScript module is disabled in the editor build (see *GDScript-disabled
+build* below).
 
 ## Status
 
-**Phase 0 (this round): dependency.** The bundled Lua 5.5 interpreter sources
-are downloaded, validated and compiled into the engine. The script language
-implementation itself (ScriptLanguage, Script, ScriptInstance and the editor
-integration) is the next phase and is not started yet.
+- **Phase 0, dependency:** the Lua 5.5.1 sources are downloaded, validated and
+  compiled into the engine.
+- **Phase 1, script classes:** `LuaScript` (a `Script`) and `LuaScriptInstance`
+  (a `ScriptInstance`). Each object gets its own Lua environment.
+- **Phase 2, language:** `LuaLanguage` is registered with `ScriptServer`, and
+  `.lua` files load and save as `LuaScript` resources.
+- **Phase 3, Variant binding:** `lua_bridge.cpp` maps Godot values to Lua.
+  `nil`, booleans, integers, floats and strings are native; everything else
+  travels in a userdata with the `kaizen.Variant` metatable. Properties,
+  methods, operators, `pairs` and `#` work on those values. Lua tables convert
+  to `Array` (when they are a sequence) or `Dictionary`, and Lua functions
+  convert to `Callable`.
+- **Phase 4, editor:** syntax validation and function lookup
+  (`LuaEditorLanguage`). No highlighter, completion or debugger yet.
+- **Phase 5, parity:** `class_name` registers a global class, `--@tool`,
+  `--@export` and `--@signal` are read from the script header, and engine
+  classes are reachable from Lua (see *Engine access*).
+
+Runtime-verified (engine binary, headless): script load, `class_name` and
+`extends`, method calls, `@export` defaults, Variant arithmetic and
+conversions, Callable round trips, error propagation with a traceback,
+`free()` without leak warnings, and the three churn projects in
+`tests/kaizen/`. The GPU-side resource and pipeline counters need a GPU and
+were not checked in the headless sandbox.
+
+## Script conventions
+
+- `--@extends Node2D` sets the native base class (default `Object`).
+- `--@class_name Name` declares a global class name.
+- `--@tool` marks the script as a tool script.
+- `--@export name: type = expr` declares an exported member. The default
+  expression is evaluated once per instance, unless the script set the value
+  itself first.
+- `--@signal name(params)` declares a signal.
+- A column-zero `function name(...)` (or `name = function(...)`) is a script
+  method. Methods are globals of the instance environment and are called
+  without a receiver. The owning object is available as `self`.
+- `_init` runs once, when the instance is created. Notifications dispatch to
+  `_enter_tree`, `_ready`, `_process(delta)`, `_physics_process(delta)` and
+  `_exit_tree`.
+- `print` writes to the Godot output.
+
+## Engine access
+
+- `Vector2(...)`, `Vector3(...)` and `Color(...)` construct Variants. Their
+  constants and static methods are reached by indexing the type:
+  `Vector2.ZERO`, `Color.from_hsv(h, s, v)`.
+- An engine class name used as a global is a class table:
+  - integer constants: `BaseMaterial3D.TRANSPARENCY_ALPHA`, `Image.FORMAT_RGBA8`
+  - constructors: `Sprite2D.new()` or `new("Sprite2D")`
+  - static methods: `Image.create(w, h, false, Image.FORMAT_RGBA8)`
+  - instance methods of a singleton: `RenderingServer.get_rendering_info(...)`
+- `get_singleton("PhysicsServer3D")` returns an engine singleton, or nil.
+- `randf_range(from, to)` is the GDScript helper.
+
+Errors are raised as Lua errors and carry the Godot class and member name:
+`'Vector2' has no constant or static method named 'nope'.` A missing key in a
+Dictionary is nil, as for a Lua table. A Lua function that raises, when called
+through a Callable, reports its error to the Godot error log and returns nil,
+as GDScript does; the caller is not interrupted.
+
+## GDScript removed
+
+The GDScript module (`modules/gdscript/`) has been removed from the tree. Lua
+is the only script language in the editor build; the build line is unchanged:
+
+```bash
+scons platform=linuxbsd target=editor module_gdscript_enabled=no -j<N>
+```
+
+Engine code that used to be guarded by `MODULE_GDSCRIPT_ENABLED` (the
+`--gdscript-docs` and `--lsp-port` command-line flags, the GDScript language
+server settings, and the GDScript syntax highlighter in the class reference)
+is gone with it. The class reference documentation still contains GDScript
+examples, which are shown as text only.
+
+Projects that still use `.gd` scripts will not load. The bundled sample
+(`packaging/samples/hello-kaizen`) and the test projects in `tests/kaizen/`
+use Lua. Still GDScript and not yet ported: the rendering benchmark harness and
+scenes in `benchmarks/rd_2d` and `benchmarks/rd_3d`, and the Android
+instrumented test scripts in `platform/android/java/app/src/instrumented/assets`.
 
 ## Getting the dependency
 
@@ -31,25 +109,23 @@ The SCsub compiles the full Lua library (`lapi.c` … `lvm.c`, 33 sources)
 excluding the standalone `lua.c`/`luac.c` mains. Warnings from the vendored
 C sources are silenced; module code builds with the engine's warning flags.
 
-## Verify
+## Test
 
 ```bash
-./build.sh smoke    # includes the Lua runtime smoke test
-bash tests/kaizen/run_lua_smoke.sh
+bash tests/kaizen/run_lua_smoke.sh          # the bundled Lua 5.5 library, through the C API
+bash tests/kaizen/run_lua_engine_test.sh    # the bridge, inside the engine (tests/kaizen/lua_engine_probe.lua)
+bash tests/kaizen/run_tests.sh              # includes the metadata parser tests (test_lua_metadata)
 ```
 
-The smoke test creates a `lua_State`, runs real Lua code and checks results —
-proof the bundled interpreter works.
+`run_lua_engine_test.sh` needs the editor binary built with the module. It
+prints `LUA_ENGINE_PROBE: PASS (N failure(s))` and exits non-zero on failure.
+
+The churn projects (`tests/kaizen/churn_project`, `p251_dedup_project`,
+`pipeline_churn_project`) are Lua ports of the former GDScript scenes. Run them
+with the command in `tests/kaizen/README.md`; the GPU diagnostics need a GPU.
 
 ## Roadmap (future rounds)
 
-1. `LuaScript` / `LuaScriptInstance` implementing `Script`/`ScriptInstance`.
-2. `LuaLanguage` registering with `ScriptServer` (like `GDScriptLanguage`).
-3. Variant <-> Lua value binding (the C API glue for Object/RefCounted).
-4. Editor support: syntax highlighting, completion, debugger hooks.
-5. `class_name`/preload semantics parity with GDScript where it makes sense.
-
-## License
-
-Lua 5.5 is MIT (see `thirdparty/lua/lua` README). Module code is AGPL-3.0,
-like the rest of KaizenEngine.
+1. Editor: syntax highlighting and completion, debugger hooks.
+2. Argument-count checks when a Lua function is called through a Callable.
+3. Runtime tests for the script instance on more node types.

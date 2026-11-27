@@ -10,7 +10,7 @@ index 4a25c457..f88302ef 100755
 +/*                             KAIZEN ENGINE                              */
  /*                        https://godotengine.org                         */
  /**************************************************************************/
- /* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
+ /* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 @@ -42,6 +42,14 @@ if len(sys.argv) < 2:
  for f in sys.argv[1:]:
      fname = f
