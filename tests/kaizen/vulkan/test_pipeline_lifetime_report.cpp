@@ -5,7 +5,7 @@
 /*                                                                        */
 /*  These run with no Vulkan loader, no device and no validation layer -  */
 /*  that is the point. The test they guard (pipeline_lifetime_vulkan.cpp) */
-/*  skips on a host without a device, so before this file the report an   */
+/*  skips on a machine without a device, so before this file the report an */
 /*  operator reads was checked by nobody: it was only ever seen by hand,  */
 /*  on a machine that had a GPU attached, after a run whose exit code     */
 /*  already disagreed with it.                                            */

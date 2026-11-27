@@ -40,4 +40,4 @@
 
 #pragma once
 
-#include <thirdparty/glad/glad/egl.h> // IWYU pragma: export.
+#include <thirdparty/glad-2.0.8/glad/egl.h> // IWYU pragma: export.

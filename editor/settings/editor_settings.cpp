@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -849,8 +849,11 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("text_editor/behavior/general/empty_selection_clipboard", true);
 
 	PackedStringArray extensions;
-	if (ClassDB::class_exists("LuaScript")) {
-		extensions.push_back("lua");
+	if (ClassDB::class_exists("GDScript")) {
+		extensions.push_back("gd");
+	}
+	if (ClassDB::class_exists("CSharpScript")) {
+		extensions.push_back("cs");
 	}
 	extensions.push_back("gdshader");
 	_initial_set("text_editor/behavior/general/find_in_file_extensions", extensions);
@@ -1190,6 +1193,14 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	// Debug
 	_initial_set("network/debug/remote_host", "127.0.0.1"); // Hints provided in setup_network
 	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "network/debug/remote_port", 6007, "1,65535,1")
+
+	/* GDScript Language Server */
+	_initial_set("network/language_server/remote_host", "127.0.0.1"); // Hints provided in setup_network
+	EDITOR_SETTING_BASIC(Variant::INT, PROPERTY_HINT_RANGE, "network/language_server/remote_port", 6005, "1,65535,1");
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "network/language_server/enable_smart_resolve", true, String());
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "network/language_server/show_native_symbols_in_editor", false, String());
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "network/language_server/use_thread", false, String());
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_NONE, "network/language_server/poll_limit_usec", 100000, "");
 
 	/* Debugger/profiler */
 
@@ -1602,8 +1613,10 @@ void EditorSettings::setup_network() {
 
 	// Add hints with valid IP addresses to remote_host property.
 	add_property_hint(PropertyInfo(Variant::STRING, "network/debug/remote_host", PROPERTY_HINT_ENUM, hint));
+	add_property_hint(PropertyInfo(Variant::STRING, "network/language_server/remote_host", PROPERTY_HINT_ENUM, hint));
 	// Fix potentially invalid remote_host due to network change.
 	set("network/debug/remote_host", selected);
+	set("network/language_server/remote_host", selected);
 }
 
 void EditorSettings::save() {

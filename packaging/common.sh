@@ -52,32 +52,54 @@ kz_nproc() {
 }
 
 # --- Binary discovery ----------------------------------------------------
-# kz_binary_name <target>
-# Mirrors the SCons naming: kaizen.<platform>.<target>.<arch>
+# kz_binary_name <target> <mono:yes|no>
+# Mirrors the SCons naming: kaizen.<platform>.<target>.<arch>[.<module>]
+# The module suffix (e.g. ".mono") is appended after the architecture.
 kz_binary_name() {
-	local target="$1"
-	printf 'kaizen.%s.%s.%s' "${KZ_PLATFORM}" "${target}" "${KZ_ARCH}"
+	local target="$1" mono="$2" mod=""
+	[[ "${mono}" == "yes" ]] && mod=".mono"
+	printf 'kaizen.%s.%s.%s%s' "${KZ_PLATFORM}" "${target}" "${KZ_ARCH}" "${mod}"
 }
 
-# kz_binary_path <target> [bin_dir]
+# kz_binary_path <target> <mono> [bin_dir]
 kz_binary_path() {
-	local target="$1" bin_dir="${2:-${KZ_REPO_ROOT}/bin}"
-	printf '%s/%s' "${bin_dir}" "$(kz_binary_name "${target}")"
+	local target="$1" mono="$2" bin_dir="${3:-${KZ_REPO_ROOT}/bin}"
+	printf '%s/%s' "${bin_dir}" "$(kz_binary_name "${target}" "${mono}")"
 }
 
-# kz_resolve_binary <target> [bin_dir]
-# Returns the binary the build produced, or fails when it is not there.
+# kz_resolve_binary <target> <mono> [bin_dir]
+# Returns the first existing candidate. Prefers the exact expected name, then a
+# glob fallback so a custom module suffix does not silently break packaging.
 kz_resolve_binary() {
-	local target="$1" bin_dir="${2:-${KZ_REPO_ROOT}/bin}"
-	local exact
-	exact="$(kz_binary_path "${target}" "${bin_dir}")"
-	[[ -f "${exact}" ]] || return 1
-	printf '%s' "${exact}"
+	local target="$1" mono="$2" bin_dir="${3:-${KZ_REPO_ROOT}/bin}"
+	local exact candidate
+
+	exact="$(kz_binary_path "${target}" "${mono}" "${bin_dir}")"
+	if [[ -f "${exact}" ]]; then
+		printf '%s' "${exact}"
+		return 0
+	fi
+
+	# Fallback: allow any module suffix (e.g. `.mono` or future modules).
+	for candidate in "${bin_dir}"/kaizen."${KZ_PLATFORM}"."${target}"*."${KZ_ARCH}"; do
+		[[ -f "${candidate}" ]] || continue
+		if [[ "${mono}" == "yes" && "${candidate}" != *.mono.* ]]; then
+			continue
+		fi
+		if [[ "${mono}" == "no" && "${candidate}" == *.mono.* ]]; then
+			continue
+		fi
+		printf '%s' "${candidate}"
+		return 0
+	done
+
+	return 1
 }
 
 # --- Version helpers -----------------------------------------------------
 # kz_version_full_build <binary>
-# Returns the engine's full build string, e.g. "4.8.beta.custom_build".
+# Returns the engine's full build string, e.g. "4.8.beta.custom_build" or
+# "4.8.beta.mono.custom_build".
 kz_version_full_build() {
 	local binary="$1" out
 	[[ -x "${binary}" ]] || return 1
@@ -89,7 +111,7 @@ kz_version_full_build() {
 # kz_version_full_config <full_build>
 # Strips the build tag ("custom_build", "official", ...) to obtain the value of
 # KAIZEN_VERSION_FULL_CONFIG, which is the export-templates directory name.
-# Example: "4.8.beta.custom_build" -> "4.8.beta"
+# Example: "4.8.beta.mono.custom_build" -> "4.8.beta.mono"
 kz_version_full_config() {
 	local full_build="$1"
 	case "${full_build}" in
@@ -154,6 +176,42 @@ kz_epoch() {
 	else
 		date +%s
 	fi
+}
+
+# --- .NET detection ------------------------------------------------------
+# kz_dotnet_root
+# Finds the .NET installation root without trusting PATH alone.
+kz_dotnet_root() {
+	local candidate
+	for candidate in "${DOTNET_ROOT:-}" /usr/lib64/dotnet /usr/lib/dotnet /usr/share/dotnet "${HOME}/.dotnet"; do
+		[[ -n "${candidate}" && -x "${candidate}/dotnet" ]] && {
+			printf '%s' "${candidate}"
+			return 0
+		}
+	done
+	if command -v dotnet >/dev/null 2>&1; then
+		candidate="$(readlink -f "$(command -v dotnet)" 2>/dev/null || true)"
+		[[ -n "${candidate}" ]] && {
+			printf '%s' "$(dirname "${candidate}")"
+			return 0
+		}
+	fi
+	return 1
+}
+
+# kz_dotnet_sdk_version <dotnet-root>
+kz_dotnet_sdk_version() {
+	local root="$1"
+	[[ -x "${root}/dotnet" ]] || return 1
+	"${root}/dotnet" --list-sdks 2>/dev/null | tail -n1 | awk '{print $1}'
+}
+
+# kz_dotnet_runtime_version <dotnet-root>
+kz_dotnet_runtime_version() {
+	local root="$1"
+	[[ -x "${root}/dotnet" ]] || return 1
+	"${root}/dotnet" --list-runtimes 2>/dev/null |
+		awk '$1 == "Microsoft.NETCore.App" {print $2}' | sort -V | tail -n1
 }
 
 # --- Small utilities -----------------------------------------------------

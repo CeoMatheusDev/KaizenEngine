@@ -45,7 +45,7 @@
 #include "core/os/os.h"
 #include "servers/display/display_server.h"
 
-#include <thirdparty/glad/glad/glx.h>
+#include <thirdparty/glad-2.0.8/glad/glx.h>
 
 #ifdef SOWRAP_ENABLED
 #include "dynwrappers/xrender-so_wrap.h"

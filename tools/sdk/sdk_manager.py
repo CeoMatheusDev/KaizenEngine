@@ -225,11 +225,6 @@ class SDKManager:
         print("-" * 90)
 
         for key, name, acquisition in self.manifest.list_all():
-            if acquisition == "bundled_with_physx":
-                # Shipped inside another SDK's tree (e.g. PhysX 5.x has no separate pxshared/),
-                # so a directory check would report the parent tree as this entry.
-                print(f"{key:<30} {name:<45} {'bundled':<15}")
-                continue
             installed = self.is_installed(key)
             valid = False
             if installed:

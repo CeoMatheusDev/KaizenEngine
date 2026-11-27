@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -411,3 +411,37 @@ public:
 	EditorHelpBitTooltip(Control *p_target, bool p_shortcut = false);
 };
 
+class EditorSyntaxHighlighter;
+
+class EditorHelpHighlighter {
+public:
+	enum Language {
+		LANGUAGE_GDSCRIPT,
+		LANGUAGE_CSHARP,
+		LANGUAGE_MAX,
+	};
+
+private:
+	using HighlightData = Vector<Pair<int, Color>>;
+
+	static EditorHelpHighlighter *singleton;
+
+	HashMap<String, HighlightData> highlight_data_caches[LANGUAGE_MAX];
+
+	TextEdit *text_edits[LANGUAGE_MAX];
+	Ref<Script> scripts[LANGUAGE_MAX];
+	Ref<EditorSyntaxHighlighter> highlighters[LANGUAGE_MAX];
+
+	HighlightData _get_highlight_data(Language p_language, const String &p_source, bool p_use_cache);
+
+public:
+	static void create_singleton();
+	static void free_singleton();
+	static EditorHelpHighlighter *get_singleton();
+
+	void highlight(RichTextLabel *p_rich_text_label, Language p_language, const String &p_source, bool p_use_cache);
+	void clear_cache();
+
+	EditorHelpHighlighter();
+	virtual ~EditorHelpHighlighter();
+};

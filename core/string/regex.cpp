@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -42,7 +42,7 @@
 #define PCRE2_CODE_UNIT_WIDTH 32
 #endif
 
-#include <thirdparty/pcre2/src/pcre2.h>
+#include <thirdparty/pcre2-10.49/src/pcre2.h>
 
 static void *_regex_malloc(PCRE2_SIZE p_size, void *p_user) {
 	return memalloc(p_size);

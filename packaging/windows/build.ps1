@@ -4,18 +4,20 @@
 
 .DESCRIPTION
     Wraps the engine's SCons build for Windows (MSVC or MinGW-w64). Builds the
-    editor and/or export templates.
+    editor and/or export templates. With -Mono it also generates the C# glue
+    and builds the managed assemblies.
 
     NOTE: this script is provided for the Windows workflow but has NOT been
     validated in this repository (no Windows toolchain was available). Run it
     on Windows with Visual Studio Build Tools 2022+ or MinGW-w64 installed.
 
 .EXAMPLE
-    .\packaging\windows\build.ps1 -Target all -Jobs 16
+    .\packaging\windows\build.ps1 -Target all -Mono -Jobs 16
 #>
 [CmdletBinding()]
 param(
     [string[]]$Target = @("all"),
+    [switch]$Mono,
     [switch]$Dev,
     [switch]$Production,
     [int]$Jobs = 0,
@@ -50,12 +52,14 @@ try {
 }
 
 $sconsArgs = @("platform=$KzPlatform", "arch=$Arch", "-j$Jobs")
+if ($Mono) { $sconsArgs += "module_mono_enabled=yes" }
 if ($Dev) { $sconsArgs += "dev_build=yes" }
 if ($Production) { $sconsArgs += "production=yes" }
 if ($VerboseBuild) { $sconsArgs += "verbose=yes" }
 
 Write-KzInfo "Kaizen Windows build"
 Write-KzInfo "  targets    : $($expanded -join ', ')"
+Write-KzInfo "  .NET module: $Mono"
 Write-KzInfo "  jobs       : $Jobs"
 
 function Invoke-KzStep([string]$Description, [scriptblock]$Action) {
@@ -74,11 +78,22 @@ foreach ($target in $expanded) {
         & $scons.Source @argsForTarget
     }
     if (-not $DryRun) {
-        $binary = Get-KzBinaryPath $target
+        $binary = Get-KzBinaryPath $target $Mono.IsPresent
         if (-not (Test-Path $binary)) { Stop-Kz "Build finished but binary not found: $binary" }
         Write-KzOk "Built: $binary"
     }
 }
 
+if ($Mono -and ($expanded -contains "editor") -and -not $DryRun) {
+    $editor = Get-KzBinaryPath "editor" $true
+    Invoke-KzStep "Generating C# glue" {
+        & $editor --headless --generate-mono-glue modules/mono/glue
+    }
+    Invoke-KzStep "Building managed assemblies" {
+        & python3 modules/mono/build_scripts/build_assemblies.py `
+            --kaizen-output-dir (Join-Path $KzRepoRoot "bin") `
+            --kaizen-platform $KzPlatform
+    }
+}
 
 Write-KzInfo "Build complete."

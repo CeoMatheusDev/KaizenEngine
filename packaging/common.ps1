@@ -30,14 +30,15 @@ function Get-KzJobs {
     return 4
 }
 
-# Mirrors the SCons naming: kaizen.<platform>.<target>.<arch>.exe
-function Get-KzBinaryName([string]$Target) {
-    return "kaizen.$KzPlatform.$Target.$KzArch.exe"
+# Mirrors the SCons naming: kaizen.<platform>.<target>.<arch>[.<module>].exe
+function Get-KzBinaryName([string]$Target, [bool]$Mono) {
+    $module = if ($Mono) { ".mono" } else { "" }
+    return "kaizen.$KzPlatform.$Target.$KzArch$module.exe"
 }
 
-function Get-KzBinaryPath([string]$Target, [string]$BinDir) {
+function Get-KzBinaryPath([string]$Target, [bool]$Mono, [string]$BinDir) {
     if (-not $BinDir) { $BinDir = Join-Path $KzRepoRoot "bin" }
-    return Join-Path $BinDir (Get-KzBinaryName $Target)
+    return Join-Path $BinDir (Get-KzBinaryName $Target $Mono)
 }
 
 function Get-KzVersionFullBuild([string]$Binary) {

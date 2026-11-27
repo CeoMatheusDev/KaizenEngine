@@ -2,8 +2,8 @@
 #
 # Kaizen Engine — distribution validator (Linux).
 #
-# Verifies structure, metadata, checksums, binaries, export templates, runtime
-# behavior, the official .tar.xz archive and the
+# Verifies structure, metadata, checksums, binaries, export templates, managed
+# (.NET) files, runtime behavior, the official .tar.xz archive and the
 # installer/uninstaller (user, coexistence and simulated system-wide modes).
 #
 # Usage:
@@ -15,6 +15,9 @@
 #       --no-tarball    Skip archive validation
 #       --no-install    Skip installation/uninstallation tests
 #       --global        Also test a simulated system-wide installation
+#       --mono          Expect a .NET-enabled distribution
+#       --no-mono       Expect a distribution without .NET
+#                       (default: auto-detect)
 #       --gui           Also start the editor once (requires a display)
 #       --skip-run      Do not execute the packaged binary
 #   -h, --help          Show this help
@@ -34,6 +37,7 @@ TARBALL=""
 TARBALL_AUTO="yes"
 INSTALL_TESTS="yes"
 GLOBAL_TEST="no"
+MONO="auto"
 SKIP_RUN="no"
 GUI="no"
 
@@ -60,6 +64,14 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--global)
 		GLOBAL_TEST="yes"
+		shift
+		;;
+	--mono)
+		MONO="yes"
+		shift
+		;;
+	--no-mono)
+		MONO="no"
 		shift
 		;;
 	--skip-run)
@@ -122,6 +134,7 @@ require_link() { [[ -L "$1" && -e "$1" ]] && check_ok "$2" || check_fail "$2 (mi
 DIST="$(cd "${DIST}" && pwd)"
 BIN_DIR="${DIST}/Engine/Binaries/${KZ_OS_DIR}"
 TEMPLATES_DIR="${DIST}/ExportTemplates/${KZ_OS_DIR}"
+MANAGED_DIR="${DIST}/Engine/Managed/KaizenSharp"
 BUILD_INFO="${DIST}/Build/Config/build-info.json"
 PKG_INFO="${DIST}/Build/Config/package-info.env"
 MANIFEST="${DIST}/MANIFEST.sha256"
@@ -135,12 +148,22 @@ for f in "${BIN_DIR}"/kaizen.linuxbsd.*; do
 	break
 done
 
+if [[ "${MONO}" == "auto" ]]; then
+	if [[ -n "${CANONICAL}" && "${CANONICAL}" == *.mono ]] || [[ -e "${DIST}/Engine/Managed/dotnet" ]]; then
+		MONO="yes"
+	elif [[ -e "${BIN_DIR}/KaizenSharp" ]]; then
+		MONO="yes"
+	else
+		MONO="no"
+	fi
+fi
 
 PACKAGE_VERSION=""
 PACKAGE_NAME=""
 CHANNEL=""
 ENGINE_VERSION=""
 TEMPLATES_CONFIG=""
+DOTNET_BUNDLED="no"
 SOURCE_INCLUDED="no"
 if [[ -f "${PKG_INFO}" ]]; then
 	PACKAGE_VERSION="$(pkg_get "${PKG_INFO}" PACKAGE_VERSION)"
@@ -148,11 +171,13 @@ if [[ -f "${PKG_INFO}" ]]; then
 	CHANNEL="$(pkg_get "${PKG_INFO}" CHANNEL)"
 	ENGINE_VERSION="$(pkg_get "${PKG_INFO}" ENGINE_VERSION)"
 	TEMPLATES_CONFIG="$(pkg_get "${PKG_INFO}" TEMPLATES_CONFIG)"
+	DOTNET_BUNDLED="$(pkg_get "${PKG_INFO}" DOTNET_BUNDLED)"
 	SOURCE_INCLUDED="$(pkg_get "${PKG_INFO}" SOURCE_INCLUDED)"
 fi
 
 kz_info "Validating Kaizen distribution"
 kz_info "  dist : ${DIST}"
+kz_info "  mono : ${MONO}"
 
 # --- 1. Layout -----------------------------------------------------------
 kz_info "Layout"
@@ -165,7 +190,7 @@ require_dir "${DIST}/Config/linux" "Linux integration directory"
 require_dir "${DIST}/Config/linux/icons/hicolor/scalable/apps" "scalable icon directory"
 require_dir "${DIST}/Config/linux/icons/hicolor/256x256/apps" "256x256 icon directory"
 require_dir "${DIST}/LICENSES" "licenses directory"
-require_dir "${DIST}/Samples/hello-kaizen" "Lua sample directory"
+require_dir "${DIST}/Samples/hello-kaizen" "GDScript sample directory"
 require_dir "${DIST}/Setup" "setup directory"
 require_file "${DIST}/README.txt" "root README"
 require_file "${DIST}/LICENSES/LICENSE.txt" "Kaizen license"
@@ -175,12 +200,20 @@ require_file "${DIST}/Config/linux/org.kaizenengine.Kaizen.xml" "MIME definition
 require_file "${DIST}/Config/linux/kaizen.6" "manual page"
 require_file "${DIST}/Config/linux/icons/hicolor/scalable/apps/kaizen.svg" "scalable icon"
 require_file "${DIST}/Config/linux/icons/hicolor/256x256/apps/kaizen.png" "256x256 icon"
-require_file "${DIST}/Samples/hello-kaizen/project.kaizen" "Lua sample project"
+require_file "${DIST}/Samples/hello-kaizen/project.kaizen" "GDScript sample project"
 
 for helper in install.sh uninstall.sh select.sh check-deps.sh; do
 	require_exec "${DIST}/Setup/${helper}" "Setup/${helper} is executable"
 done
 
+if [[ "${MONO}" == "yes" ]]; then
+	require_dir "${DIST}/Samples/hello-kaizen-csharp" "C# sample directory"
+	require_file "${DIST}/Samples/hello-kaizen-csharp/HelloKaizenCSharp.csproj" "C# sample project"
+else
+	[[ -e "${DIST}/Samples/hello-kaizen-csharp" ]] &&
+		check_warn "C# sample present in a non-mono package" ||
+		check_ok "no C# sample in a non-mono package"
+fi
 
 if [[ "${SOURCE_INCLUDED}" == "yes" ]]; then
 	require_dir "${DIST}/Engine/Source" "engine source (SOURCE_INCLUDED=yes)"
@@ -239,6 +272,9 @@ if [[ -z "${CANONICAL}" ]]; then
 else
 	check_ok "canonical binary: $(basename "${CANONICAL}")"
 	require_exec "${CANONICAL}" "canonical binary is executable"
+	if [[ "${CANONICAL}" == *.mono && "${MONO}" != "yes" ]]; then
+		check_fail "mono binary present but --no-mono was requested"
+	fi
 	if head -c 4 "${CANONICAL}" | grep -q $'\x7fELF'; then
 		check_ok "canonical binary is an ELF executable"
 	else
@@ -248,9 +284,15 @@ else
 	[[ "${arch}" == *x86-64* ]] && check_ok "architecture is x86-64" || check_warn "could not confirm x86-64 architecture (file: ${arch})"
 	[[ -f "${BIN_DIR}/_sc_" ]] && check_ok "portable marker (_sc_) present" || check_warn "portable marker (_sc_) missing (portable mode disabled)"
 
-	# The launcher is a generated POSIX-sh wrapper, not a symlink.
+	# The launcher is a generated POSIX-sh wrapper, not a symlink, so it can
+	# locate a bundled .NET runtime regardless of PATH.
 	if [[ -f "${BIN_DIR}/kaizen" && ! -L "${BIN_DIR}/kaizen" ]]; then
 		check_ok "'kaizen' launcher is a generated wrapper"
+		if grep -q 'DOTNET_ROOT' "${BIN_DIR}/kaizen"; then
+			check_ok "launcher configures a private .NET root"
+		else
+			check_fail "launcher does not configure DOTNET_ROOT"
+		fi
 		if grep -q "exec \"\$dir/$(basename "${CANONICAL}")\"" "${BIN_DIR}/kaizen" ||
 			grep -q "exec .*$(basename "${CANONICAL}")" "${BIN_DIR}/kaizen"; then
 			check_ok "launcher target matches the canonical binary"
@@ -299,7 +341,48 @@ if [[ -n "${CANONICAL}" && -x "${CANONICAL}" ]]; then
 	fi
 fi
 
-# --- 5. Build manifest (JSON) -------------------------------------------
+# --- 5. Managed (.NET) ---------------------------------------------------
+if [[ "${MONO}" == "yes" ]]; then
+	kz_info "Managed assemblies (.NET)"
+	require_link "${BIN_DIR}/KaizenSharp" "KaizenSharp resolves next to the executable"
+	require_file "${MANAGED_DIR}/Api/Release/KaizenSharp.dll" "KaizenSharp API (Release)"
+	require_file "${MANAGED_DIR}/Api/Debug/KaizenSharp.dll" "KaizenSharp API (Debug)"
+	require_file "${MANAGED_DIR}/Api/Release/KaizenSharpEditor.dll" "KaizenSharp editor API (Release)"
+	require_file "${MANAGED_DIR}/Tools/KaizenTools.dll" "KaizenTools assembly"
+	require_file "${MANAGED_DIR}/Tools/KaizenTools.deps.json" "KaizenTools dependency manifest"
+	if compgen -G "${MANAGED_DIR}/Tools/nupkgs/Kaizen.NET.Sdk.*.nupkg" >/dev/null; then
+		check_ok "Kaizen.NET.Sdk NuGet package present"
+	else
+		check_fail "Kaizen.NET.Sdk NuGet package missing from Tools/nupkgs"
+	fi
+	if compgen -G "${MANAGED_DIR}/Api/Release/KaizenPlugins.dll" >/dev/null; then
+		check_ok "KaizenPlugins runtime present"
+	else
+		check_fail "KaizenPlugins runtime missing"
+	fi
+	if [[ "${DOTNET_BUNDLED}" == "yes" ]]; then
+		require_exec "${DIST}/Engine/Managed/dotnet/dotnet" "bundled .NET host is executable"
+		require_file "${DIST}/LICENSES/dotnet/LICENSE.txt" "bundled .NET license"
+		sdk_meta="$(pkg_get "${DIST}/Build/Config/dotnet-info.env" DOTNET_SDK)"
+		if [[ -n "${sdk_meta}" && -d "${DIST}/Engine/Managed/dotnet/sdk/${sdk_meta}" ]]; then
+			check_ok "bundled .NET SDK matches metadata: ${sdk_meta}"
+		else
+			check_fail "bundled .NET SDK does not match metadata: ${sdk_meta:-<unknown>}"
+		fi
+		bundled_version="$(env -u DOTNET_ROOT HOME="${DIST}" PATH="/usr/bin:/bin" "${DIST}/Engine/Managed/dotnet/dotnet" --version 2>/dev/null || true)"
+		[[ -n "${bundled_version}" ]] &&
+			check_ok "bundled .NET runs without the system installation: ${bundled_version}" ||
+			check_fail "bundled .NET does not run in isolation"
+	else
+		[[ -d "${DIST}/Engine/Managed/dotnet" ]] &&
+			check_warn "a .NET copy exists but metadata says DOTNET_BUNDLED=no" ||
+			check_ok "no bundled .NET (system SDK required)"
+	fi
+elif [[ -e "${DIST}/Engine/Managed/dotnet" ]]; then
+	check_fail "bundled .NET present in a non-mono package"
+fi
+
+# --- 6. Build manifest (JSON) -------------------------------------------
 kz_info "Build manifest"
 if [[ -f "${BUILD_INFO}" ]]; then
 	check_ok "build manifest exists"
@@ -455,7 +538,7 @@ prepare_smoke_bin() {
 run_isolated() { # <home> <command...>
 	local home="$1"
 	shift
-	env -u LD_LIBRARY_PATH \
+	env -u DOTNET_ROOT -u LD_LIBRARY_PATH \
 		HOME="${home}" \
 		XDG_DATA_HOME="${home}/xdg-data" \
 		XDG_CONFIG_HOME="${home}/xdg-config" \

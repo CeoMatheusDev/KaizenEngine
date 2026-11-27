@@ -148,10 +148,6 @@ an implementation - see `patches/rendering-server/001`. `modules/gdscript`: one 
 and its whole content is an empty `modules/gdscript/tests/scripts/.kaizen/.gdignore`.
 `core/`: nothing beyond the header pass.
 
-> **Update:** `modules/gdscript` and `modules/mono` have since been removed from the tree
-> (GDScript removal, then C#/Mono removal; Lua 5.5 is the primary script language and C++
-> is the second one). The paragraph above describes the history before those removals.
-
 Two consequences that are easy to get wrong. First, no audio or physics number in
 `benchmarks/results/` measures fork code: those areas are covered by the S-scenes only as
 workload, so an audio or physics regression cannot be attributed to this fork, and cannot

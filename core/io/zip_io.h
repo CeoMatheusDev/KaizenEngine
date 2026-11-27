@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -33,8 +33,8 @@
 #include "core/io/file_access.h"
 
 // This file serves as the Kaizen interface to minizip.
-#include <thirdparty/minizip/unzip.h> // IWYU pragma: export
-#include <thirdparty/minizip/zip.h> // IWYU pragma: export
+#include <thirdparty/minizip-1.3.2/unzip.h> // IWYU pragma: export
+#include <thirdparty/minizip-1.3.2/zip.h> // IWYU pragma: export
 
 // Get the current file info and safely convert the full filepath to a String.
 int kaizen_unzip_get_current_file_info(unzFile p_zip_file, unz_file_info64 &r_file_info, String &r_filepath);

@@ -23,24 +23,19 @@ KaizenEngine supports the NVIDIA PhysX SDK as an alternative physics backend. Ph
 python tools/sdk/sdk_manager.py --list
 ```
 
-### Download
-```bash
-python3 tools/sdk/sdk_manager.py --download physx/physx
-```
-This shallow-clones [NVIDIA-Omniverse/PhysX](https://github.com/NVIDIA-Omniverse/PhysX)
-at the tag pinned in `tools/sdk/manifest/physx_sdks.json`
-(`110.3-omni-and-physx-5.9.1`, PhysX SDK 5.9.1) into `thirdparty/physx/physx/`.
-The pin keeps the build reproducible; the clone is ~90 MB.
-
-PhysX is compiled from source by the module's SCsub (no CMake step).
+### Manual Installation (from source)
+1. Clone PhysX 5.x from [GitHub](https://github.com/NVIDIA-Omniverse/PhysX) into `thirdparty/physx/physx/`
+2. The build system will automatically build PhysX from source using CMake
 
 ### Build Configuration
 PhysX is compiled straight into the engine: the module's SCsub builds the
-CPU SDK from `thirdparty/physx/physx/physx/source`, so a normal build picks
+CPU SDK (foundation, lowlevel, simulation controller, extensions, PVD,
+...) from `thirdparty/physx/physx/physx/source`, so a normal build picks
 it up with no extra steps:
 ```bash
-./build.sh physx                              # just the PhysX group (~460 SDK objects)
 scons platform=linuxbsd target=editor        # PhysX on by default
+scons physx_physics_3d                        # optional: just the PhysX group
+scons builtin_physx_gpu=yes                   # opt-in: GPU sim (needs CUDA)
 ```
 
 ## Build Options
@@ -49,7 +44,7 @@ scons platform=linuxbsd target=editor        # PhysX on by default
 |--------|---------|-------------|
 | `builtin_physx` | yes | Enable NVIDIA PhysX SDK integration |
 | `builtin_physx_extensions` | yes | Enable PhysX Extensions (cooking, character controller, vehicle) |
-| `builtin_physx_gpu` | no | Reserved. `yes` is rejected by the SCsub: the PhysX GPU sources are not built yet |
+| `builtin_physx_gpu` | no | Enable PhysX GPU acceleration (requires CUDA-capable GPU) |
 | `physx_sdk_path` | thirdparty/physx | Custom path to PhysX SDK root |
 
 ## Directory Structure
@@ -59,10 +54,8 @@ thirdparty/physx/
 │   └── physx/          # PhysX SDK source
 │       ├── source/     # Foundation, Common, Core, Extensions, etc.
 │       └── include/    # Public headers (PxPhysics.h, etc.)
+├── pxshared/           # Shared PhysX headers (PhysX 4.x layouts only)
 └── build/              # CMake build output (generated)
-# PhysX 5.x has no separate pxshared/ directory: the shared headers ship inside
-# physx/physx/ (manifest: "bundled_with_physx"). A separate pxshared/ tree is only
-# relevant for PhysX 4.x layouts.
 ```
 
 ## Architecture
@@ -98,27 +91,17 @@ PhysX can be swapped for any other physics backend by implementing the same inte
 
 ## In-engine Build
 The module's SCsub compiles the CPU SDK sources directly (no separate CMake
-invocation). It defines `PX_PHYSX_STATIC_LIB`, `PX_PUBLIC_RELEASE=1` (the same
-as NVIDIA's public release build: no internal device telemetry) and
-`DISABLE_CUDA_PHYSX`, so the GPU code paths are compiled out. Cooking
-(`physxcooking`, used for convex, triangle and heightfield meshes), extensions,
-character kinematic and vehicle are included. The OmniPvd headers under
-`physx/pvdruntime` are on the include path, so PVD streams compile in.
-Platform-specific sources (`*/windows/*`, `*/unix/*`) are filtered per platform.
-
-`tests/kaizen/run_physx_smoke.sh` links its test with the same defines. The
-SDK headers change class layouts with these macros, so a mismatch would be
-an ABI error and not a clean failure.
+invocation): `PX_PHYSX_STATIC_LIB`, `PX_PHYSX_CORE`, cooking, extensions,
+character kinematic and vehicle are on; `PX_SUPPORT_GPU_PHYSX` only with
+`builtin_physx_gpu=yes`. The OmniPvd headers under `physx_base/pvdruntime`
+are on the include path, so PVD streams compile in. Platform-specific
+sources (`*/windows/*`, `*/unix/*`) are filtered per platform.
 
 To verify the SDK build end to end:
 ```bash
 ./build.sh physx     # compile the PhysX SDK group
 ./build.sh smoke     # runtime smoke test: a box must settle on a plane
 ```
-
-Verified on Linux x86_64 with PhysX 5.9.1: the group builds with no errors,
-and the smoke test passes (the box settles at y = 0.500 on a plane and comes
-to rest).
 
 ## Runtime Detection
 - PhysX is only enabled when `builtin_physx=yes` is set during build

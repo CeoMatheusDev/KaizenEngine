@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -33,7 +33,7 @@
 #include "core/math/math_funcs_binary.h"
 
 KAIZEN_GCC_WARNING_PUSH_AND_IGNORE("-Walloc-zero")
-#include <thirdparty/clipper2/include/clipper2/clipper.h>
+#include <thirdparty/clipper2-2.0.1/include/clipper2/clipper.h>
 KAIZEN_GCC_WARNING_POP
 #include <thirdparty/misc/polypartition.h>
 #define STB_RECT_PACK_IMPLEMENTATION

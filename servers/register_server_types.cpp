@@ -410,16 +410,6 @@ void unregister_server_types() {
 	OS::get_singleton()->benchmark_begin_measure("Servers", "Unregister Extensions");
 
 	ServersDebugger::deinitialize();
-
-	// RTXBackend is held by a static Ref, and the engine keeps a raw pointer to it. Before
-	// this change the static Ref was only destroyed at process exit, after the ObjectDB had
-	// been torn down, which segfaulted in ~Object on every editor exit. Drop the engine's
-	// entry first, then release the object while the ObjectDB is still alive.
-	if (Engine::get_singleton()->has_singleton("RTXBackend")) {
-		Engine::get_singleton()->remove_singleton("RTXBackend");
-	}
-	RTXBackend::destroy_singleton();
-
 	memdelete(shader_types);
 	if constexpr (GD_IS_CLASS_ENABLED(MovieWriterPNGWAV)) {
 		memdelete(writer_pngwav);

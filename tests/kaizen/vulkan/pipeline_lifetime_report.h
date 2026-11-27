@@ -11,7 +11,7 @@
 /*  pipeline_lifetime_vulkan.cpp with four lines that hardcoded "PASS",   */
 /*  three that hardcoded "CLEAN" for sanitizers the build never enabled,  */
 /*  six that printed "(validated in phases)" instead of a number, and an  */
-/*  exit code that missed the validation-error count the summary above it */
+/*  exit code that ignored the validation-error count the summary above it */
 /*  had just reported as a failure. A report that manufactures its own    */
 /*  evidence is worse than no report, and none of it was checkable.       */
 /*                                                                        */

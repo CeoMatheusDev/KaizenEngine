@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -78,7 +78,7 @@
 #include "extensions/openxr_extension_wrapper_extension.h"
 #endif // DISABLE_DEPRECATED
 
-#include <thirdparty/openxr/src/common/xr_linear.h>
+#include <thirdparty/openxr-1.4.1/src/common/xr_linear.h>
 
 #ifdef ANDROID_ENABLED
 #define OPENXR_LOADER_NAME "libopenxr_loader.so"

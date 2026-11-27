@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -897,20 +897,13 @@ ScriptCreateDialog::ScriptCreateDialog() {
 	gc->add_child(memnew(Label(TTR("Language:"))));
 	gc->add_child(language_menu);
 
-	// Lua is the primary script language; GDScript is preferred only in builds that still have it.
 	default_language = -1;
-	int gdscript_index = -1;
 	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
 		String lang = ScriptServer::get_language(i)->get_name();
 		language_menu->add_item(lang);
-		if (lang == "Lua") {
+		if (lang == "GDScript") {
 			default_language = i;
-		} else if (lang == "GDScript") {
-			gdscript_index = i;
 		}
-	}
-	if (default_language < 0) {
-		default_language = gdscript_index;
 	}
 	if (ScriptServer::get_language_count() == 0) {
 		// Edge Case 1: No scripting languages exist at all.
@@ -919,10 +912,10 @@ ScriptCreateDialog::ScriptCreateDialog() {
 		language_menu->set_auto_translate_mode(AUTO_TRANSLATE_MODE_ALWAYS);
 		language_menu->add_item(TTR("No Scripting Languages Available"));
 	} else if (default_language >= 0) {
-		// Normal Case: the default language (Lua, or GDScript where it is built), select it.
+		// Normal Case: GDScript is available, select it.
 		language_menu->select(default_language);
 	} else {
-		// Edge Case 2: Languages exist (like C#), but neither Lua nor GDScript is available.
+		// Edge Case 2: Languages exist (like C#), but GDScript is disabled.
 		language_menu->select(0);
 	}
 

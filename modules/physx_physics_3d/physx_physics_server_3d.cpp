@@ -1236,32 +1236,6 @@ ObjectID PhysXPhysicsServer3D::area_get_object_instance_id(RID p_area) const {
 }
 
 void PhysXPhysicsServer3D::area_set_param(RID p_area, PS3DE::AreaParameter p_param, const Variant &p_value) {
-	// World3D configures a space's default gravity by passing the space RID here
-	// (same contract as KaizenPhysicsServer3D::area_set_param).
-	if (PhysXSpace *sp = space_owner.get_or_null(p_area)) {
-		bool gravity_changed = false;
-		switch (p_param) {
-			case PS3DE::AREA_PARAM_GRAVITY: {
-				sp->gravity_magnitude = p_value;
-				gravity_changed = true;
-			} break;
-			case PS3DE::AREA_PARAM_GRAVITY_VECTOR: {
-				sp->gravity_direction = p_value;
-				gravity_changed = true;
-			} break;
-			default:
-				// Damping and other default-area params have no per-scene PhysX equivalent here.
-				break;
-		}
-		if (gravity_changed) {
-			sp->gravity = sp->gravity_direction.normalized() * sp->gravity_magnitude;
-			if (sp->scene) {
-				sp->scene->setGravity(PxVec3(sp->gravity.x, sp->gravity.y, sp->gravity.z));
-			}
-		}
-		return;
-	}
-
 	PhysXArea *area = area_owner.get_or_null(p_area);
 	ERR_FAIL_NULL(area);
 	switch (p_param) {
@@ -1301,17 +1275,6 @@ void PhysXPhysicsServer3D::area_set_transform(RID p_area, const Transform3D &p_t
 }
 
 Variant PhysXPhysicsServer3D::area_get_param(RID p_parea, PS3DE::AreaParameter p_param) const {
-	// Space RID = the space's default area (see area_set_param).
-	if (const PhysXSpace *sp = space_owner.get_or_null(p_parea)) {
-		switch (p_param) {
-			case PS3DE::AREA_PARAM_GRAVITY:
-				return sp->gravity_magnitude;
-			case PS3DE::AREA_PARAM_GRAVITY_VECTOR:
-				return sp->gravity_direction;
-			default:
-				return Variant();
-		}
-	}
 	const PhysXArea *area = area_owner.get_or_null(p_parea);
 	ERR_FAIL_NULL_V(area, Variant());
 	switch (p_param) {
@@ -2713,8 +2676,7 @@ void PhysXPhysicsServer3D::step(real_t p_step) {
 			continue;
 		}
 		if (body->state_sync_callback.is_valid()) {
-			// RigidBody3D/AnimatableBody3D expect the PhysicsDirectBodyState3D, not (rid, id).
-			body->state_sync_callback.call(body_get_direct_state(body->rid));
+			body->state_sync_callback.call(body->rid, body->object_id);
 		}
 		if (body->force_integration_callback.is_valid() && !body->omit_force_integration) {
 			body->force_integration_callback.call(body_get_direct_state(body->rid), body->force_integration_udata);

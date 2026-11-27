@@ -52,4 +52,4 @@
 #define GLAD_GLES2
 #endif
 
-#include <thirdparty/glad/glad/gl.h> // IWYU pragma: export.
+#include <thirdparty/glad-2.0.8/glad/gl.h> // IWYU pragma: export.

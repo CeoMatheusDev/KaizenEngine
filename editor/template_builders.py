@@ -45,7 +45,11 @@ def parse_template(inherits, source, delimiter):
 
 
 def make_templates(target, source, env):
-    delimiter = "#"  # Lua single line comment delimiter by default.
+    delimiter = "#"  # GDScript single line comment delimiter by default.
+    if source:
+        ext = os.path.splitext(str(source[0]))[1]
+        if ext == ".cs":
+            delimiter = "//"
 
     parsed_templates = []
 

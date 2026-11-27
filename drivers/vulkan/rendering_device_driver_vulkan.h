@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -45,7 +45,7 @@
 #endif
 #endif
 #include <thirdparty/re-spirv/re-spirv.h>
-#include <thirdparty/vulkan/vk_mem_alloc.h>
+#include <thirdparty/vulkan-1.4.335.0/vk_mem_alloc.h>
 
 #include <drivers/vulkan/kaizen_vulkan.h>
 

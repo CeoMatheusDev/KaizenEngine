@@ -50,13 +50,6 @@ RTXBackend *RTXBackend::get_singleton() {
 	return rtx_backend_singleton.ptr();
 }
 
-void RTXBackend::destroy_singleton() {
-	if (rtx_backend_singleton.is_valid()) {
-		rtx_backend_singleton->shutdown();
-		rtx_backend_singleton.unref();
-	}
-}
-
 void RTXBackend::load_settings() {
 	ProjectSettings *ps = ProjectSettings::get_singleton();
 	if (!ps) {

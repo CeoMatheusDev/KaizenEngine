@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -39,7 +39,7 @@
 #include "scene/resources/2d/navigation_mesh_source_geometry_data_2d.h"
 #include "scene/resources/2d/navigation_polygon.h"
 
-#include <thirdparty/clipper2/include/clipper2/clipper.h>
+#include <thirdparty/clipper2-2.0.1/include/clipper2/clipper.h>
 #include <thirdparty/misc/polypartition.h>
 
 NavMeshGenerator2D *NavMeshGenerator2D::singleton = nullptr;

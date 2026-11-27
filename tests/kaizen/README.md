@@ -140,10 +140,6 @@ registry slot and inserts a key. Acceptance criteria covered:
 - Key-table churn: filling the registry, destroying half the entries
   (tombstones) and re-acquiring them yields new generations without merging
   identities, for both numeric and canonical keys.
-- Creation failure: a reservation acquired for a creation that fails is
-  released and retired, the object is destroyed exactly once, and the key
-  becomes available for a new generation
-  (`creation_failure_releases_the_reservation_exactly_once`).
 
 ## End-to-end churn test (requires the engine)
 
@@ -217,41 +213,9 @@ probe acquire during retirement, and allows a new registry generation after the
 physical-destruction callback. The verification deliberately adds test-only
 acquisitions, so its cache hit/miss counters are not workload metrics. The
 Vulkan lifetime registry retired and destroyed all 204 physical pipelines with
-no resident, retiring, destroyable, or pending objects. That run still emitted
-a deferred shader-release warning and the generic warning for one shader RID;
-free requests blocked by live cache references or dependent RIDs are now
-deferred and completed (at final release or device shutdown) instead of
-dropped, so a rerun must show a warning-free teardown.
-
-## Pipeline dedup project (requires the engine and a GPU)
-
-`p251_dedup_project/` is the P2.5.1 natural-deduplication scenario for the
-functional cache (see `docs/architecture/pipeline-lifetime.md` section 9.4).
-It renders three groups for 120 frames: 32 meshes sharing one
-`StandardMaterial3D` instance (Group A), 16 meshes whose own `StandardMaterial3D`
-instances carry identical parameters (Group B — independent `PipelineCacheRD`
-consumers of the same semantic key), and 8 meshes with distinct material states
-(Group C — semantic isolation). It then frees every consumer and material while
-rendering continues and keeps drawing for 30 more frames (the teardown phase),
-printing `telemetry_stats:`/`telemetry_analysis:` lines and a final
-`teardown_ok:` marker.
-
-```bash
-KAIZEN_PIPELINE_CACHE=on \
-KAIZEN_PIPELINE_LIFETIME=on \
-  bin/kaizen.linuxbsd.template_release.x86_64 \
-  --path tests/kaizen/p251_dedup_project --resolution 1280x720
-```
-
-Assertion protocol for the run: the log must contain `teardown_ok:`, must not
-contain `Deferring`, and the `telemetry_stats` counters must show
-`shared_acquires > 0` with `physical_creates` below the number of logical
-acquisitions (Group B shares only if the engine shares the shader identity
-between identical materials; the scenario reports either outcome honestly).
-Creation failure cannot be forced from script; that acceptance case lives in
-`test_pipeline_registry.cpp`
-(`creation_failure_releases_the_reservation_exactly_once`), which mirrors
-`render_pipeline_create_cached()`'s failure path.
+no resident, retiring, destroyable, or pending objects. Teardown still emits a
+deferred shader-release warning and the generic warning for one shader RID;
+independent multi-consumer reuse and clean renderer-owner teardown remain open.
 
 ## Vulkan image-buffer and texture-buffer callback tests
 
@@ -276,43 +240,30 @@ requiring the former, and accepts `KAIZEN_SANITIZERS=address,undefined` to build
 under sanitizers and tell the report so. Without that variable the report says the
 sanitizers were not built; it can no longer claim otherwise.
 
-## Lua and PhysX engine tests (requires the engine)
+## C# glue and class-reference consistency
 
-Lua 5.5 is the primary script language, so the engine-level checks are written in Lua.
-Each runner starts the editor binary headless and runs a probe as the main loop; the runner
-fails on any `[FAIL]` line, a non-zero exit status, or an unexpected script error.
+`api_glue/check_api_glue.py` compares four sources that have to agree for every enum the
+fork extends: the C++ declaration order (which is the value), the `BIND_ENUM_CONSTANT`
+list (which is what ClassDB exposes), `doc/classes/<Class>.xml` (which is the
+documentation), and the generated C# enum in `modules/mono/glue/.../Generated/`. It exists
+because `087edfa7` added four `RenderingInfo` counters, hand-edited the generated C# enum
+to match, and added no doc XML and no `<summary>` blocks - a state in which C# callers get
+four undocumented values and the next regeneration deletes them. Running the checker
+against that state reports 8 failures; against the tree as it is now it reports none.
 
-```bash
-./build.sh lua -j2                             # or ./build.sh physx -j2 (includes Lua)
-bash tests/kaizen/run_lua_smoke.sh             # Lua VM only, no engine
-bash tests/kaizen/run_lua_engine_test.sh       # Variant, Object, singleton, preload checks
-bash tests/kaizen/run_physx_smoke.sh           # PhysX server only
-bash tests/kaizen/run_physx_engine_test.sh     # PhysX scene run through the engine
-```
+`test_check_api_glue.py` (18 tests) drives the checker over a synthetic four-file tree
+with one source broken at a time, so a checker that passes for the wrong reason shows up
+here: a doc value that no longer matches the C++ position, an entry inserted in the middle
+without renumbering, a glue entry with nothing bound behind it, a glue entry with no
+summary, doc text drifting from the XML, a `[constant X]` reference that was not
+translated to a `<see cref>`, and a doc entry for an enumerator that is not bound (which
+must *not* be reported). `run_tests.sh` runs both the checker and the tests.
 
-`lua_engine_probe.lua` covers Variant arithmetic, table and Callable round trips, error
-reporting, `new()`, singletons, class constants, `preload("res://...")` (helper file
-`lua_preload_helper.lua`) and the global Variant constructors. The churn and pipeline
-projects under `churn_project/`, `p251_dedup_project/` and `pipeline_churn_project/` are Lua
-ports; their GPU telemetry needs a GPU and a pipeline cache, so it is not checked here.
-
-## C++ script tests
-
-`test_cpp_script_api.cpp` runs in `run_tests.sh` with no engine. It builds a sample script
-against the API header the engine writes next to each script (`-Wall -Wextra -Werror`), loads
-it with `dlopen`, and drives the `KAIZEN_CPP_SCRIPT` entry points through the lifecycle.
-
-`run_cpp_engine_test.sh` needs the editor binary built with the `cpp_script` module and a C++
-compiler (clang++ or g++, or `KAIZEN_CPP_COMPILER`). It writes three fixtures into a temporary
-project: a working script, one that does not compile, and one without `KAIZEN_CPP_SCRIPT`. It
-runs `cpp_engine_probe.lua` headless, which loads them, instantiates the script on a node,
-reloads it with a broken and then a fixed source, and frees the node. The runner checks the
-`[C++] ...` lines the scripts print, in order, and fails on any unexpected engine error.
-
-```bash
-bash tests/kaizen/run_tests.sh                 # includes test_cpp_script_api
-bash tests/kaizen/run_cpp_engine_test.sh       # needs the engine binary
-```
+The rule it enforces is worth stating, because it is a design constraint on whoever extends
+one of these enums next: the C++ declaration order is the value, and the XML is the doc
+source, so the correct sequence is enumerator -> bind -> XML entry -> regenerate the glue.
+Hand-editing the glue is only acceptable because this fork tracks it, and then only with
+this checker saying the four sources still agree.
 
 ## Pipeline lifetime report helpers
 

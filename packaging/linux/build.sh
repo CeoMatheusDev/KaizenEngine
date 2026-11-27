@@ -4,7 +4,8 @@
 #
 # Wraps the engine's own SCons build system without altering it. Builds the
 # editor and/or export templates, preserving previous artifacts (never cleans
-# implicitly).
+# implicitly). For .NET builds it also generates the C# glue and compiles the
+# managed assemblies (KaizenSharp API, tools and NuGet packages).
 #
 # Usage:
 #   ./packaging/linux/build.sh [options]
@@ -12,6 +13,8 @@
 # Options:
 #   -t, --target LIST     editor, template_debug, template_release, all
 #                         (comma separated or repeated; default: all)
+#       --mono            Enable the .NET module (module_mono_enabled=yes)
+#       --no-mono         Disable the .NET module (default for this script)
 #       --dev             Dev build (dev_build=yes)
 #       --production      Production build (production=yes)
 #       --jobs N          Parallel jobs (default: nproc)
@@ -32,6 +35,7 @@ usage() {
 
 # --- Defaults ------------------------------------------------------------
 declare -a TARGETS=()
+MONO="yes"
 DEV_BUILD="no"
 PRODUCTION="no"
 JOBS="$(kz_nproc)"
@@ -62,6 +66,14 @@ while [[ $# -gt 0 ]]; do
 		[[ $# -ge 2 ]] || kz_die "--target requires a value."
 		parse_targets "$2"
 		shift 2
+		;;
+	--mono)
+		MONO="yes"
+		shift
+		;;
+	--no-mono)
+		MONO="no"
+		shift
 		;;
 	--dev)
 		DEV_BUILD="yes"
@@ -113,6 +125,7 @@ esac
 
 if [[ "${DRY_RUN}" == "no" ]]; then
 	kz_need_cmd scons python3
+	[[ "${MONO}" == "yes" ]] && kz_need_cmd dotnet
 fi
 
 # Expand "all" preserving deterministic order.
@@ -147,6 +160,7 @@ run_cmd() {
 
 # --- Build configuration ------------------------------------------------
 declare -a SCONS_ARGS=(platform=linuxbsd "arch=${ARCH}" "-j${JOBS}")
+[[ "${MONO}" == "yes" ]] && SCONS_ARGS+=(module_mono_enabled=yes)
 [[ "${DEV_BUILD}" == "yes" ]] && SCONS_ARGS+=(dev_build=yes)
 [[ "${PRODUCTION}" == "yes" ]] && SCONS_ARGS+=(production=yes)
 
@@ -154,6 +168,7 @@ kz_info "Kaizen build"
 kz_info "  repository : ${KZ_REPO_ROOT}"
 kz_info "  platform   : ${KZ_PLATFORM}/${ARCH}"
 kz_info "  targets    : ${BUILD_ORDER[*]}"
+kz_info "  .NET module: ${MONO}"
 kz_info "  dev build  : ${DEV_BUILD}"
 kz_info "  production : ${PRODUCTION}"
 kz_info "  jobs       : ${JOBS}"
@@ -168,13 +183,35 @@ for target in "${BUILD_ORDER[@]}"; do
 	run_cmd "${cmd[@]}"
 
 	if [[ "${DRY_RUN}" == "no" ]]; then
-		if ! binary="$(kz_resolve_binary "${target}")"; then
-			kz_die "Build of ${target} finished but no binary was found in ${KZ_REPO_ROOT}/bin. Expected: $(kz_binary_name "${target}")"
+		if ! binary="$(kz_resolve_binary "${target}" "${MONO}")"; then
+			kz_die "Build of ${target} finished but no binary was found in ${KZ_REPO_ROOT}/bin. Expected: $(kz_binary_name "${target}" "${MONO}")"
 		fi
 		BUILT_FILES+=("${binary}")
 		kz_ok "Built: $(realpath --relative-to="${KZ_REPO_ROOT}" "${binary}")"
 	fi
 done
+
+# --- Managed (.NET) assemblies ------------------------------------------
+if [[ "${MONO}" == "yes" && "${want_editor}" == "yes" && "${DRY_RUN}" == "no" ]]; then
+	editor_bin="$(kz_resolve_binary editor yes)"
+	kz_info "Generating C# glue (KaizenSharp API sources) ..."
+	run_cmd "${editor_bin}" --headless --generate-mono-glue modules/mono/glue
+
+	kz_info "Building managed assemblies (KaizenSharp, KaizenTools, Kaizen.NET.Sdk) ..."
+	declare -a asm_args=(
+		python3 modules/mono/build_scripts/build_assemblies.py
+		--kaizen-output-dir "${KZ_REPO_ROOT}/bin"
+		--kaizen-platform "${KZ_PLATFORM}"
+	)
+	[[ "${DEV_BUILD}" == "yes" ]] && asm_args+=(--dev-debug)
+	run_cmd "${asm_args[@]}"
+
+	[[ -f "${KZ_REPO_ROOT}/bin/KaizenSharp/Api/Release/KaizenSharp.dll" ]] ||
+		kz_die "Managed API assemblies were not produced at bin/KaizenSharp/Api/Release."
+	[[ -f "${KZ_REPO_ROOT}/bin/KaizenSharp/Tools/KaizenTools.dll" ]] ||
+		kz_die "Managed tools were not produced at bin/KaizenSharp/Tools."
+	kz_ok "Managed assemblies: bin/KaizenSharp/{Api/Debug,Api/Release,Tools}"
+fi
 
 # --- Summary ------------------------------------------------------------
 if [[ "${DRY_RUN}" == "no" ]]; then
@@ -182,5 +219,8 @@ if [[ "${DRY_RUN}" == "no" ]]; then
 	for f in "${BUILT_FILES[@]}"; do
 		printf '  %-72s %s\n' "$(basename "${f}")" "$(du -h "${f}" | cut -f1)"
 	done
-	kz_info "Next: ./packaging/linux/package.sh"
+	if [[ "${MONO}" == "yes" && "${want_editor}" == "yes" ]]; then
+		printf '  %-72s %s\n' "KaizenSharp/ (managed assemblies)" "$(du -sh "${KZ_REPO_ROOT}/bin/KaizenSharp" | cut -f1)"
+	fi
+	kz_info "Next: ./packaging/linux/package.sh $([[ "${MONO}" == "yes" ]] && echo --mono)"
 fi

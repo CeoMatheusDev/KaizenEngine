@@ -3,17 +3,20 @@
     Kaizen Engine — Windows distribution validator.
 
 .DESCRIPTION
-    Verifies structure, binaries, export templates, manifest integrity of a packaged Windows distribution.
+    Verifies structure, binaries, export templates, managed (.NET) files and
+    manifest integrity of a packaged Windows distribution.
 
     NOTE: provided for the Windows workflow but NOT validated in this
     repository (no Windows toolchain available).
 
 .EXAMPLE
-    .\packaging\windows\validate.ps1 -Dist dist\Kaizen
+    .\packaging\windows\validate.ps1 -Dist dist\Kaizen -Mono yes
 #>
 [CmdletBinding()]
 param(
     [string]$Dist = "",
+    [ValidateSet("auto", "yes", "no")]
+    [string]$Mono = "auto",
     [switch]$SkipRun,
     [switch]$Gui
 )
@@ -38,12 +41,18 @@ function Require-File([string]$Path, [string]$Description) {
 
 $binDir = Join-Path $Dist "Engine\Binaries\$KzOsDir"
 $tplDir = Join-Path $Dist "Engine\ExportTemplates\$KzOsDir"
+$managed = Join-Path $Dist "Engine\Managed\KaizenSharp"
 $manifestPath = Join-Path $Dist "Engine\Build\Config\build-info.json"
 
 $canonical = Get-ChildItem $binDir -Filter "kaizen.windows.*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($Mono -eq "auto") {
+    $Mono = if ($canonical -and $canonical.Name -like "*.mono.exe") { "yes" } else { "no" }
+}
+$isMono = ($Mono -eq "yes")
 
 Write-KzInfo "Validating Kaizen distribution"
 Write-KzInfo "  dist : $Dist"
+Write-KzInfo "  mono : $isMono"
 
 # Structure.
 Require-File (Join-Path $Dist "Setup\README.md") "setup notes"
@@ -72,6 +81,20 @@ if (-not $canonical) {
     }
 }
 
+# Managed assemblies.
+if ($isMono) {
+    Require-File (Join-Path $managed "Api\Release\KaizenSharp.dll") "KaizenSharp API (Release)"
+    Require-File (Join-Path $managed "Api\Debug\KaizenSharp.dll") "KaizenSharp API (Debug)"
+    Require-File (Join-Path $managed "Tools\KaizenTools.dll") "KaizenTools"
+    Require-File (Join-Path $managed "Tools\KaizenTools.deps.json") "KaizenTools deps manifest"
+    Require-File (Join-Path $Dist "Samples\hello-kaizen-csharp\project.kaizen") "C# sample project"
+    if (Get-ChildItem (Join-Path $managed "Tools\nupkgs") -Filter "Kaizen.NET.Sdk.*.nupkg" -ErrorAction SilentlyContinue) {
+        Check-Ok "Kaizen.NET.Sdk NuGet package present"
+    } else {
+        Check-Fail "Kaizen.NET.Sdk NuGet package missing"
+    }
+    if (Test-Path (Join-Path $binDir "KaizenSharp")) { Check-Ok "KaizenSharp next to executable" } else { Check-Fail "KaizenSharp missing next to executable" }
+}
 
 # Manifest.
 if (Test-Path $manifestPath) {

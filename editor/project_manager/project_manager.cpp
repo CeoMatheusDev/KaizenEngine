@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -81,6 +81,7 @@
 #include "servers/physics_3d/physics_server_3d.h"
 #endif // PHYSICS_3D_DISABLED
 
+#include "modules/modules_enabled.gen.h" // For gdscript, mono. (For editor help highlighter).
 
 constexpr int KAIZEN4_CONFIG_VERSION = 5;
 
@@ -330,6 +331,9 @@ void ProjectManager::_update_theme(bool p_skip_creation) {
 		}
 	}
 
+#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
+	EditorHelpHighlighter::get_singleton()->clear_cache();
+#endif
 
 #ifdef ANDROID_ENABLED
 	DisplayServer::get_singleton()->window_set_color(theme->get_color("background", EditorStringName(Editor)));
@@ -718,7 +722,7 @@ void ProjectManager::_open_selected_projects_check_warnings() {
 				unsupported_features.remove_at(i);
 				i--;
 			} else if (feature == "C#") {
-				warning_message += TTR("Warning: This project uses C#, which Kaizen does not support. C# scripts will not work in this build.\n\n");
+				warning_message += TTR("Warning: This project uses C#, but this build of Kaizen does not have\nthe Mono module. If you proceed you will not be able to use any C# scripts.\n\n");
 				unsupported_features.remove_at(i);
 				i--;
 			} else if (ProjectList::project_feature_looks_like_version(feature)) {
@@ -1511,6 +1515,9 @@ ProjectManager::ProjectManager() {
 		OS::get_singleton()->set_low_processor_usage_mode(true);
 	}
 
+#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
+	EditorHelpHighlighter::create_singleton();
+#endif
 
 	SceneTree::get_singleton()->get_root()->connect("files_dropped", callable_mp(this, &ProjectManager::_files_dropped));
 
@@ -2111,6 +2118,9 @@ ProjectManager::~ProjectManager() {
 
 	EditorHelp::cleanup_doc();
 
+#if defined(MODULE_GDSCRIPT_ENABLED) || defined(MODULE_MONO_ENABLED)
+	EditorHelpHighlighter::free_singleton();
+#endif
 
 	if (EditorSettings::get_singleton()) {
 		EditorSettings::destroy();

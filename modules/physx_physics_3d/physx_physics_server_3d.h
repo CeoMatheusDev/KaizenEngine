@@ -80,9 +80,6 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 		RID rid;
 		physx::PxScene *scene = nullptr;
 		Vector3 gravity = Vector3(0, -9.81, 0);
-		// Default-area gravity as configured by World3D (direction and magnitude are kept separately).
-		Vector3 gravity_direction = Vector3(0, -1, 0);
-		real_t gravity_magnitude = 9.81;
 		bool active = false;
 		HashMap<int, real_t> params;
 		int max_debug_contacts = 0;

@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -101,7 +101,7 @@
 #define SDL_THREAD_WINDOWS 1
 #define SDL_TIMER_WINDOWS 1
 #define SDL_SENSOR_WINDOWS 1
-#define SDL_FILESYSTEM_WINDOWS 1 // Used by `thirdparty/sdl/joystick/windows/SDL_dinputjoystick.c`.
+#define SDL_FILESYSTEM_WINDOWS 1 // Used by `thirdparty/sdl-3.4.20/joystick/windows/SDL_dinputjoystick.c`.
 #define SDL_FSOPS_WINDOWS 1
 
 // Linux defines.
@@ -125,7 +125,7 @@
 #ifdef DBUS_ENABLED
 #define HAVE_DBUS_DBUS_H 1
 #define SDL_USE_LIBDBUS 1
-// SOWRAP_ENABLED is handled in `thirdparty/sdl/core/linux/SDL_dbus.c`.
+// SOWRAP_ENABLED is handled in `thirdparty/sdl-3.4.20/core/linux/SDL_dbus.c`.
 #endif
 
 #ifdef UDEV_ENABLED

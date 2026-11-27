@@ -22,6 +22,7 @@
 #       --select[=CHANNEL]     Set the default channel after installing
 #       --no-select            Do not change the current default selection
 #       --templates-only       Install export templates only
+#       --no-share-dotnet      Keep a private .NET copy per version
 #       --force                Replace an already installed version
 #       --dry-run              Validate and print the plan without writing
 #   -y, --yes                  Assume yes for confirmation prompts
@@ -30,6 +31,7 @@
 # Layout (per-user):
 #   ~/.local/opt/kaizen/<channel>/<version>/   engine tree
 #   ~/.local/opt/kaizen/<channel>/current -> <version>
+#   ~/.local/opt/kaizen/.dotnet/<sdk>/         shared private .NET (if bundled)
 #   ~/.local/opt/kaizen/default-channel        selected default channel
 #   ~/.local/bin/kaizen, kaizen-<channel>      launchers
 #   ~/.local/share/kaizen/export_templates/    export templates
@@ -55,6 +57,7 @@ REQ_VERSION=""
 SELECT_CHANNEL=""
 SELECT_MODE="auto" # auto (first install only) | yes | no
 TEMPLATES_ONLY="no"
+SHARE_DOTNET="yes"
 FORCE="no"
 DRY_RUN="no"
 ASSUME_YES="no"
@@ -140,6 +143,10 @@ while [[ $# -gt 0 ]]; do
 		TEMPLATES_ONLY="yes"
 		shift
 		;;
+	--no-share-dotnet)
+		SHARE_DOTNET="no"
+		shift
+		;;
 	--force)
 		FORCE="yes"
 		shift
@@ -206,6 +213,7 @@ FINAL_DIR=""
 CHANNEL_DIR=""
 BACKUP_DIR=""
 NEW_INSTALLED="no"
+CREATED_SHARED_DOTNET=""
 TMP_HOME=""
 TMP_TAR=""
 CURRENT_LINK=""
@@ -229,6 +237,9 @@ on_error() {
 			mv "${BACKUP_DIR}" "${FINAL_DIR}"
 			BACKUP_DIR=""
 			warn "previous installation restored: ${FINAL_DIR}"
+		fi
+		if [[ -n "${CREATED_SHARED_DOTNET}" && -d "${CREATED_SHARED_DOTNET}" ]]; then
+			rm -rf "${CREATED_SHARED_DOTNET}"
 		fi
 		# Do not leave a channel pointer to a version that never landed.
 		if [[ "${NEW_INSTALLED}" == "no" && -n "${CURRENT_LINK}" && -L "${CURRENT_LINK}" ]]; then
@@ -375,6 +386,10 @@ VERSION_BASE="$(pkg_get "${PKG_INFO}" PACKAGE_VERSION_BASE)"
 CHANNEL="$(pkg_get "${PKG_INFO}" CHANNEL)"
 ENGINE_VERSION="$(pkg_get "${PKG_INFO}" ENGINE_VERSION)"
 TEMPLATES_CONFIG="$(pkg_get "${PKG_INFO}" TEMPLATES_CONFIG)"
+MONO="$(pkg_get "${PKG_INFO}" MONO)"
+DOTNET_BUNDLED="$(pkg_get "${PKG_INFO}" DOTNET_BUNDLED)"
+DOTNET_SDK="$(pkg_get "${PKG_INFO}" DOTNET_SDK)"
+DOTNET_RUNTIME="$(pkg_get "${PKG_INFO}" DOTNET_RUNTIME)"
 ARCH_META="$(pkg_get "${PKG_INFO}" ARCH)"
 PLATFORM_META="$(pkg_get "${PKG_INFO}" PLATFORM)"
 ROOT_META="$(pkg_get "${PKG_INFO}" ROOT)"
@@ -447,6 +462,10 @@ fi
 # --- Space check --------------------------------------------------------
 if [[ "${TEMPLATES_ONLY}" != "yes" ]]; then
 	NEED_KB="$(du -sk "${DIST_ROOT}" | cut -f1)"
+	if [[ "${SHARE_DOTNET}" == "yes" && "${DOTNET_BUNDLED}" == "yes" && -d "${OPT_ROOT}/.dotnet/${DOTNET_SDK}" ]]; then
+		DOTNET_KB="$(du -sk "${DIST_ROOT}/Engine/Managed/dotnet" 2>/dev/null | cut -f1 || echo 0)"
+		NEED_KB=$((NEED_KB - DOTNET_KB))
+	fi
 	AVAIL_KB="$(available_kb "$(dirname "${OPT_ROOT}")")"
 	if [[ -n "${AVAIL_KB}" && "${AVAIL_KB}" =~ ^[0-9]+$ && "${AVAIL_KB}" -lt $((NEED_KB + 51200)) ]]; then
 		die "Not enough free space: need ~$((NEED_KB / 1024)) MB, available $((AVAIL_KB / 1024)) MB."
@@ -489,11 +508,39 @@ tar -C "${DIST_ROOT}" \
 rm -f "${STAGE_DIR}/Engine/Binaries/Linux/_sc_"
 rm -rf "${STAGE_DIR}/Engine/Binaries/Linux/editor_data"
 
+# --- Private .NET bundle ------------------------------------------------
+if [[ "${DOTNET_BUNDLED}" == "yes" && -d "${STAGE_DIR}/Engine/Managed/dotnet" ]]; then
+	if [[ "${SHARE_DOTNET}" == "yes" ]]; then
+		SHARED_DOTNET="${OPT_ROOT}/.dotnet/${DOTNET_SDK}"
+		if [[ ! -d "${SHARED_DOTNET}" ]]; then
+			info "Installing shared .NET ${DOTNET_SDK} (${DOTNET_RUNTIME}) ..."
+			install -d "$(dirname "${SHARED_DOTNET}")"
+			DOTNET_STAGE="$(dirname "${SHARED_DOTNET}")/.${DOTNET_SDK}.staging.$$"
+			rm -rf "${DOTNET_STAGE}"
+			# Move the staged copy (single copy, same filesystem in practice).
+			mv "${STAGE_DIR}/Engine/Managed/dotnet" "${DOTNET_STAGE}"
+			mv "${DOTNET_STAGE}" "${SHARED_DOTNET}"
+			CREATED_SHARED_DOTNET="${SHARED_DOTNET}"
+		else
+			info "Reusing shared .NET ${DOTNET_SDK}."
+			rm -rf "${STAGE_DIR}/Engine/Managed/dotnet"
+		fi
+		ln -s "../../../../.dotnet/${DOTNET_SDK}" "${STAGE_DIR}/Engine/Managed/dotnet"
+		env -i PATH="/usr/bin:/bin" HOME="${TMPDIR:-/tmp}" "${SHARED_DOTNET}/dotnet" --info >/dev/null 2>&1 ||
+			die "Bundled .NET runtime failed to start: ${SHARED_DOTNET}"
+	fi
+fi
+
+# --- Validate staged version -------------------------------------------
+info "Validating staged installation ..."
 TMP_HOME="$(mktemp -d "${TMPDIR:-/tmp}/kaizen-home.XXXXXX")"
-STAGED_VERSION="$(HOME="${TMP_HOME}" PATH="/usr/bin:/bin" \
+STAGED_VERSION="$(env -u DOTNET_ROOT HOME="${TMP_HOME}" PATH="/usr/bin:/bin" \
 	"${STAGE_DIR}/Engine/Binaries/Linux/kaizen" --version 2>/dev/null | head -n1 | tr -d '\r' || true)"
 [[ "${STAGED_VERSION}" == "${ENGINE_VERSION}" ]] ||
 	die "Staged launcher reported '${STAGED_VERSION}', expected '${ENGINE_VERSION}'."
+if [[ "${MONO}" == "yes" && ! -e "${STAGE_DIR}/Engine/Binaries/Linux/KaizenSharp" ]]; then
+	die "KaizenSharp is not accessible next to the staged executable."
+fi
 ok "Staged engine runs (${STAGED_VERSION})"
 
 # --- Receipt ------------------------------------------------------------
@@ -503,6 +550,10 @@ CHANNEL=${CHANNEL}
 VERSION=${PACKAGE_VERSION}
 ENGINE_VERSION=${ENGINE_VERSION}
 TEMPLATES_CONFIG=${TEMPLATES_CONFIG}
+MONO=${MONO}
+DOTNET_BUNDLED=${DOTNET_BUNDLED}
+DOTNET_SDK=${DOTNET_SDK}
+DOTNET_RUNTIME=${DOTNET_RUNTIME}
 MODE=${MODE}
 OPT_ROOT=${OPT_ROOT}
 BIN_DIR=${BIN_DIR}
@@ -620,6 +671,11 @@ if [[ "${SELECT_MODE}" == "yes" || ! -f "${DEFAULT_FILE}" ]]; then
 		mv -f "${DEFAULT_FILE}.tmp.$$" "${DEFAULT_FILE}"
 		ok "Default channel: ${CHOSEN}"
 	fi
+fi
+
+# --- Optional dependency report ----------------------------------------
+if [[ "${MONO}" == "yes" && "${DOTNET_BUNDLED}" != "yes" && -f "${OPT_ROOT}/check-deps.sh" ]]; then
+	KZ_APP_DIR="${FINAL_DIR}" "${OPT_ROOT}/check-deps.sh" --quiet || true
 fi
 
 # --- Caches -------------------------------------------------------------

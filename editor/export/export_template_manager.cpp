@@ -5,7 +5,7 @@
 /*                             KAIZEN ENGINE                              */
 /*                        https://godotengine.org                         */
 /**************************************************************************/
-/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2014-present Kaizen Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
 /*                                                                        */
 /* Permission is hereby granted, free of charge, to any person obtaining  */
@@ -62,6 +62,7 @@
 #include "servers/display/display_server.h"
 #include "servers/rendering/rendering_server.h"
 
+#include "modules/modules_enabled.gen.h" // IWYU pragma: keep. For mono.
 
 void ExportTemplateManager::_request_mirrors() {
 	mirrors_list->clear();
@@ -556,7 +557,9 @@ void ExportTemplateManager::_initialize_template_data() {
 		PlatformInfo info;
 		info.name = "visionOS";
 		info.icon = _get_platform_icon("visionOS");
+#ifndef MODULE_MONO_ENABLED
 		info.templates = { TemplateID::VISIONOS };
+#endif
 		info.group = TTR("Mobile", "Platform Group");
 		platform_map[PlatformID::VISIONOS] = info;
 	}
@@ -564,7 +567,9 @@ void ExportTemplateManager::_initialize_template_data() {
 		PlatformInfo info;
 		info.name = "Web";
 		info.icon = _get_platform_icon("Web");
+#ifndef MODULE_MONO_ENABLED
 		info.templates = { TemplateID::WEB, TemplateID::WEB_EXTENSIONS, TemplateID::WEB_NOTHREADS, TemplateID::WEB_EXTENSIONS_NOTHREADS };
+#endif
 		info.group = TTR("Web", "Platform Group");
 		platform_map[PlatformID::WEB] = info;
 	}
