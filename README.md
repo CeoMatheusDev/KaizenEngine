@@ -216,7 +216,9 @@ scons platform=linuxbsd target=editor production=yes
 
 `dev_build` and `production` are options defined in the `SConstruct` itself (`dev_build` enables development-only debugging code; `production` adjusts the defaults for production builds).
 
-**Script languages:** Lua 5.5 (`modules/lua_script`) is the primary script language. C++ is a second script language (`modules/cpp_script`): a `.cpp` file is compiled to a shared library on load and on save, so it needs a C++ compiler (clang++ or g++) on the machine that runs the editor or the game. C# and GDScript are not part of the build.
+**C#/Mono module:** the Mono module exists in the tree, but it is **disabled by default**. To enable it, build with `module_mono_enabled=yes`. Without that option, C# support is not part of the build.
+
+**Lua:** there is no Lua module in the project tree. There is no Lua support to announce.
 
 ---
 

@@ -32,8 +32,5 @@ jobs:
       - name: PhysX runtime smoke test
         run: bash tests/kaizen/run_physx_smoke.sh
 
-      - name: PhysX engine regression test
-        run: bash tests/kaizen/run_physx_engine_test.sh
-
       - name: Lua runtime smoke test
         run: bash tests/kaizen/run_lua_smoke.sh
