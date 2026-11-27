@@ -32,8 +32,9 @@ OUT="${TMPDIR:-/tmp}/kaizen_physx_smoke"
 # The module TUs (modules/physx_physics_3d) depend on engine symbols; the
 # smoke test links only the self-contained SDK objects.
 # shellcheck disable=SC2046
-"$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB \
+"$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB -DPX_PUBLIC_RELEASE=1 \
     -I thirdparty/physx/physx/physx/include \
+    -I thirdparty/physx/physx/source \
     tests/kaizen/physx_smoke.cpp \
     $(find thirdparty/physx -name '*.o') \
     -lpthread -o "$OUT"

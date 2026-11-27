@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-11-23",
+  "last_updated": "2026-11-26",
   "sdk_group": "physx",
   "sdk_root": "thirdparty/physx",
   "sdks": {
@@ -15,6 +15,7 @@
       "developer_account_required": false,
       "current_version": "5.9.1",
       "min_version": "5.0.0",
+      "acquisition_ref": "110.3-omni-and-physx-5.9.1",
       "expected_structure": {
         "source": [
           "physx/source/foundation/",
