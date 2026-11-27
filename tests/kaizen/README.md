@@ -140,6 +140,10 @@ registry slot and inserts a key. Acceptance criteria covered:
 - Key-table churn: filling the registry, destroying half the entries
   (tombstones) and re-acquiring them yields new generations without merging
   identities, for both numeric and canonical keys.
+- Creation failure: a reservation acquired for a creation that fails is
+  released and retired, the object is destroyed exactly once, and the key
+  becomes available for a new generation
+  (`creation_failure_releases_the_reservation_exactly_once`).
 
 ## End-to-end churn test (requires the engine)
 
@@ -213,9 +217,41 @@ probe acquire during retirement, and allows a new registry generation after the
 physical-destruction callback. The verification deliberately adds test-only
 acquisitions, so its cache hit/miss counters are not workload metrics. The
 Vulkan lifetime registry retired and destroyed all 204 physical pipelines with
-no resident, retiring, destroyable, or pending objects. Teardown still emits a
-deferred shader-release warning and the generic warning for one shader RID;
-independent multi-consumer reuse and clean renderer-owner teardown remain open.
+no resident, retiring, destroyable, or pending objects. That run still emitted
+a deferred shader-release warning and the generic warning for one shader RID;
+free requests blocked by live cache references or dependent RIDs are now
+deferred and completed (at final release or device shutdown) instead of
+dropped, so a rerun must show a warning-free teardown.
+
+## Pipeline dedup project (requires the engine and a GPU)
+
+`p251_dedup_project/` is the P2.5.1 natural-deduplication scenario for the
+functional cache (see `docs/architecture/pipeline-lifetime.md` section 9.4).
+It renders three groups for 120 frames: 32 meshes sharing one
+`StandardMaterial3D` instance (Group A), 16 meshes whose own `StandardMaterial3D`
+instances carry identical parameters (Group B — independent `PipelineCacheRD`
+consumers of the same semantic key), and 8 meshes with distinct material states
+(Group C — semantic isolation). It then frees every consumer and material while
+rendering continues and keeps drawing for 30 more frames (the teardown phase),
+printing `telemetry_stats:`/`telemetry_analysis:` lines and a final
+`teardown_ok:` marker.
+
+```bash
+KAIZEN_PIPELINE_CACHE=on \
+KAIZEN_PIPELINE_LIFETIME=on \
+  bin/kaizen.linuxbsd.template_release.x86_64 \
+  --path tests/kaizen/p251_dedup_project --resolution 1280x720
+```
+
+Assertion protocol for the run: the log must contain `teardown_ok:`, must not
+contain `Deferring`, and the `telemetry_stats` counters must show
+`shared_acquires > 0` with `physical_creates` below the number of logical
+acquisitions (Group B shares only if the engine shares the shader identity
+between identical materials; the scenario reports either outcome honestly).
+Creation failure cannot be forced from script; that acceptance case lives in
+`test_pipeline_registry.cpp`
+(`creation_failure_releases_the_reservation_exactly_once`), which mirrors
+`render_pipeline_create_cached()`'s failure path.
 
 ## Vulkan image-buffer and texture-buffer callback tests
 

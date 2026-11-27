@@ -245,9 +245,12 @@ bool RenderingDevice::_free_dependencies(RID p_id) {
 	if (E) {
 		while (E->value.size()) {
 			const RID dependent = *E->value.begin();
-			free_rid(dependent);
+			deferred_rid_frees.erase(dependent);
+			_try_free_rid(dependent);
 			if (E->value.has(dependent)) {
-				WARN_PRINT("Deferring RID " + itos(p_id.get_id()) + " release because dependent RID " + itos(dependent.get_id()) + " is still referenced.");
+				// The dependent free was deferred (e.g. a shared pipeline that
+				// still holds PipelineCacheRD references). Keep the dependency
+				// edge and let the retry pass complete this free later.
 				return false;
 			}
 		}
@@ -7851,31 +7854,76 @@ bool RenderingDevice::_dependencies_make_mutable(RID p_id, RDG::ResourceTracker 
 /**** FRAME MANAGEMENT ****/
 /**************************/
 
-void RenderingDevice::free_rid(RID p_rid) {
-	ERR_RENDER_THREAD_GUARD();
-
+bool RenderingDevice::_try_free_rid(RID p_rid) {
+	bool deferred_for_cache = false;
 	{
 		MutexLock lock(pipeline_cache_mutex);
 		RenderPipeline *pipeline = render_pipeline_owner.get_or_null(p_rid);
-		if (pipeline != nullptr && pipeline->cache_free_data != nullptr && pipeline_cache_registry != nullptr) {
+		if (!pipeline_cache_shutting_down && pipeline != nullptr && pipeline->cache_free_data != nullptr && pipeline_cache_registry != nullptr) {
 			Kaizen::PipelineHandle handle;
 			handle.index = pipeline->cache_free_data->registry_index;
 			handle.generation = pipeline->cache_free_data->registry_generation;
 			Kaizen::PipelineInfo info;
 			if (pipeline_cache_registry->describe(handle, info) && info.host_refs != 0) {
-				WARN_PRINT("Deferring shared render pipeline release while PipelineCacheRD references remain.");
-				return;
+				// Kaizen P2.3: PipelineCacheRD logical references are still
+				// live. Defer the request instead of dropping it;
+				// pipeline_cache_release() completes it when the last reference
+				// is gone, and device shutdown forces it before the owner
+				// sweeps (clean shader/pipeline teardown).
+				deferred_for_cache = true;
 			}
 		}
 	}
 
-	if (!_free_dependencies(p_rid)) {
-		return;
+	if (deferred_for_cache) {
+		deferred_rid_frees.insert(p_rid);
+		return false;
 	}
-	_free_internal(p_rid);
+
+	if (!_free_dependencies(p_rid)) {
+		// A dependent RID is still referenced. The dependency edge is kept and
+		// the free is retried once that dependent is freed.
+		deferred_rid_frees.insert(p_rid);
+		return false;
+	}
+	return _free_internal(p_rid);
 }
 
-void RenderingDevice::_free_internal(RID p_id) {
+void RenderingDevice::_retry_deferred_frees() {
+	if (deferred_free_retry_running) {
+		return;
+	}
+	deferred_free_retry_running = true;
+	bool progress = true;
+	while (progress && !deferred_rid_frees.is_empty()) {
+		progress = false;
+		Vector<RID> pending;
+		for (const RID &rid : deferred_rid_frees) {
+			pending.push_back(rid);
+		}
+		for (uint32_t i = 0; i < pending.size(); i++) {
+			const RID rid = pending[i];
+			if (!deferred_rid_frees.has(rid)) {
+				continue; // Completed by an earlier iteration.
+			}
+			deferred_rid_frees.erase(rid);
+			if (_try_free_rid(rid)) {
+				progress = true;
+			}
+		}
+	}
+	deferred_free_retry_running = false;
+}
+
+void RenderingDevice::free_rid(RID p_rid) {
+	ERR_RENDER_THREAD_GUARD();
+
+	deferred_rid_frees.erase(p_rid);
+	_try_free_rid(p_rid);
+	_retry_deferred_frees();
+}
+
+bool RenderingDevice::_free_internal(RID p_id) {
 	// Kaizen: track the logical release. The slot is only returned to the
 	// tracker's pool once the ring frame that owns the deferred destruction is
 	// processed (see _free_pending_resources / notify_frame_completed), which
@@ -8038,9 +8086,11 @@ void RenderingDevice::_free_internal(RID p_id) {
 #else
 		ERR_PRINT("Attempted to free invalid ID: " + itos(p_id.get_id()));
 #endif
+		return false;
 	}
 
 	frames_pending_resources_for_processing = uint32_t(frames.size());
+	return true;
 }
 
 void RenderingDevice::texture_replace_rid(RID p_old_texture, RID p_new_texture) {
@@ -9409,14 +9459,30 @@ void RenderingDevice::pipeline_cache_release(Kaizen::PipelineHandle p_handle) {
 	if (pipeline_cache_registry == nullptr) {
 		return;
 	}
-	MutexLock lock(pipeline_cache_mutex);
-	if (pipeline_cache_shutting_down) {
-		return;
+	RID deferred_to_free;
+	{
+		MutexLock lock(pipeline_cache_mutex);
+		if (pipeline_cache_shutting_down) {
+			return;
+		}
+		ERR_FAIL_COND_MSG(!pipeline_cache_registry->release(p_handle), "Invalid or duplicate pipeline cache reference release.");
+		Kaizen::PipelineInfo info;
+		if (pipeline_cache_registry->describe(p_handle, info) && info.host_refs == 0 && info.recording_refs == 0) {
+			pipeline_cache_registry->retire_now(p_handle);
+			// Kaizen P2.3: the last logical reference is gone. Complete a free
+			// request that was deferred while references were live.
+			if (pipeline_cache_rids.has(p_handle.index)) {
+				const RID rid = pipeline_cache_rids[p_handle.index];
+				if (deferred_rid_frees.has(rid)) {
+					deferred_rid_frees.erase(rid);
+					deferred_to_free = rid;
+				}
+			}
+		}
 	}
-	ERR_FAIL_COND_MSG(!pipeline_cache_registry->release(p_handle), "Invalid or duplicate pipeline cache reference release.");
-	Kaizen::PipelineInfo info;
-	if (pipeline_cache_registry->describe(p_handle, info) && info.host_refs == 0 && info.recording_refs == 0) {
-		pipeline_cache_registry->retire_now(p_handle);
+	if (deferred_to_free.is_valid()) {
+		_try_free_rid(deferred_to_free);
+		_retry_deferred_frees();
 	}
 }
 
@@ -9666,6 +9732,11 @@ void RenderingDevice::finalize() {
 		pipeline_cache_physically_freed.clear();
 		pipeline_cache_rid_to_handle.clear();
 	}
+
+	// Kaizen P2.3: complete free requests that were deferred while shared cache
+	// references or dependent RIDs were live. Shutdown forces them through, so
+	// the owner sweeps below see a clean tree (no deferred-release warnings).
+	_retry_deferred_frees();
 
 	if (pipeline_cache_enabled) {
 		update_pipeline_cache(true);
