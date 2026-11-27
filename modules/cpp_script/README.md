@@ -95,6 +95,6 @@ lifecycle order and that the engine logged no unexpected errors.
 Run it with the editor binary built with this module, for example:
 
 ```bash
-scons platform=linuxbsd target=editor module_gdscript_enabled=no -j2
+scons platform=linuxbsd target=editor -j2
 bash tests/kaizen/run_cpp_engine_test.sh
 ```

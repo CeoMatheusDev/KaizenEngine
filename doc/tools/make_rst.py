@@ -641,9 +641,8 @@ class ClassDef(DefinitionBase):
         self.class_group = group_name
 
 
-# Checks if code samples have both GDScript and C# variations.
-# For simplicity we assume that a GDScript example is always present, and ignore contexts
-# which don't necessarily need C# examples.
+# Checks if code samples have both language variations.
+# Currently only Lua is supported (GDScript removed).
 class ScriptLanguageParityCheck:
     def __init__(self) -> None:
         self.hit_map: OrderedDict[str, list[tuple[DefinitionBase, str]]] = OrderedDict()
@@ -1837,7 +1836,7 @@ def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_
 
 RESERVED_FORMATTING_TAGS = ["i", "b", "u", "lb", "rb", "code", "kbd", "center", "url", "br"]
 RESERVED_LAYOUT_TAGS = ["codeblocks"]
-RESERVED_CODEBLOCK_TAGS = ["codeblock", "gdscript", "csharp"]
+RESERVED_CODEBLOCK_TAGS = ["codeblock"]  # Only Lua code blocks are supported (GDScript removed)
 RESERVED_CROSSLINK_TAGS = [
     "method",
     "constructor",
@@ -1924,8 +1923,7 @@ def format_text_block(
     ignore_code_warnings = False
     code_warning_if_intended_string = "If this is intended, use [code skip-lint]...[/code]."
 
-    has_codeblocks_gdscript = False
-    has_codeblocks_csharp = False
+    has_codeblocks_lua = False
 
     pos = 0
     admonition_pos = -1
@@ -1937,7 +1935,7 @@ def format_text_block(
             and not (
                 len(state.reserved_tag_check.tag_stack) == 2
                 and state.reserved_tag_check.tag_stack[0] == "codeblocks"
-                and state.reserved_tag_check.tag_stack[1] in ("gdscript", "csharp")
+                and state.reserved_tag_check.tag_stack[1] == "lua"
             )
         ):
             print_warning(
@@ -2018,16 +2016,7 @@ def format_text_block(
 
             elif tag_state.name == "codeblocks":
                 if tag_state.closing:
-                    if not has_codeblocks_gdscript or not has_codeblocks_csharp:
-                        state.script_language_parity_check.add_hit(
-                            state.current_class,
-                            context,
-                            "Only one script language sample found in [codeblocks]",
-                            state,
-                        )
-
-                    has_codeblocks_gdscript = False
-                    has_codeblocks_csharp = False
+                    has_codeblocks_lua = False
 
                     state.reserved_tag_check.add_closing_tag(tag_state.name)
                     tag_text = ""
@@ -2040,24 +2029,15 @@ def format_text_block(
             elif is_in_tagset(tag_state.name, RESERVED_CODEBLOCK_TAGS):
                 state.reserved_tag_check.add_opening_tag(tag_state.name)
 
-                if tag_state.name == "gdscript":
+                if tag_state.name == "lua":
                     if not inside_code_tabs:
                         print_error(
-                            f"{state.current_class}.xml: GDScript code block is used outside of [codeblocks] in {context_name}.",
+                            f"{state.current_class}.xml: Lua code block is used outside of [codeblocks] in {context_name}.",
                             state,
                         )
                     else:
-                        has_codeblocks_gdscript = True
-                    tag_text = "\n .. code-tab:: gdscript\n"
-                elif tag_state.name == "csharp":
-                    if not inside_code_tabs:
-                        print_error(
-                            f"{state.current_class}.xml: C# code block is used outside of [codeblocks] in {context_name}.",
-                            state,
-                        )
-                    else:
-                        has_codeblocks_csharp = True
-                    tag_text = "\n .. code-tab:: csharp\n"
+                        has_codeblocks_lua = True
+                    tag_text = "\n .. code-tab:: lua\n"
                 else:
                     state.script_language_parity_check.add_hit(
                         state.current_class,
@@ -2573,10 +2553,8 @@ def preformat_text_block(text: str, state: State) -> str | None:
             if (
                 stripped_line.startswith("[codeblock]")
                 or stripped_line.startswith("[codeblock ")
-                or stripped_line.startswith("[gdscript]")
-                or stripped_line.startswith("[gdscript ")
-                or stripped_line.startswith("[csharp]")
-                or stripped_line.startswith("[csharp ")
+                or stripped_line.startswith("[lua]")
+                or stripped_line.startswith("[lua ")
             ):
                 if result:
                     result += "\n"

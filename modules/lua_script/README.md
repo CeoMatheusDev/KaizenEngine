@@ -1,8 +1,6 @@
 # Lua Script Module
 
-Lua 5.5 scripting for KaizenEngine. Lua is the engine's primary script language:
-the GDScript module is disabled in the editor build (see *GDScript-disabled
-build* below).
+Lua 5.5 scripting for KaizenEngine. Lua is the engine's primary script language.
 
 ## Status
 
@@ -70,23 +68,16 @@ as GDScript does; the caller is not interrupted.
 ## GDScript removed
 
 The GDScript module (`modules/gdscript/`) has been removed from the tree. Lua
-is the only script language in the editor build; the build line is unchanged:
-
-```bash
-scons platform=linuxbsd target=editor module_gdscript_enabled=no -j<N>
-```
+is the only script language available in the engine.
 
 Engine code that used to be guarded by `MODULE_GDSCRIPT_ENABLED` (the
 `--gdscript-docs` and `--lsp-port` command-line flags, the GDScript language
 server settings, and the GDScript syntax highlighter in the class reference)
-is gone with it. The class reference documentation still contains GDScript
-examples, which are shown as text only.
+has been removed entirely. The class reference documentation no longer
+contains GDScript examples.
 
-Projects that still use `.gd` scripts will not load. The bundled sample
-(`packaging/samples/hello-kaizen`) and the test projects in `tests/kaizen/`
-use Lua. Still GDScript and not yet ported: the rendering benchmark harness and
-scenes in `benchmarks/rd_2d` and `benchmarks/rd_3d`, and the Android
-instrumented test scripts in `platform/android/java/app/src/instrumented/assets`.
+Projects that still use `.gd` scripts will not load. All sample and test
+projects in `tests/kaizen/` use Lua.
 
 ## Getting the dependency
 
