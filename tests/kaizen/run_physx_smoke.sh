@@ -29,14 +29,45 @@ fi
 echo "Linking smoke test against $OBJ_COUNT PhysX SDK objects..."
 
 OUT="${TMPDIR:-/tmp}/kaizen_physx_smoke"
-# The module TUs (modules/physx_physics_3d) depend on engine symbols; the
-# smoke test links only the self-contained SDK objects.
+
+# Core SDK objects needed by the smoke test.
+# Include: foundation, common, physx, geomutils, lowlevel, scenequery, task,
+#          physxcooking (needed for cooking functions),
+#          physxextensions (needs Xml serialization for vtables),
+#          metadata (GeneratedInfo).
+# Exclude: vehicle, characterkinematic, pvd, omnipvd, GPU, deformable, tet,
+#          particle, serialization/Binary, and extensions.
+# Note: ExtCustomGeometryExt is excluded because it depends on PxGenerateContacts
+#       which requires internal contact generation functions not available in static linking.
 # shellcheck disable=SC2046
 "$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB -DPX_PUBLIC_RELEASE=1 \
     -I thirdparty/physx/physx/physx/include \
     -I thirdparty/physx/physx/source \
     tests/kaizen/physx_smoke.cpp \
-    $(find thirdparty/physx -name '*.o') \
+    $(find thirdparty/physx -name '*.o' \
+        ! -path '*/physxvehicle/*' \
+        ! -path '*/physxcharacterkinematic/*' \
+        ! -path '*/pvd/*' \
+        ! -path '*/omnipvd/*' \
+        ! -path '*/immediatemode/*' \
+        ! -path '*/physx/src/gpu/*' \
+        ! -path '*/physx/src/NpDeformable*' \
+        ! -path '*/physx/src/NpParticle*' \
+        ! -path '*/physx/src/NpDirectGPUAPI*' \
+        ! -path '*/physx/src/NpPvd*' \
+        ! -path '*/physx/src/NpCharacterkinematic*' \
+        ! -path '*/physx/src/NpVehicle*' \
+        ! -path '*/physxcharacterkinematic*' \
+        ! -path '*/omnipvd/*' \
+        ! -path '*/physx/extensions/src/omnipvd/*' \
+        ! -path '*/physxextensions/src/serialization/Binary/*' \
+        ! -path '*/physxextensions/src/tet/*' \
+        ! -path '*/physxextensions/src/ExtDeformableVolumeExt*' \
+        ! -path '*/physxextensions/src/ExtTetMakerExt*' \
+        ! -path '*/physxextensions/src/ExtCustomGeometryExt*' \
+        ! -path '*/physxextensions/src/ExtRigidActorExt*' \
+        ! -path '*/physxextensions/src/ExtParticleExt*' \
+    2>/dev/null) \
     -lpthread -o "$OUT"
 
 echo "Running PhysX runtime smoke test..."
