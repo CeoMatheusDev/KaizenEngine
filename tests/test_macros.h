@@ -57,7 +57,7 @@
 
 // See documentation for doctest at:
 // https://github.com/onqtam/doctest/blob/master/doc/markdown/readme.md#reference
-#include <thirdparty/doctest/doctest.h>
+#include <thirdparty/doctest-2.5.3/doctest.h>
 
 // Forces a test file to be linked.
 #define TEST_FORCE_LINK(m_name) \

@@ -181,17 +181,17 @@ Copyright: 2013, Jorge Jimenez
  2013, Diego Gutierrez
 License: Expat
 
-Files: thirdparty/accesskit/*
+Files: thirdparty/accesskit-0.23.1/*
 Comment: AccessKit
 Copyright: 2023, The AccessKit Authors.
 License: Expat
 
-Files: thirdparty/amd-fsr/*
+Files: thirdparty/amd-fsr-1.0.2/*
 Comment: AMD FidelityFX Super Resolution
 Copyright: 2021, Advanced Micro Devices, Inc.
 License: Expat
 
-Files: thirdparty/amd-fsr2/*
+Files: thirdparty/amd-fsr2-2.2.1/*
 Comment: AMD FidelityFX Super Resolution 2
 Copyright: 2022-2023, Advanced Micro Devices, Inc.
 License: Expat
@@ -201,7 +201,7 @@ Comment: ANGLE
 Copyright: 2018, The ANGLE Project Authors.
 License: BSD-3-clause
 
-Files: thirdparty/astcenc/*
+Files: thirdparty/astcenc-5.3.0/*
 Comment: Arm ASTC Encoder
 Copyright: 2011-2025, Arm Limited
 License: Apache-2.0
@@ -211,7 +211,7 @@ Comment: Basis Universal
 Copyright: 2019-2025, Binomial LLC.
 License: Apache-2.0
 
-Files: thirdparty/brotli/*
+Files: thirdparty/brotli-1.2.1/*
 Comment: Brotli
 Copyright: 2009, 2010, 2013-2016 by the Brotli Authors.
 License: Expat
@@ -297,7 +297,7 @@ Comment: Vazirmatn font
 Copyright: 2015, The Vazirmatn Project Authors.
 License: OFL-1.1
 
-Files: thirdparty/freetype/*
+Files: thirdparty/freetype-2.15.0/*
 Comment: The FreeType Project
 Copyright: 1996-2026, David Turner, Robert Wilhelm, and Werner Lemberg.
 License: FTL
@@ -307,20 +307,20 @@ Comment: GamepadMotionHelpers
 Copyright: 2020-2023, Julian "Jibb" Smart
 License: Expat
 
-Files: thirdparty/glad/*
+Files: thirdparty/glad-2.0.8/*
 Comment: glad
 Copyright: 2013-2022, David Herberth
  2013-2020, The Khronos Group Inc.
 License: CC0-1.0 and Apache-2.0
 
-Files: thirdparty/glslang/*
+Files: thirdparty/glslang-1.4.335.0/*
 Comment: glslang
 Copyright: 2015-2020, Google, Inc.
  2014-2020, The Khronos Group Inc
  2002, NVIDIA Corporation.
 License: glslang
 
-Files: thirdparty/graphite/*
+Files: thirdparty/graphite-1.3.15/*
 Comment: Graphite engine
 Copyright: 2010, SIL International
 License: Expat
@@ -331,7 +331,7 @@ Copyright: 2009, Florian Loitsch
  2018-2023, The simdjson authors
 License: Expat and Apache-2.0
 
-Files: thirdparty/harfbuzz/*
+Files: thirdparty/harfbuzz-15.0.0/*
 Comment: HarfBuzz text shaping library
 Copyright: 2010-2022, Google, Inc.
  2015-2020, Ebrahim Byagowi
@@ -352,7 +352,7 @@ Copyright: 2010-2022, Google, Inc.
  2013-2015, Alexei Podtelezhnikov
 License: HarfBuzz
 
-Files: thirdparty/icu4c/*
+Files: thirdparty/icu4c-79.1/*
 Comment: International Components for Unicode
 Copyright: 1991-2026, Unicode, Inc.
 License: Unicode
@@ -362,25 +362,25 @@ Comment: libbacktrace
 Copyright: 2012-2021, Free Software Foundation, Inc.
 License: BSD-3-clause
 
-Files: thirdparty/libjpeg-turbo/*
+Files: thirdparty/libjpeg-turbo-3.1.3/*
 Comment: libjpeg-turbo
 Copyright: 2009-2025, D. R. Commander
  2015, Viktor Szathmáry.
  1991-2020, Thomas G. Lane, Guido Vollbeding
 License: BSD-3-clause and IJG
 
-Files: thirdparty/libktx/*
+Files: thirdparty/libktx-4.4.2/*
 Comment: KTX
 Copyright: 2013-2020, Mark Callow
  2010-2020 The Khronos Group, Inc.
 License: Apache-2.0
 
-Files: thirdparty/libogg/*
+Files: thirdparty/libogg-1.3.6/*
 Comment: OggVorbis
 Copyright: 2002, Xiph.org Foundation
 License: BSD-3-clause
 
-Files: thirdparty/libpng/*
+Files: thirdparty/libpng-1.6.59/*
 Comment: libpng
 Copyright: 1995-2026, The PNG Reference Library Authors.
  2018-2026, Cosmin Truta.
@@ -389,32 +389,32 @@ Copyright: 1995-2026, The PNG Reference Library Authors.
  1995-1996, Guy Eric Schalnat, Group 42, Inc.
 License: Zlib
 
-Files: thirdparty/libtheora/*
+Files: thirdparty/libtheora-1.2.0/*
 Comment: OggTheora
 Copyright: 2002-2009, Xiph.org Foundation
 License: BSD-3-clause
 
-Files: thirdparty/libvorbis/*
+Files: thirdparty/libvorbis-1.3.7/*
 Comment: OggVorbis
 Copyright: 2002-2020, Xiph.org Foundation
 License: BSD-3-clause
 
-Files: thirdparty/libwebp/*
+Files: thirdparty/libwebp-1.6.0/*
 Comment: WebP codec
 Copyright: 2010, Google Inc.
 License: BSD-3-clause
 
-Files: thirdparty/manifold/*
+Files: thirdparty/manifold-3.5.2/*
 Comment: Manifold
 Copyright: 2020-2026, The Manifold Authors
 License: Apache-2.0
 
-Files: thirdparty/mbedtls/*
+Files: thirdparty/mbedtls-4.1.1/*
 Comment: Mbed TLS
 Copyright: The Mbed TLS Contributors
 License: Apache-2.0
 
-Files: thirdparty/meshoptimizer/*
+Files: thirdparty/meshoptimizer-1.3/*
 Comment: meshoptimizer
 Copyright: 2016-2026, Arseny Kapoulkine
 License: Expat
@@ -429,12 +429,12 @@ Comment: mingw-std-threads
 Copyright: 2016, Mega Limited
 License: BSD-2-clause
 
-Files: thirdparty/miniupnpc/*
+Files: thirdparty/miniupnpc-2.3.3/*
 Comment: MiniUPnP Project
 Copyright: 2005-2025, Thomas Bernard
 License: BSD-3-clause
 
-Files: thirdparty/minizip/*
+Files: thirdparty/minizip-1.3.2/*
 Comment: MiniZip
 Copyright: 1998-2026, Gilles Vollant
  2007-2008, Even Rouault
@@ -529,7 +529,7 @@ Comment: YUV2RGB
 Copyright: 2008-2011, Robin Watts
 License: BSD-2-clause
 
-Files: thirdparty/msdfgen/*
+Files: thirdparty/msdfgen-1.13/*
 Comment: Multi-channel signed distance field generator
 Copyright: 2014-2025, Viktor Chlumsky
 License: Expat
@@ -539,7 +539,7 @@ Comment: OffsetAllocator
 Copyright: 2023, Sebastian Aaltonen
 License: Expat
 
-Files: thirdparty/openxr/*
+Files: thirdparty/openxr-1.4.1/*
 Comment: OpenXR Loader
 Copyright: 2020-2026, The Khronos Group Inc.
 License: Apache-2.0
@@ -556,22 +556,22 @@ Comment: re-spirv
 Copyright: 2024, renderbag and contributors
 License: Expat
 
-Files: thirdparty/recastnavigation/*
+Files: thirdparty/recastnavigation-1.6.0/*
 Comment: Recast
 Copyright: 2009, Mikko Mononen
 License: Zlib
 
-Files: thirdparty/rvo2/*
+Files: thirdparty/rvo2-1.1.63/*
 Comment: RVO2
 Copyright: 2016, University of North Carolina at Chapel Hill
 License: Apache-2.0
 
-Files: thirdparty/sdl/*
+Files: thirdparty/sdl-3.4.20/*
 Comment: SDL
 Copyright: 1997-2026, Sam Lantinga
 License: Zlib
 
-Files: thirdparty/sdl/hidapi/*
+Files: thirdparty/sdl-3.4.20/hidapi/*
 Comment: hidapi
 Copyright: 2010, Alan Ott, Signal 11 Software
 License: BSD-3-clause
@@ -596,18 +596,18 @@ Comment: Swappy
 Copyright: 2019, The Android Open Source Project
 License: Apache-2.0
 
-Files: thirdparty/thorvg/*
+Files: thirdparty/thorvg-1.1.3/*
 Comment: ThorVG
 Copyright: 2020-2026, The ThorVG Project
 License: Expat
 
-Files: thirdparty/tinyexr/*
+Files: thirdparty/tinyexr-3.2.0/*
 Comment: TinyEXR
 Copyright: 2014-2021, Syoyo Fujita
  2002, Industrial Light & Magic, a division of Lucas Digital Ltd. LLC
 License: BSD-3-clause
 
-Files: thirdparty/ufbx/*
+Files: thirdparty/ufbx-0.23.1/*
 Comment: ufbx
 Copyright: 2020, Samuli Raivio
 License: Expat
@@ -618,24 +618,24 @@ Copyright: 2011, Khaled Mamou
  2003-2009, Erwin Coumans
 License: BSD-3-clause
 
-Files: thirdparty/volk/*
+Files: thirdparty/volk-1.3.15/*
 Comment: volk
 Copyright: 2018-2025, Arseny Kapoulkine
 License: Expat
 
-Files: thirdparty/vulkan/*
+Files: thirdparty/vulkan-1.4.335.0/*
 Comment: Vulkan Headers
 Copyright: 2015-2025, The Khronos Group Inc.
  2015-2025, Valve Corporation
  2015-2025, LunarG, Inc.
 License: Apache-2.0
 
-Files: thirdparty/vulkan/vk_mem_alloc.h
+Files: thirdparty/vulkan-1.4.335.0/vk_mem_alloc.h
 Comment: Vulkan Memory Allocator
 Copyright: 2017-2025, Advanced Micro Devices, Inc.
 License: Expat
 
-Files: thirdparty/wayland/*
+Files: thirdparty/wayland-1.24.0/*
 Comment: Wayland core protocol
 Copyright: 2008-2012, Kristian Høgsberg
  2010-2012, Intel Corporation
@@ -643,7 +643,7 @@ Copyright: 2008-2012, Kristian Høgsberg
  2012, Collabora, Ltd.
 License: Expat
 
-Files: thirdparty/wayland-protocols/*
+Files: thirdparty/wayland-protocols-1.47/*
 Comment: Wayland protocols
 Copyright: 2008-2013, Kristian Høgsberg
  2010-2013, Intel Corporation
@@ -655,7 +655,7 @@ Copyright: 2008-2013, Kristian Høgsberg
  2015, Red Hat Inc.
 License: Expat
 
-Files: thirdparty/wayland-protocols/mesa/wayland-drm.xml
+Files: thirdparty/wayland-protocols-1.47/mesa/wayland-drm.xml
 Comment: Mesa Wayland protocols
 Copyright: 2008-2011, Kristian Høgsberg
  2010-2011, Intel Corporation
@@ -673,12 +673,12 @@ Copyright: 2018-2020, Jonathan Young
  2006, NVIDIA Corporation, Ignacio Castano
 License: Expat
 
-Files: thirdparty/zlib/*
+Files: thirdparty/zlib-1.3.2/*
 Comment: zlib
 Copyright: 1995-2026, Jean-loup Gailly and Mark Adler
 License: Zlib
 
-Files: thirdparty/zstd/*
+Files: thirdparty/zstd-1.5.7/*
 Comment: Zstandard
 Copyright: Meta Platforms, Inc. and affiliates.
 License: BSD-3-clause

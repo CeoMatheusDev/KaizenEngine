@@ -1229,10 +1229,10 @@ if env["vulkan"]:
     # DLSS effect, which wraps VkImage/VkCommandBuffer) need the bundled
     # Vulkan headers -- and the same volk mode as drivers/vulkan, otherwise
     # the call paths mix volk trampolines with direct libvulkan symbols.
-    env.Prepend(CPPPATH=["#thirdparty/vulkan", "#thirdparty/vulkan/include"])
+    env.Prepend(CPPPATH=["#thirdparty/vulkan-1.4.335.0", "#thirdparty/vulkan-1.4.335.0/include"])
     if env["use_volk"]:
         env.AppendUnique(CPPDEFINES=["USE_VOLK"])
-        env.Prepend(CPPPATH=["#thirdparty/volk"])
+        env.Prepend(CPPPATH=["#thirdparty/volk-1.3.15"])
     if env["builtin_nvidia_dlss"]:
         env.Append(CPPDEFINES=["NGX_DLSS_ENABLED"])
     if env["builtin_nvidia_streamline"]:
