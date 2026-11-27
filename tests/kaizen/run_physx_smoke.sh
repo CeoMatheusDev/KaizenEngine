@@ -36,6 +36,7 @@ OUT="${TMPDIR:-/tmp}/kaizen_physx_smoke"
 # layouts with PX_SUPPORT_GPU_PHYSX and PX_PUBLIC_RELEASE, so a mismatch is an ABI error.
 "$CXX" -O1 -std=gnu++17 -DPX_PHYSX_STATIC_LIB -DPX_PUBLIC_RELEASE=1 -DDISABLE_CUDA_PHYSX \
     -I thirdparty/physx/physx/physx/include \
+    -I thirdparty/physx/physx/source \
     tests/kaizen/physx_smoke.cpp \
     $(find thirdparty/physx -name '*.o') \
     -lpthread -o "$OUT"
