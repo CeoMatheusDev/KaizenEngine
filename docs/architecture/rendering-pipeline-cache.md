@@ -7,8 +7,11 @@
 > **Kaizen P2 status:** `PipelineCacheRD` uses full-key shared acquisition
 > behind `KAIZEN_PIPELINE_CACHE=on`. Focused renderer/device/Vulkan runtime
 > checks cover duplicate acquire, partial release, blocked retirement reacquire,
-> and key reuse after physical destruction. Natural multi-consumer hits and
-> clean shader teardown remain open; budget-driven eviction stays disabled. See
+> and key reuse after physical destruction. Clean shader teardown is
+> implemented (blocked free requests are deferred and completed, never
+> dropped), and the independent multi-consumer scenario exists in
+> `tests/kaizen/p251_dedup_project` pending a GPU run; natural multi-consumer
+> hits remain unproven and budget-driven eviction stays disabled. See
 > [Pipeline object lifetime and eviction](pipeline-lifetime.md).
 
 This document describes renderer variant lookup, opt-in shared pipeline-object

@@ -192,6 +192,54 @@ TEST_BEGIN(owner_shutdown_retires_entries_with_live_logical_references)
 	CHECK_EQ(registry.get_stats().pending_bytes, (uint64_t)0);
 TEST_END()
 
+TEST_BEGIN(creation_failure_releases_the_reservation_exactly_once)
+	// Mirrors the failure path of RenderingDevice::render_pipeline_create_cached():
+	// acquire() reserves the key, a failed creation releases the reservation and
+	// retires the entry, and the object is destroyed exactly once so the key
+	// becomes available for a new generation. Part of the functional-cache
+	// acceptance suite (docs/architecture/pipeline-lifetime.md 9.3).
+	PipelineRegistry registry(2, 0);
+	PipelineKey key;
+	key.add_u32(77);
+
+	PipelineHandle reservation = registry.acquire(key, KIB);
+	CHECK(!reservation.is_null());
+	PipelineInfo info;
+	CHECK(registry.describe(reservation, info));
+	CHECK_EQ(info.host_refs, (uint32_t)1);
+	CHECK_EQ(registry.get_stats().physical_creates, (uint64_t)1);
+
+	// Creation failed: release the reservation and retire the entry.
+	CHECK(registry.release(reservation));
+	CHECK_EQ(registry.get_stats().shared_acquires, (uint64_t)0);
+	CHECK(registry.retire_now(reservation));
+	// The key stays blocked until the retiring entry is destroyed.
+	CHECK(registry.acquire(key, KIB).is_null());
+
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	PipelineHandle destroyable[2];
+	CHECK_EQ(registry.collect_destroyable(destroyable, 2), (uint32_t)1);
+	CHECK(registry.destroy(destroyable[0]));
+	// Exactly once: a second destroy of the same handle fails.
+	CHECK(!registry.destroy(destroyable[0]));
+
+	// The failed creation left nothing behind; a new acquire gets a new
+	// generation with a clean lifecycle.
+	PipelineHandle recreated = registry.acquire(key, KIB);
+	CHECK(!recreated.is_null());
+	CHECK(recreated != reservation);
+	CHECK(registry.release(recreated));
+	CHECK(registry.retire_now(recreated));
+	CHECK_EQ(registry.set_completed_serial(PipelineQueue::Graphics, 0), (uint32_t)1);
+	CHECK_EQ(registry.collect_destroyable(destroyable, 2), (uint32_t)1);
+	CHECK(registry.destroy(destroyable[0]));
+
+	PipelineStats stats = registry.get_stats();
+	CHECK_EQ(stats.resident_count, (uint64_t)0);
+	CHECK_EQ(stats.retiring_count, (uint64_t)0);
+	CHECK_EQ(stats.destroyable_count, (uint64_t)0);
+TEST_END()
+
 TEST_BEGIN(acquire_hit_and_miss)
 	PipelineRegistry registry(8, 4 * KIB);
 
@@ -1248,6 +1296,7 @@ int main(int argc, char **argv) {
 	pipeline_key_uses_complete_canonical_identity();
 	typed_registry_shares_exact_keys_and_blocks_retirement_reacquire();
 	owner_shutdown_retires_entries_with_live_logical_references();
+	creation_failure_releases_the_reservation_exactly_once();
 	acquire_hit_and_miss();
 	release_rejects_invalid_sequences();
 	stale_handle_rejected();

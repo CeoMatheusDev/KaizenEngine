@@ -4,8 +4,12 @@
 > and device-level safety/concurrency validation under ASan/UBSan/TSan) is
 > successfully completed and validated. The recording reference lifecycle
 > (`begin_use`/`end_use_with_serial`/`abort_use`) is now fully wired in the
-> driver. Natural multi-consumer reuse and clean shader teardown remain open;
-> automatic budget eviction is opt-in.
+> driver. Clean shader teardown is implemented (free requests that hit live
+> `PipelineCacheRD` references or dependent RIDs are deferred and completed at
+> final release or device shutdown, never dropped), and the independent
+> multi-consumer runtime scenario exists in `tests/kaizen/p251_dedup_project/`;
+> a GPU run of that scenario remains open. Automatic budget eviction is
+> opt-in.
 > **Scope:** `kaizen/rendering/pipeline_cache/`, plus the documented Vulkan
 > hooks in `patches/rendering-device/004-pipeline-lifetime-integration.md`.
 > **Related:** [Pipeline cache and shader variants](rendering-pipeline-cache.md), [Resource lifetime diagnostics](resource-diagnostics.md), [Rendering roadmap](rendering-roadmap.md)
@@ -597,9 +601,11 @@ can be enabled once the cache lifetime contract is independently proven.
 | Area | State | Completion criterion |
 | --- | --- | --- |
 | P2.1 — Vulkan destruction | Closed | Destruction waits for confirmed completion on every queue that used the pipeline. |
-| P2.2 — Runtime lifetime | Open | References during command-buffer recording are not yet tracked end-to-end. |
+| P2.2 — Runtime lifetime | Closed | References during command-buffer recording are wired end-to-end (`begin_use`/`end_use_with_serial`/`abort_use`); closure evidence in section 8.7. |
 | P2.3 — Tracking infrastructure | Complete | Pipeline creation, accounting, retirement, and teardown cleanup are wired. |
 | P2.3 — Functional cache | Integrated; focused runtime checks passed | Full-key sharing and lifecycle are validated with a controlled duplicate request; independent renderer consumers remain unproven. |
+| P2.3 — Clean teardown | Implemented; GPU validation open | Free requests blocked by live cache references or dependent RIDs are deferred and completed at final release or device shutdown instead of being dropped. |
+| P2.3 — Independent consumers | Scenario authored; run open | `tests/kaizen/p251_dedup_project` renders independent identical consumers plus isolated variants and a teardown phase. |
 
 ### 9.1 Infrastructure already in place
 
@@ -683,9 +689,17 @@ request passed the same-RID and partial-release checks; retirement reacquire was
 blocked and reacquire after the physical callback passed. Verification mode
 adds one test-only cache hit and one test generation, so its cache counters are
 not workload metrics. Both runs ended with zero resident/retiring/destroyable
-driver entries and zero pending bytes. Teardown still emits a deferred shader
-release and a generic warning for one shader RID; a clean renderer-owner
-shutdown and independent multi-consumer test remain open.
+driver entries and zero pending bytes.
+
+Teardown is now clean by construction: `RenderingDevice::free_rid()` no longer
+drops a free request when shared-cache references or dependent RIDs are still
+live. The request is deferred (`deferred_rid_frees`) and completed when the
+last logical reference is released (`pipeline_cache_release()`), when the
+blocking dependent is freed, or forced at device shutdown before the owner
+leak sweeps. The former teardown output ("Deferring shared render pipeline
+release while PipelineCacheRD references remain" and "Deferring RID ... release
+because dependent RID ... is still referenced") is gone; a GPU run of
+`tests/kaizen/p251_dedup_project` must confirm a warning-free teardown log.
 
 The functional-cache acceptance suite must prove:
 
@@ -698,8 +712,19 @@ The functional-cache acceptance suite must prove:
 
 ### 9.4 Remaining work
 
-1. Add a runtime scenario with independent `PipelineCacheRD` consumers of the
-   same semantic key, plus creation failure and clean shader teardown.
+1. ~~Add a runtime scenario with independent `PipelineCacheRD` consumers of the
+   same semantic key, plus creation failure and clean shader teardown.~~
+   **Authored:** `tests/kaizen/p251_dedup_project` now covers independent
+   identical consumers (Group B, separate `StandardMaterial3D` instances with
+   identical parameters), a shared-instance group (Group A), isolated variants
+   (Group C) and an active-frame teardown phase. The creation-failure
+   acceptance case is covered by the registry test
+   `creation_failure_releases_the_reservation_exactly_once`
+   (`tests/kaizen/test_pipeline_registry.cpp`), which mirrors
+   `render_pipeline_create_cached()`'s failure path (reserve, release, retire,
+   destroy exactly once, new generation). Clean shader teardown is implemented
+   in `RenderingDevice` (deferred-free completion). **Open:** run the scenario
+   on a GPU and confirm `teardown_ok` with no "Deferring" warnings in the log.
 2. Verify exact-once destruction and callback shutdown behavior across
    supported failure/device-lost paths. Keep eviction disabled throughout.
 3. Only after those checks pass, separately enable a measured budget and LRU

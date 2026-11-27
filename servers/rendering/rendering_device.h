@@ -147,6 +147,17 @@ private:
 	bool _free_dependencies(RID p_id);
 	void _replace_dependency(RID p_dependent, RID p_old_dependency, RID p_new_dependency);
 
+	// Kaizen P2.3: free requests that could not complete yet (a shared pipeline
+	// still holds PipelineCacheRD logical references, or a dependent RID is
+	// still referenced). The request is kept and completed when the blocker is
+	// released (pipeline_cache_release) or at device shutdown, so a deferred
+	// free is never silently dropped.
+	HashSet<RID> deferred_rid_frees;
+	bool deferred_free_retry_running = false;
+
+	bool _try_free_rid(RID p_rid);
+	void _retry_deferred_frees();
+
 private:
 	/***************************/
 	/**** BUFFER MANAGEMENT ****/
@@ -1959,7 +1970,7 @@ protected:
 			RenderingDeviceDriver::SemaphoreID p_dst_draw_semaphore_to_signal);
 
 public:
-	void _free_internal(RID p_id);
+	bool _free_internal(RID p_id);
 	void _begin_frame(bool p_presented = false);
 	void _end_frame();
 	void _execute_frame(bool p_present);
