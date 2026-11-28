@@ -240,30 +240,22 @@ requiring the former, and accepts `KAIZEN_SANITIZERS=address,undefined` to build
 under sanitizers and tell the report so. Without that variable the report says the
 sanitizers were not built; it can no longer claim otherwise.
 
-## C# glue and class-reference consistency
+## Lua script metadata and engine integration
 
-`api_glue/check_api_glue.py` compares four sources that have to agree for every enum the
-fork extends: the C++ declaration order (which is the value), the `BIND_ENUM_CONSTANT`
-list (which is what ClassDB exposes), `doc/classes/<Class>.xml` (which is the
-documentation), and the generated C# enum in `modules/mono/glue/.../Generated/`. It exists
-because `087edfa7` added four `RenderingInfo` counters, hand-edited the generated C# enum
-to match, and added no doc XML and no `<summary>` blocks - a state in which C# callers get
-four undocumented values and the next regeneration deletes them. Running the checker
-against that state reports 8 failures; against the tree as it is now it reports none.
+`test_lua_metadata.cpp` compiles the script annotation/function metadata reader without
+engine headers or a downloaded Lua SDK. It is part of `run_tests.sh`. It checks class and
+base annotations, exported fields, signal declarations, top-level methods, line lookup,
+and CRLF handling. `run_lua_smoke.sh` exercises the real Lua C runtime, while
+`run_lua_engine_test.sh` exercises scripts inside an editor build that includes Lua,
+including a nested-table round trip beyond the former depth cap and a declared `--@signal`.
 
-`test_check_api_glue.py` (18 tests) drives the checker over a synthetic four-file tree
-with one source broken at a time, so a checker that passes for the wrong reason shows up
-here: a doc value that no longer matches the C++ position, an entry inserted in the middle
-without renumbering, a glue entry with nothing bound behind it, a glue entry with no
-summary, doc text drifting from the XML, a `[constant X]` reference that was not
-translated to a `<see cref>`, and a doc entry for an enumerator that is not bound (which
-must *not* be reported). `run_tests.sh` runs both the checker and the tests.
+## PhysX SDK and engine integration
 
-The rule it enforces is worth stating, because it is a design constraint on whoever extends
-one of these enums next: the C++ declaration order is the value, and the XML is the doc
-source, so the correct sequence is enumerator -> bind -> XML entry -> regenerate the glue.
-Hand-editing the glue is only acceptable because this fork tracks it, and then only with
-this checker saying the four sources still agree.
+`run_physx_smoke.sh` links a standalone simulation against the built PhysX objects and
+checks a dynamic box settles on a floor. `run_physx_engine_test.sh` runs a headless engine
+probe against the `PhysX Physics` server and checks space gravity, body state synchronization,
+rigid-body settling, area gravity override modes, and override participation by a non-monitorable area. These require the PhysX SDK checkout and a matching engine build;
+they are separate from the SDK-independent `run_tests.sh` suite.
 
 ## Pipeline lifetime report helpers
 

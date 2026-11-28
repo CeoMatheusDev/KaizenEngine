@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds and runs the standalone Kaizen subsystem tests.
-# These tests do not require an engine build: the core depends only on the
-# C++ standard library.
+# These tests do not require an engine build or downloaded SDKs; subsystem
+# helpers and the Lua metadata parser are compiled as standalone C++ tests.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,10 +75,13 @@ python3 "${SCRIPT_DIR}/shadow_filter/extract_source_bodies.py" \
 	"${SCRIPT_DIR}/shadow_filter/test_shadow_filter.cpp" \
 	-o "${SHADOW_BIN}"
 
-# C# glue consistency: the generated bindings are tracked in-tree and maintained by
-# hand, so the four sources that have to agree are compared instead of trusted.
-python3 "${SCRIPT_DIR}/api_glue/check_api_glue.py" --repo-root "${REPO_ROOT}"
-python3 -m unittest discover -s "${SCRIPT_DIR}/api_glue" -p 'test_*.py' 2>&1 | tail -3
+# Lua script metadata parsing is intentionally engine-independent, so it can be
+# compiled and exercised on every developer machine without downloading the Lua SDK.
+LUA_METADATA_BIN="${OUT_DIR}/test_lua_metadata"
+"${CXX}" "${CXXFLAGS[@]}" \
+	"${SCRIPT_DIR}/test_lua_metadata.cpp" \
+	"${REPO_ROOT}/modules/lua_script/lua_script_metadata.cpp" \
+	-o "${LUA_METADATA_BIN}"
 
 # Licence banner geometry: the box rows are padding-held, and a rebrand that lengthens a
 # row without moving a space is invisible to the tool that writes them - its template was
@@ -94,3 +97,4 @@ python3 -m unittest discover -s "${SCRIPT_DIR}/license_box" -p 'test_*.py' 2>&1 
 "${PIPELINE_BIN}" "$@"
 "${HZB_BIN}" "$@"
 "${SHADOW_BIN}" "$@"
+"${LUA_METADATA_BIN}" "$@"

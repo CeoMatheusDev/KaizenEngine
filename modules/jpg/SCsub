@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 Import("env_modules")
 
@@ -9,7 +11,7 @@ env_jpg = env_modules.Clone()
 thirdparty_obj = []
 
 if env["builtin_libjpeg_turbo"]:
-    thirdparty_dir = "#thirdparty/libjpeg-turbo"
+    thirdparty_dir = methods.get_thirdparty_dir("libjpeg-turbo")
 
     thirdparty_sources_common = [
         "jaricom.c",

@@ -21,6 +21,7 @@
 
 #include "rtx_backend.h"
 
+#include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/object/class_db.h"
 #include "servers/rendering/rendering_device.h"
@@ -48,6 +49,17 @@ RTXBackend *RTXBackend::get_singleton() {
 		rtx_backend_singleton->load_settings();
 	}
 	return rtx_backend_singleton.ptr();
+}
+
+void RTXBackend::cleanup_singleton() {
+	if (rtx_backend_singleton.is_null()) {
+		return;
+	}
+	Engine *engine = Engine::get_singleton();
+	if (engine) {
+		engine->remove_singleton("RTXBackend");
+	}
+	rtx_backend_singleton.unref();
 }
 
 void RTXBackend::load_settings() {

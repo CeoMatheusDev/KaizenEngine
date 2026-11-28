@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+import methods
+
 Import("env")
 
 if "RD_GLSL" in env["BUILDERS"]:
@@ -8,7 +10,7 @@ if "RD_GLSL" in env["BUILDERS"]:
     gl_include_files = [str(f) for f in Glob("*_inc.glsl")] + [str(f) for f in Glob("../*_inc.glsl")]
 
     # Add all FSR2 shader and header files.
-    fsr2_dir = "#thirdparty/amd-fsr2/shaders"
+    fsr2_dir = methods.get_thirdparty_dir("amd-fsr2") + "shaders"
     gl_include_files += [str(f) for f in Glob(fsr2_dir + "/*.h")]
     gl_include_files += [str(f) for f in Glob(fsr2_dir + "/*.glsl")]
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 Import("env_modules")
 
@@ -11,7 +13,7 @@ env_glslang = env_modules.Clone()
 thirdparty_obj = []
 
 if env["builtin_glslang"]:
-    thirdparty_dir = "#thirdparty/glslang/"
+    thirdparty_dir = methods.get_thirdparty_dir("glslang")
     thirdparty_spirv_headers_dir = "#thirdparty/spirv-headers/"
     thirdparty_sources = [
         "glslang/GenericCodeGen/CodeGen.cpp",

@@ -49,6 +49,7 @@ public:
 	// Lazy singleton used by consumers (e.g. DLSSEffect) to read the RTX
 	// configuration. Created on first access and destroyed at shutdown().
 	static RTXBackend *get_singleton();
+	static void cleanup_singleton();
 
 	bool is_supported() const { return supported; }
 	bool init();

@@ -24,6 +24,8 @@
 #include "core/object/ref_counted.h"
 #include "kaizen/physics/backend/physics_backend.h"
 
+#include <functional>
+
 #include <PxPhysicsAPI.h>
 
 /// @brief PhysX backend for the physics system.
@@ -36,10 +38,9 @@ class PhysXBackend : public PhysicsBackend {
 public:
 	/// @brief Configuration for the PhysX backend.
 	struct Config {
-		bool gpu_acceleration = true; // Use GPU acceleration when available.
+		bool gpu_acceleration = false; // GPU simulation is not compiled into this CPU-only SDK build.
 		bool cooking = true; // Enable mesh cooking for convex/triangle meshes.
-		bool character_controller = true; // Initialize the character controller manager.
-		bool vehicle = true; // Vehicle API available to clients.
+		bool character_controller = false; // Create the low-level manager for native integration clients.
 		real_t simulation_step = 1.0 / 60.0; // Fixed simulation step.
 		int max_sub_steps = 4; // Maximum sub-steps per simulate() call.
 		bool broadphase_mbp = true; // Use MBP broadphase instead of SAP.
@@ -55,6 +56,9 @@ private:
 	void *controller_manager = nullptr; // PxControllerManager of the first scene.
 	Vector<void *> controller_managers; // Per-scene PxControllerManager instances.
 	Vector<void *> scenes; // Created PxScene instances.
+	Vector<uint8_t> scene_active; // Whether each scene should participate in simulation.
+	Vector<uint8_t> scene_pending_results; // True after simulate() until fetchResults().
+	std::function<void()> before_simulation_step; // Applies engine-side forces once per fixed substep.
 	real_t step_accumulator = 0; // Fixed-step accumulator.
 
 public:
@@ -71,6 +75,7 @@ public:
 	bool fetch_results(bool p_wait = true) override;
 	void *create_scene(const Vector3 &p_gravity) override;
 	void destroy_scene(void *p_scene) override;
+	void set_scene_active(void *p_scene, bool p_active);
 	void cleanup() override;
 
 	// ---- SDK accessors for the PhysX physics server ----
@@ -82,6 +87,7 @@ public:
 
 	Config &get_config() { return config; }
 	const Config &get_config() const { return config; }
+	void set_before_simulation_step(const std::function<void()> &p_callback) { before_simulation_step = p_callback; }
 
 	// ---- Conversion helpers ----
 

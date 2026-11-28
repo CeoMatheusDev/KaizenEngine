@@ -55,7 +55,7 @@
 #define FFX_GCC
 #endif
 
-#include <thirdparty/amd-fsr2/ffx_fsr2.h>
+#include <thirdparty/amd-fsr2-2.2.1/ffx_fsr2.h>
 
 #define FSR2_MAX_QUEUED_FRAMES (4)
 #define FSR2_MAX_UNIFORM_BUFFERS (4)

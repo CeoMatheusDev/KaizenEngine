@@ -30,7 +30,7 @@ if env["opengl3"]:
         File("gl_manager_x11_egl.cpp"),
         File("gl_manager_x11.cpp"),
         File("detect_prime_x11.cpp"),
-        File("#thirdparty/glad/glx.c"),
+        File("#thirdparty/glad-2.0.8/glx.c"),
     ])
 
 Return("source_files")

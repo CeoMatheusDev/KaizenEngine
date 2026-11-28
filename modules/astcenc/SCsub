@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 Import("env_modules")
 
@@ -10,7 +12,7 @@ env_astcenc = env_modules.Clone()
 
 thirdparty_obj = []
 
-thirdparty_dir = "#thirdparty/astcenc/"
+thirdparty_dir = methods.get_thirdparty_dir("astcenc")
 thirdparty_sources = [
     "astcenc_averages_and_directions.cpp",
     "astcenc_block_sizes.cpp",

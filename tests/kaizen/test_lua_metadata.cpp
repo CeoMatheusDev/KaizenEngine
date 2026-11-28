@@ -122,6 +122,41 @@ static void test_functions() {
 	CHECK_EQ(meta.functions[2].line, 24);
 }
 
+static void test_long_comments_and_strings_are_ignored() {
+	const char *test_name = "test_long_comments_and_strings_are_ignored";
+	const char *source = R"lua(local example = [==[
+function fake_string() end
+--@class_name FakeString
+]==]
+--[=[
+function fake_comment() end
+--@export hidden: int = 9
+]=]
+function actual()
+end
+)lua";
+	const LuaScriptMetadata::Metadata meta = LuaScriptMetadata::parse(source);
+	CHECK(meta.class_name.empty());
+	CHECK(meta.exports.empty());
+	CHECK_EQ(meta.functions.size(), size_t(1));
+	if (meta.functions.size() == 1) {
+		CHECK_EQ(meta.functions[0].name, std::string("actual"));
+		CHECK_EQ(meta.functions[0].line, 9);
+	}
+
+	const char *continued_string = R"lua(local text = "continued\
+function false_positive() end"
+function real_method()
+end
+)lua";
+	const LuaScriptMetadata::Metadata continued = LuaScriptMetadata::parse(continued_string);
+	CHECK_EQ(continued.functions.size(), size_t(1));
+	if (continued.functions.size() == 1) {
+		CHECK_EQ(continued.functions[0].name, std::string("real_method"));
+		CHECK_EQ(continued.functions[0].line, 3);
+	}
+}
+
 static void test_lookup_and_empty() {
 	const char *test_name = "test_lookup_and_empty";
 	CHECK_EQ(LuaScriptMetadata::find_function_line(SCRIPT, "take_damage"), 17);
@@ -151,6 +186,7 @@ int main() {
 	test_exports();
 	test_signals();
 	test_functions();
+	test_long_comments_and_strings_are_ignored();
 	test_lookup_and_empty();
 
 	if (failures == 0) {

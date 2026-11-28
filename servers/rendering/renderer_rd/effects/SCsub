@@ -15,7 +15,7 @@ if env["metal"]:
 
 thirdparty_obj = []
 
-thirdparty_dir = "#thirdparty/amd-fsr2/"
+thirdparty_dir = methods.get_thirdparty_dir("amd-fsr2")
 thirdparty_sources = ["ffx_assert.cpp", "ffx_fsr2.cpp"]
 thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
 

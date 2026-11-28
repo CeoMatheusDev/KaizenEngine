@@ -31,6 +31,24 @@ def set_scu_folders(scu_folders):
     _scu_folders = scu_folders
 
 
+def get_thirdparty_dir(name: str) -> str:
+    """Return an SCons-rooted path to a vendored dependency checkout.
+
+    SDK manager checkouts may include their pinned version in the directory
+    name (for example ``zlib-1.3.2``), while older engine build scripts use
+    the unversioned project name. Prefer an exact directory, otherwise resolve
+    the newest matching ``name-*`` checkout.
+    """
+    thirdparty = base_folder / "thirdparty"
+    exact = thirdparty / name
+    if exact.is_dir():
+        selected = name
+    else:
+        matches = sorted(path.name for path in thirdparty.glob(name + "-*") if path.is_dir())
+        selected = matches[-1] if matches else name
+    return f"#thirdparty/{selected}/"
+
+
 def add_source_files_orig(self, sources, files, allow_gen=False):
     # Convert string to list of absolute paths (including expanding wildcard)
     if isinstance(files, str):
@@ -140,26 +158,32 @@ def get_version_info(module_version_string="", silent=False):
             print_info(f"Using custom build name: '{build_name}'.")
 
     import version
+    import kvs
 
+    engine_version = kvs.Version.from_module(version)
     version_info = {
         "short_name": str(version.short_name),
         "name": str(version.name),
-        "major": int(version.major),
-        "minor": int(version.minor),
-        "patch": int(version.patch),
-        "status": str(version.status),
+        "major": int(engine_version.major),
+        "minor": int(engine_version.minor),
+        "patch": int(engine_version.patch),
+        # The generated legacy macro expects a human-readable channel name.
+        # KVS stores channel and revision separately in version.py.
+        "status": engine_version.channel_name,
         "build": str(build_name),
         "module_config": str(version.module_config) + module_version_string,
         "website": str(version.website),
         "docs_branch": str(version.docs),
     }
 
-    # For dev snapshots (alpha, beta, RC, etc.) we do not commit status change to Git,
-    # so this define provides a way to override it without having to modify the source.
+    # Keep the legacy override compatible while using KVS as the source of truth.
     if os.getenv("KAIZEN_VERSION_STATUS") is not None:
-        version_info["status"] = str(os.getenv("KAIZEN_VERSION_STATUS"))
+        override = kvs.Version.from_module(version, {"KAIZEN_VERSION_STATUS": os.environ["KAIZEN_VERSION_STATUS"]})
+        version_info["status"] = override.channel_name
         if not silent:
-            print_info(f"Using version status '{version_info['status']}', overriding the original '{version.status}'.")
+            print_info(
+                f"Using version status '{version_info['status']}', overriding the original '{engine_version.channel_name}'."
+            )
 
     return version_info
 

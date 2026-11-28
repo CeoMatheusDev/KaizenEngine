@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+import methods
+
 Import("env")
 
 thirdparty_obj = []
-thirdparty_dir = "#thirdparty/vulkan"
-thirdparty_volk_dir = "#thirdparty/volk"
-thirdparty_spirv_headers_dir = "#thirdparty/spirv-headers"
-thirdparty_respirv_dir = "#thirdparty/re-spirv"
+thirdparty_dir = methods.get_thirdparty_dir("vulkan").rstrip("/")
+thirdparty_volk_dir = methods.get_thirdparty_dir("volk").rstrip("/")
+thirdparty_spirv_headers_dir = methods.get_thirdparty_dir("spirv-headers").rstrip("/")
+thirdparty_respirv_dir = methods.get_thirdparty_dir("re-spirv").rstrip("/")
 
 # Use bundled Vulkan headers
 env.Prepend(CPPPATH=[thirdparty_dir, thirdparty_dir + "/include"])

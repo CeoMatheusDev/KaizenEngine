@@ -80,6 +80,10 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 		RID rid;
 		physx::PxScene *scene = nullptr;
 		Vector3 gravity = Vector3(0, -9.81, 0);
+		real_t gravity_magnitude = 9.81;
+		Vector3 gravity_direction = Vector3(0, -1, 0);
+		real_t default_linear_damp = 0.0;
+		real_t default_angular_damp = 0.0;
 		bool active = false;
 		HashMap<int, real_t> params;
 		int max_debug_contacts = 0;
@@ -123,12 +127,19 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 		bool monitorable = true;
 		bool ray_pickable = true;
 		real_t priority = 0;
+		PS3DE::AreaSpaceOverrideMode gravity_override_mode = PS3DE::AREA_SPACE_OVERRIDE_DISABLED;
 		real_t gravity = 0;
 		Vector3 gravity_vector = Vector3(0, -1, 0);
 		bool gravity_is_point = false;
 		real_t gravity_point_unit_distance = 0;
+		PS3DE::AreaSpaceOverrideMode linear_damp_override_mode = PS3DE::AREA_SPACE_OVERRIDE_DISABLED;
 		real_t linear_damp = 0;
+		PS3DE::AreaSpaceOverrideMode angular_damp_override_mode = PS3DE::AREA_SPACE_OVERRIDE_DISABLED;
 		real_t angular_damp = 0;
+		real_t wind_force_magnitude = 0;
+		Vector3 wind_source;
+		Vector3 wind_direction;
+		real_t wind_attenuation_factor = 0;
 		Callable monitor_callback;
 		Callable area_monitor_callback;
 		// Overlap tracking (per-step diffing).
@@ -178,6 +189,10 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 
 	// User callbacks run while stepping; free_rid() defers the actual release
 	// to the end of the step so map iteration and in-flight objects stay valid.
+	bool active = true;
+	bool flushing_queries = false;
+	int active_objects = 0;
+	int collision_pairs = 0;
 	bool in_step = false;
 	Vector<RID> pending_frees;
 
@@ -193,7 +208,12 @@ class PhysXPhysicsServer3D : public PhysicsServer3DDummy {
 	void _resync_px_shape_indices(PhysXBody *p_body);
 	void _resync_px_shape_indices(PhysXArea *p_area);
 	void _apply_body_mode(PhysXBody *p_body);
+	void _apply_simulation_step_forces();
 	void _apply_body_mass(PhysXBody *p_body);
+	void _apply_body_damping(PhysXBody *p_body);
+	Vector<PhysXArea *> _get_overlapping_areas(const PhysXBody *p_body) const;
+	Vector3 _get_effective_gravity(const PhysXBody *p_body, const Vector3 &p_position) const;
+	real_t _get_effective_damping(const PhysXBody *p_body, bool p_angular) const;
 	void _apply_filter_data(PhysXBody *p_body);
 	void _destroy_joint(PhysXJoint *p_joint);
 	void _check_area_overlaps();
@@ -365,6 +385,9 @@ public:
 
 	// ---- Lifecycle ----
 	void free_rid(RID p_rid) override;
+	void set_active(bool p_active) override;
+	bool is_flushing_queries() const override { return flushing_queries; }
+	int get_process_info(PS3DE::ProcessInfo p_info) override;
 	void init() override;
 	void step(real_t p_step) override;
 	void sync() override;

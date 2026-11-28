@@ -42,7 +42,7 @@ KAIZEN_GCC_WARNING_PUSH_AND_IGNORE("-Wshadow")
 
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/Public/ShaderLang.h>
-#include <glslang/SPIRV/GlslangToSpv.h>
+#include <SPIRV/GlslangToSpv.h>
 
 KAIZEN_GCC_WARNING_POP
 

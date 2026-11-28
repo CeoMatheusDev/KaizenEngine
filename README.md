@@ -32,9 +32,9 @@ The project aims to preserve the flexibility and open-source philosophy of its u
 - 🎨 **Integrated editor:** visual creation and management of projects and scenes (inherited Godot infrastructure, with original modifications under development).
 - ⚡ **Rendering:** graphics infrastructure based on Godot's rendering architecture.
 - 🧩 **Scene and node system:** organization of game objects and behaviors (Godot-inherited scene architecture).
-- 🎯 **Physics:** 2D and 3D simulation and collision (Godot-inherited physics; the tree ships the renamed `kaizen_physics_2d`/`kaizen_physics_3d` modules as the default engine and the optional NVIDIA PhysX backend).
+- 🎯 **Physics:** built-in Kaizen 2D/3D servers plus an optional, source-built NVIDIA PhysX 5 backend for 3D. PhysX includes rigid bodies, shapes, areas, collision queries, joints, fixed-step simulation and collision filtering; unsupported features are documented in `modules/physx_physics_3d/README.md`.
 - 🔊 **Audio:** playback and management of audio (inherited from Godot).
-- 🛠️ **Extensibility:** ability to work with native code and scripting systems.
+- 🛠️ **Lua scripting:** Lua 5.5 scripts as `.lua` resources, with instance-isolated environments, node lifecycle callbacks, exports, signals, and engine Variant/object bindings.
 - 📦 **Multiplatform export:** export infrastructure inherited from Godot's architecture, subject to the platforms actually enabled in Kaizen.
 - 🔌 **Modularity:** ability to extend the engine's systems.
 
@@ -117,6 +117,19 @@ scons platform=linuxbsd target=template_debug
 ```
 
 `target=` can be omitted (`editor` is the default), but passing it explicitly avoids ambiguity. Replace `linuxbsd` with `windows` or `macos` as appropriate for your platform.
+
+#### Optional SDKs: Lua and PhysX
+
+The repository does not download large third-party SDKs during normal builds. Fetch the pinned open-source dependencies before compiling these modules:
+
+```bash
+python3 tools/sdk/sdk_manager.py --download lua/lua
+python3 tools/sdk/sdk_manager.py --download physx/physx
+./build.sh lua
+./build.sh physx
+```
+
+Lua sources are placed in `thirdparty/lua/lua/`; PhysX is placed in `thirdparty/physx/physx/`. To verify the standalone dependency smoke tests after building, run `./build.sh smoke`. For full script/server integration tests, build the editor with both modules and run `tests/kaizen/run_lua_engine_test.sh` and `tests/kaizen/run_physx_engine_test.sh`.
 
 ### Linux
 
@@ -216,9 +229,11 @@ scons platform=linuxbsd target=editor production=yes
 
 `dev_build` and `production` are options defined in the `SConstruct` itself (`dev_build` enables development-only debugging code; `production` adjusts the defaults for production builds).
 
-**C#/Mono module:** the Mono module exists in the tree, but it is **disabled by default**. To enable it, build with `module_mono_enabled=yes`. Without that option, C# support is not part of the build.
+**Lua scripting:** Lua 5.5 is the engine's script language. The `lua_script` module registers `.lua` resources with per-object script environments, lifecycle callbacks, exported properties, signals, engine Variant/object access, and editor syntax/function lookup. It requires the vendored Lua source checkout; fetch it before building (see below). The Lua language currently has no integrated debugger or syntax completion.
 
-**Lua:** there is no Lua module in the project tree. There is no Lua support to announce.
+**PhysX:** PhysX 5 is an optional 3D physics server, not the default server. Fetch the SDK before building the module. `./build.sh physx` builds the SDK and backend; select `PhysX Physics` in Project Settings under `physics/3d/physics_engine` (or launch with `--physics-3d-server "PhysX Physics"`).
+
+The former GDScript and Mono/C# modules are not included in this Kaizen tree.
 
 ---
 

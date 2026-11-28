@@ -3,6 +3,10 @@ from misc.utility.scons_hints import *
 
 Import("env")
 
+# glad's generated headers include <KHR/khrplatform.h> from their own root;
+# the engine-wide #thirdparty include alone locates glad/gl.h but not KHR/.
+env.Prepend(CPPPATH=["#thirdparty/glad-2.0.8"])
+
 env.add_source_files(env.drivers_sources, "*.cpp")
 
 SConscript("shaders/SCsub")

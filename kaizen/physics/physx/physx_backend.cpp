@@ -26,6 +26,7 @@
 #include "core/os/os.h"
 
 #include <atomic>
+#include <cmath>
 
 #include <characterkinematic/PxControllerManager.h>
 #include <extensions/PxDefaultCpuDispatcher.h>
@@ -49,11 +50,10 @@ _FORCE_INLINE_ uint64_t _owner_key_from_filter(const PxFilterData &d) {
 } // namespace
 
 PxFilterFlags PhysXBackend::filter_shader(PxFilterObjectAttributes p_attr_0, PxFilterData p_data_0, PxFilterObjectAttributes p_attr_1, PxFilterData p_data_1, PxPairFlags &r_pair_flags, const void *, PxU32) {
-	if (PxFilterObjectIsTrigger(p_attr_0) || PxFilterObjectIsTrigger(p_attr_1)) {
-		r_pair_flags = PxPairFlag::eTRIGGER_DEFAULT;
-		return PxFilterFlags();
-	}
-	if (!((p_data_0.word0 & p_data_1.word1) || (p_data_1.word0 & p_data_0.word1))) {
+	// Apply the same symmetric layer/mask and collision-exception rules to
+	// triggers as to solid contacts. Returning trigger flags before filtering
+	// would make area sensors overlap every actor regardless of their masks.
+	if (!(p_data_0.word0 & p_data_1.word1) || !(p_data_1.word0 & p_data_0.word1)) {
 		return PxFilterFlag::eSUPPRESS;
 	}
 	const uint64_t k0 = _owner_key_from_filter(p_data_0);
@@ -64,6 +64,10 @@ PxFilterFlags PhysXBackend::filter_shader(PxFilterObjectAttributes p_attr_0, PxF
 		if (it && it->value.has(k1)) {
 			return PxFilterFlag::eSUPPRESS;
 		}
+	}
+	if (PxFilterObjectIsTrigger(p_attr_0) || PxFilterObjectIsTrigger(p_attr_1)) {
+		r_pair_flags = PxPairFlag::eTRIGGER_DEFAULT;
+		return PxFilterFlags();
 	}
 	r_pair_flags = PxPairFlag::eSOLVE_CONTACT | PxPairFlag::eDETECT_DISCRETE_CONTACT | PxPairFlag::eNOTIFY_TOUCH_FOUND;
 	return PxFilterFlags();
@@ -78,8 +82,21 @@ void PhysXBackend::add_collision_exception(const void *p_owner_a, const void *p_
 
 void PhysXBackend::remove_collision_exception(const void *p_owner_a, const void *p_owner_b) {
 	MutexLock lock(exception_mutex);
-	exception_pairs[(uint64_t)(uintptr_t)p_owner_a].erase((uint64_t)(uintptr_t)p_owner_b);
-	exception_pairs[(uint64_t)(uintptr_t)p_owner_b].erase((uint64_t)(uintptr_t)p_owner_a);
+	const uint64_t key_a = (uint64_t)(uintptr_t)p_owner_a;
+	const uint64_t key_b = (uint64_t)(uintptr_t)p_owner_b;
+	if (HashSet<uint64_t> *pairs = exception_pairs.getptr(key_a)) {
+		pairs->erase(key_b);
+		if (pairs->is_empty()) {
+			exception_pairs.erase(key_a);
+		}
+	}
+	if (HashSet<uint64_t> *pairs = exception_pairs.getptr(key_b)) {
+		pairs->erase(key_a);
+		if (pairs->is_empty()) {
+			exception_pairs.erase(key_b);
+		}
+	}
+	has_exceptions.store(!exception_pairs.is_empty(), std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +166,17 @@ bool PhysXBackend::init() {
 		return true;
 	}
 
+	// Project settings can be edited by hand and bypass their UI hints. Keep the
+	// timestep in the documented range and guarantee at least one simulation step.
+	if (!std::isfinite(double(config.simulation_step)) || config.simulation_step < 0.001 || config.simulation_step > 0.1) {
+		WARN_PRINT("PhysX: simulation_step must be finite and between 0.001 and 0.1 seconds; using 1/60 second.");
+		config.simulation_step = 1.0 / 60.0;
+	}
+	if (config.max_sub_steps < 1 || config.max_sub_steps > 16) {
+		WARN_PRINT("PhysX: max_sub_steps must be between 1 and 16; clamping the setting.");
+		config.max_sub_steps = CLAMP(config.max_sub_steps, 1, 16);
+	}
+
 	foundation = PxCreateFoundation(PX_PHYSICS_VERSION, px_allocator, px_error_callback);
 	ERR_FAIL_NULL_V_MSG(foundation, false, "PhysX: PxCreateFoundation failed.");
 
@@ -162,7 +190,8 @@ bool PhysXBackend::init() {
 		return false;
 	}
 
-	const uint32_t worker_count = MAX(1u, (uint32_t)OS::get_singleton()->get_processor_count() - 1u);
+	const int processor_count = MAX(1, OS::get_singleton()->get_processor_count());
+	const uint32_t worker_count = (uint32_t)MAX(1, processor_count - 1);
 	dispatcher = PxDefaultCpuDispatcherCreate(worker_count);
 	ERR_FAIL_NULL_V_MSG(dispatcher, false, "PhysX: PxDefaultCpuDispatcherCreate failed.");
 
@@ -204,10 +233,15 @@ void PhysXBackend::cleanup() {
 	for (int i = 0; i < scenes.size(); i++) {
 		PxScene *scene = static_cast<PxScene *>(scenes[i]);
 		if (scene) {
+			if (i < scene_pending_results.size() && scene_pending_results[i]) {
+				scene->fetchResults(true);
+			}
 			scene->release();
 		}
 	}
 	scenes.clear();
+	scene_active.clear();
+	scene_pending_results.clear();
 
 	if (dispatcher) {
 		static_cast<PxDefaultCpuDispatcher *>(dispatcher)->release();
@@ -247,6 +281,10 @@ void *PhysXBackend::create_scene(const Vector3 &p_gravity) {
 	}
 
 	scenes.push_back(scene);
+	// Standalone PhysXBackend clients expect a newly-created SDK scene to run.
+	// PhysicsServer3D overrides this to inactive until its space is activated.
+	scene_active.push_back(1);
+	scene_pending_results.push_back(0);
 
 	if (config.character_controller) {
 		PxControllerManager *mgr = PxCreateControllerManager(*scene);
@@ -271,8 +309,13 @@ void PhysXBackend::destroy_scene(void *p_scene) {
 	}
 	PxScene *scene = static_cast<PxScene *>(p_scene);
 
-	// Release the controller manager tied to this scene first.
 	const int scene_idx = scenes.find(scene);
+	if (scene_idx >= 0 && scene_idx < scene_pending_results.size() && scene_pending_results[scene_idx]) {
+		scene->fetchResults(true);
+		scene_pending_results.write[scene_idx] = 0;
+	}
+
+	// Release the controller manager tied to this scene first.
 	if (scene_idx >= 0 && scene_idx < controller_managers.size()) {
 		PxControllerManager *mgr = static_cast<PxControllerManager *>(controller_managers[scene_idx]);
 		if (mgr) {
@@ -289,12 +332,36 @@ void PhysXBackend::destroy_scene(void *p_scene) {
 	}
 	if (scene_idx >= 0) {
 		scenes.remove_at(scene_idx);
+		if (scene_idx < scene_active.size()) {
+			scene_active.remove_at(scene_idx);
+		}
+		if (scene_idx < scene_pending_results.size()) {
+			scene_pending_results.remove_at(scene_idx);
+		}
 	}
 	scene->release();
 }
 
+void PhysXBackend::set_scene_active(void *p_scene, bool p_active) {
+	const int scene_idx = scenes.find(p_scene);
+	if (scene_idx < 0 || scene_idx >= scene_active.size()) {
+		ERR_PRINT("PhysX: cannot change activity for an unknown scene.");
+		return;
+	}
+	scene_active.write[scene_idx] = p_active ? 1 : 0;
+}
+
 bool PhysXBackend::simulate(float p_step) {
-	if (scenes.is_empty()) {
+	bool has_active_scene = false;
+	for (int i = 0; i < scenes.size() && i < scene_active.size(); i++) {
+		has_active_scene = has_active_scene || scene_active[i] != 0;
+	}
+	if (!has_active_scene) {
+		step_accumulator = 0;
+		return true;
+	}
+	if (!std::isfinite(double(p_step)) || p_step <= 0.0f) {
+		WARN_PRINT_ONCE("PhysX: ignoring a non-finite or non-positive frame step.");
 		return true;
 	}
 
@@ -303,9 +370,18 @@ bool PhysXBackend::simulate(float p_step) {
 	step_accumulator += p_step;
 	int sub_steps = 0;
 	while (step_accumulator >= fixed_step && sub_steps < config.max_sub_steps) {
-		for (int i = 0; i < scenes.size(); i++) {
+		if (before_simulation_step) {
+			before_simulation_step();
+		}
+		for (int i = 0; i < scenes.size() && i < scene_active.size(); i++) {
+			if (scene_active[i] == 0) {
+				continue;
+			}
 			PxScene *scene = static_cast<PxScene *>(scenes[i]);
 			scene->simulate(fixed_step);
+			if (i < scene_pending_results.size()) {
+				scene_pending_results.write[i] = 1;
+			}
 		}
 		step_accumulator -= fixed_step;
 		sub_steps++;
@@ -319,12 +395,16 @@ bool PhysXBackend::simulate(float p_step) {
 
 bool PhysXBackend::fetch_results(bool p_wait) {
 	bool all_ok = true;
-	for (int i = 0; i < scenes.size(); i++) {
+	for (int i = 0; i < scenes.size() && i < scene_pending_results.size(); i++) {
+		if (scene_pending_results[i] == 0) {
+			continue;
+		}
 		PxScene *scene = static_cast<PxScene *>(scenes[i]);
 		if (p_wait || scene->checkResults()) {
 			if (!scene->fetchResults(p_wait)) {
 				all_ok = false;
 			}
+			scene_pending_results.write[i] = 0;
 		}
 	}
 	return all_ok;
