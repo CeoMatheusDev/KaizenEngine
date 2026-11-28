@@ -40,11 +40,14 @@ namespace {
 class PhysXQueryFilter : public PxQueryFilterCallback {
 public:
 	uint32_t collision_mask = UINT32_MAX;
+	uint32_t collision_layer = UINT32_MAX;
+	bool require_reciprocal_mask = false;
 	HashSet<const void *> exclude;
 	bool collide_bodies = true;
 	bool collide_areas = false;
+	bool return_touch_hits = false;
 
-	virtual PxQueryHitType::Enum preFilter(const PxFilterData &filterData, const PxShape *shape, const PxRigidActor *actor, PxHitFlags &) override {
+	virtual PxQueryHitType::Enum preFilter(const PxFilterData &, const PxShape *shape, const PxRigidActor *actor, PxHitFlags &) override {
 		if (!actor || !shape) {
 			return PxQueryHitType::eNONE;
 		}
@@ -59,13 +62,35 @@ public:
 		if (!is_trigger && !collide_bodies) {
 			return PxQueryHitType::eNONE;
 		}
-		if (!(filterData.word0 & collision_mask)) {
+		// PxQueryFilterCallback::preFilter receives the query's filter data in
+		// its first argument, not the candidate shape's data. Read the latter
+		// from the shape so collision masks actually filter scene-query hits.
+		const PxFilterData shape_filter_data = shape->getQueryFilterData();
+		if (!(shape_filter_data.word0 & collision_mask) || (require_reciprocal_mask && !(shape_filter_data.word1 & collision_layer))) {
 			return PxQueryHitType::eNONE;
 		}
-		return PxQueryHitType::eBLOCK;
+		return return_touch_hits ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
 	}
 	virtual PxQueryHitType::Enum postFilter(const PxFilterData &, const PxQueryHit &, const PxShape *, const PxRigidActor *) override {
-		return PxQueryHitType::eBLOCK;
+		return return_touch_hits ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
+	}
+};
+
+// Stream touch hits in bounded batches so area queries don't truncate the
+// set of actors they collect when a scene contains more than a fixed buffer.
+class PhysXOverlapCollector : public PxHitCallback<PxOverlapHit> {
+	PxOverlapHit touch_buffer[64];
+
+public:
+	Vector<PxOverlapHit> hits;
+
+	PhysXOverlapCollector() : PxHitCallback<PxOverlapHit>(touch_buffer, 64) {}
+
+	virtual PxAgain processTouches(const PxOverlapHit *p_hits, PxU32 p_count) override {
+		for (PxU32 i = 0; i < p_count; i++) {
+			hits.push_back(p_hits[i]);
+		}
+		return true;
 	}
 };
 
@@ -100,6 +125,7 @@ public:
 			PhysicsDirectBodyState3DDummy(nullptr) {}
 
 	PhysXBody *body = nullptr;
+	PhysXPhysicsServer3D *server = nullptr;
 
 	virtual Transform3D get_transform() const override {
 		return body && body->actor ? PhysXBackend::from_px(body->actor->getGlobalPose()) : Transform3D();
@@ -117,13 +143,23 @@ public:
 		return dyn && dyn->getMass() > 0 ? 1.0 / dyn->getMass() : 0.0;
 	}
 	virtual Vector3 get_total_gravity() const override {
-		return body ? (real_t)body->params[PS3DE::BODY_PARAM_GRAVITY_SCALE] * Vector3(0, -9.81, 0) : Vector3();
+		if (!body || !server) {
+			return Vector3();
+		}
+		const Vector3 position = get_transform().origin;
+		return server->_get_effective_gravity(body, position);
 	}
 	virtual real_t get_total_angular_damp() const override {
-		return body ? (real_t)body->params[PS3DE::BODY_PARAM_ANGULAR_DAMP] : (real_t)0;
+		if (!body) {
+			return 0.0;
+		}
+		return server ? server->_get_effective_damping(body, true) : (real_t)body->params[PS3DE::BODY_PARAM_ANGULAR_DAMP];
 	}
 	virtual real_t get_total_linear_damp() const override {
-		return body ? (real_t)body->params[PS3DE::BODY_PARAM_LINEAR_DAMP] : (real_t)0;
+		if (!body) {
+			return 0.0;
+		}
+		return server ? server->_get_effective_damping(body, false) : (real_t)body->params[PS3DE::BODY_PARAM_LINEAR_DAMP];
 	}
 	virtual Vector3 get_center_of_mass() const override {
 		PxRigidDynamic *dyn = body ? body->actor ? body->actor->is<PxRigidDynamic>() : nullptr : nullptr;
@@ -199,6 +235,12 @@ public:
 	virtual bool is_sleeping() const override {
 		PxRigidDynamic *dyn = body ? body->actor ? body->actor->is<PxRigidDynamic>() : nullptr : nullptr;
 		return dyn ? dyn->isSleeping() : true;
+	}
+	virtual real_t get_step() const override {
+		return server ? server->backend->get_config().simulation_step : 0.0;
+	}
+	virtual void integrate_forces() override {
+		PhysicsDirectBodyState3D::integrate_forces();
 	}
 	virtual int get_contact_count() const override { return 0; }
 };
@@ -761,12 +803,137 @@ void PhysXPhysicsServer3D::_apply_body_mode(PhysXBody *p_body) {
 		return;
 	}
 	p_body->actor->userData = p_body;
+	if (PxRigidDynamic *dynamic = p_body->actor->is<PxRigidDynamic>()) {
+		// Per-body gravity scale is part of the PhysicsServer contract; PhysX
+		// scene gravity cannot represent arbitrary per-actor scales directly.
+		dynamic->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+	}
 	_body_rebuild_shapes(p_body);
 	_apply_body_mass(p_body);
+	_apply_body_damping(p_body);
 	_apply_filter_data(p_body);
 	if (sp && sp->scene) {
 		sp->scene->addActor(*p_body->actor);
 	}
+}
+
+void PhysXPhysicsServer3D::_apply_body_damping(PhysXBody *p_body) {
+	PxRigidDynamic *dyn = p_body->actor ? p_body->actor->is<PxRigidDynamic>() : nullptr;
+	if (!dyn) {
+		return;
+	}
+	const PhysXSpace *space = space_owner.get_or_null(p_body->space);
+	const real_t linear = (real_t)p_body->params[PS3DE::BODY_PARAM_LINEAR_DAMP] + (space ? space->default_linear_damp : 0.0);
+	const real_t angular = (real_t)p_body->params[PS3DE::BODY_PARAM_ANGULAR_DAMP] + (space ? space->default_angular_damp : 0.0);
+	dyn->setLinearDamping((float)MAX((real_t)0.0, linear));
+	dyn->setAngularDamping((float)MAX((real_t)0.0, angular));
+}
+
+Vector<PhysXPhysicsServer3D::PhysXArea *> PhysXPhysicsServer3D::_get_overlapping_areas(const PhysXBody *p_body) const {
+	Vector<PhysXArea *> result;
+	for (const KeyValue<RID, PhysXArea *> &entry : area_map) {
+		PhysXArea *area = entry.value;
+		if (area->space == p_body->space && area->overlapping_bodies.has(p_body->rid)) {
+			result.push_back(area);
+		}
+	}
+	// Keep ascending order; callers iterate backwards so high-priority areas
+	// resolve first, matching the built-in PhysicsServer3D.
+	for (int i = 1; i < result.size(); i++) {
+		PhysXArea *key = result[i];
+		int j = i - 1;
+		while (j >= 0 && result[j]->priority > key->priority) {
+			result.write[j + 1] = result[j];
+			j--;
+		}
+		result.write[j + 1] = key;
+	}
+	return result;
+}
+
+Vector3 PhysXPhysicsServer3D::_get_effective_gravity(const PhysXBody *p_body, const Vector3 &p_position) const {
+	const PhysXSpace *space = space_owner.get_or_null(p_body->space);
+	Vector3 gravity;
+	bool gravity_done = false;
+	const Vector<PhysXArea *> areas = _get_overlapping_areas(p_body);
+	for (int i = areas.size() - 1; i >= 0 && !gravity_done; i--) {
+		const PhysXArea *area = areas[i];
+		const PS3DE::AreaSpaceOverrideMode mode = area->gravity_override_mode;
+		if (mode == PS3DE::AREA_SPACE_OVERRIDE_DISABLED) {
+			continue;
+		}
+		Vector3 area_gravity;
+		if (area->gravity_is_point) {
+			const Vector3 target = area_get_transform(area->rid).xform(area->gravity_vector);
+			const Vector3 toward_point = target - p_position;
+			const real_t distance_sq = toward_point.length_squared();
+			if (distance_sq > CMP_EPSILON) {
+				const real_t unit_distance = area->gravity_point_unit_distance;
+				const real_t magnitude = unit_distance > 0.0 ? area->gravity * unit_distance * unit_distance / distance_sq : area->gravity;
+				area_gravity = toward_point.normalized() * magnitude;
+			}
+		} else {
+			area_gravity = area->gravity_vector * area->gravity;
+		}
+		switch (mode) {
+			case PS3DE::AREA_SPACE_OVERRIDE_COMBINE:
+			case PS3DE::AREA_SPACE_OVERRIDE_COMBINE_REPLACE:
+				gravity += area_gravity;
+				gravity_done = mode == PS3DE::AREA_SPACE_OVERRIDE_COMBINE_REPLACE;
+				break;
+			case PS3DE::AREA_SPACE_OVERRIDE_REPLACE:
+			case PS3DE::AREA_SPACE_OVERRIDE_REPLACE_COMBINE:
+				gravity = area_gravity;
+				gravity_done = mode == PS3DE::AREA_SPACE_OVERRIDE_REPLACE;
+				break;
+			default:
+				break;
+		}
+	}
+	if (!gravity_done) {
+		gravity += space ? space->gravity : Vector3(0, -9.81, 0);
+	}
+	return gravity * (real_t)p_body->params[PS3DE::BODY_PARAM_GRAVITY_SCALE];
+}
+
+real_t PhysXPhysicsServer3D::_get_effective_damping(const PhysXBody *p_body, bool p_angular) const {
+	const PhysXSpace *space = space_owner.get_or_null(p_body->space);
+	real_t damping = 0.0;
+	bool damping_done = false;
+	const Vector<PhysXArea *> areas = _get_overlapping_areas(p_body);
+	for (int i = areas.size() - 1; i >= 0 && !damping_done; i--) {
+		const PhysXArea *area = areas[i];
+		const PS3DE::AreaSpaceOverrideMode mode = p_angular ? area->angular_damp_override_mode : area->linear_damp_override_mode;
+		if (mode == PS3DE::AREA_SPACE_OVERRIDE_DISABLED) {
+			continue;
+		}
+		const real_t value = p_angular ? area->angular_damp : area->linear_damp;
+		switch (mode) {
+			case PS3DE::AREA_SPACE_OVERRIDE_COMBINE:
+		case PS3DE::AREA_SPACE_OVERRIDE_COMBINE_REPLACE:
+			damping += value;
+			damping_done = mode == PS3DE::AREA_SPACE_OVERRIDE_COMBINE_REPLACE;
+			break;
+		case PS3DE::AREA_SPACE_OVERRIDE_REPLACE:
+		case PS3DE::AREA_SPACE_OVERRIDE_REPLACE_COMBINE:
+			damping = value;
+			damping_done = mode == PS3DE::AREA_SPACE_OVERRIDE_REPLACE;
+			break;
+		default:
+			break;
+		}
+	}
+	if (!damping_done && space) {
+		damping += p_angular ? space->default_angular_damp : space->default_linear_damp;
+	}
+	const PS3DE::BodyParameter body_mode_param = p_angular ? PS3DE::BODY_PARAM_ANGULAR_DAMP_MODE : PS3DE::BODY_PARAM_LINEAR_DAMP_MODE;
+	const PS3DE::BodyParameter body_value_param = p_angular ? PS3DE::BODY_PARAM_ANGULAR_DAMP : PS3DE::BODY_PARAM_LINEAR_DAMP;
+	if ((int)p_body->params[body_mode_param] == PS3DE::BODY_DAMP_MODE_REPLACE) {
+		damping = p_body->params[body_value_param];
+	} else {
+		damping += (real_t)p_body->params[body_value_param];
+	}
+	return MAX((real_t)0.0, damping);
 }
 
 void PhysXPhysicsServer3D::_apply_body_mass(PhysXBody *p_body) {
@@ -810,7 +977,7 @@ void PhysXPhysicsServer3D::_destroy_joint(PhysXJoint *p_joint) {
 }
 
 void PhysXPhysicsServer3D::_check_area_overlaps() {
-	// Per-step overlap diffing: covers body<->area and area<->area monitors.
+	// Per-step overlap cache drives both area effects and optional monitor callbacks.
 	// Snapshot the areas first: monitor callbacks run below and may create
 	// areas (map growth would invalidate a live iterator).
 	Vector<PhysXArea *> areas;
@@ -819,11 +986,11 @@ void PhysXPhysicsServer3D::_check_area_overlaps() {
 	}
 	for (int ai = 0; ai < areas.size(); ai++) {
 		PhysXArea *area = areas[ai];
-		if (!area->actor || !area->monitorable) {
+		if (!area->actor) {
 			continue;
 		}
 		PhysXSpace *sp = space_owner.get_or_null(area->space);
-		if (!sp || !sp->scene) {
+		if (!sp || !sp->active || !sp->scene) {
 			continue;
 		}
 
@@ -832,13 +999,15 @@ void PhysXPhysicsServer3D::_check_area_overlaps() {
 
 		PhysXQueryFilter filter;
 		filter.collision_mask = area->collision_mask;
+		filter.collision_layer = area->collision_layer;
+		filter.require_reciprocal_mask = true;
 		filter.collide_bodies = true;
 		filter.collide_areas = true;
+		filter.return_touch_hits = true;
 		filter.exclude.insert(area);
 
-		PxOverlapBuffer buffer;
 		PxQueryFilterData qdata;
-		qdata.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER;
+		qdata.flags = PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER | PxQueryFlag::eNO_BLOCK;
 		for (int i = 0; i < area->shapes.size(); i++) {
 			const ShapeInstance &inst = area->shapes[i];
 			PhysXShape *s = shape_owner.get_or_null(inst.shape_rid);
@@ -846,11 +1015,9 @@ void PhysXPhysicsServer3D::_check_area_overlaps() {
 				continue;
 			}
 			const PxTransform pose = area->actor->getGlobalPose() * PhysXBackend::to_px(inst.local_transform);
-			if (!sp->scene->overlap(s->geometry.any(), pose, buffer, qdata, &filter)) {
-				continue;
-			}
-			for (PxU32 t = 0; t < buffer.nbTouches; t++) {
-				const PxOverlapHit &hit = buffer.touches[t];
+			PhysXOverlapCollector buffer;
+			sp->scene->overlap(s->geometry.any(), pose, buffer, qdata, &filter);
+			for (const PxOverlapHit &hit : buffer.hits) {
 				if (!hit.actor) {
 					continue;
 				}
@@ -865,7 +1032,10 @@ void PhysXPhysicsServer3D::_check_area_overlaps() {
 				if (owner->kind == PhysXPhysicsServer3D::PhysXObject::BODY) {
 					new_bodies[owner->rid].push_back(shape_idx);
 				} else {
-					new_areas[owner->rid].push_back(shape_idx);
+					PhysXArea *other_area = area_owner.get_or_null(owner->rid);
+					if (other_area && other_area->monitorable) {
+						new_areas[owner->rid].push_back(shape_idx);
+					}
 				}
 			}
 		}
@@ -1040,6 +1210,9 @@ RID PhysXPhysicsServer3D::space_create() {
 	PhysXSpace *sp = space_owner.get_or_null(rid);
 	sp->rid = rid;
 	sp->scene = (PxScene *)backend->create_scene(sp->gravity);
+	if (sp->scene) {
+		backend->set_scene_active(sp->scene, false);
+	}
 	space_map[rid] = sp;
 	if (!default_space.is_valid()) {
 		default_space = rid;
@@ -1051,6 +1224,9 @@ void PhysXPhysicsServer3D::space_set_active(RID p_space, bool p_active) {
 	PhysXSpace *sp = space_owner.get_or_null(p_space);
 	ERR_FAIL_NULL(sp);
 	sp->active = p_active;
+	if (sp->scene) {
+		backend->set_scene_active(sp->scene, p_active);
+	}
 }
 
 bool PhysXPhysicsServer3D::space_is_active(RID p_space) const {
@@ -1236,9 +1412,46 @@ ObjectID PhysXPhysicsServer3D::area_get_object_instance_id(RID p_area) const {
 }
 
 void PhysXPhysicsServer3D::area_set_param(RID p_area, PS3DE::AreaParameter p_param, const Variant &p_value) {
+	// World3D configures the default gravity and damping through this same API,
+	// passing its SPACE RID. Handle that engine contract before looking up an area.
+	if (PhysXSpace *space = space_owner.get_or_null(p_area)) {
+		switch (p_param) {
+			case PS3DE::AREA_PARAM_GRAVITY:
+				space->gravity_magnitude = MAX((real_t)0.0, (real_t)p_value);
+				break;
+			case PS3DE::AREA_PARAM_GRAVITY_VECTOR:
+				space->gravity_direction = p_value;
+				break;
+			case PS3DE::AREA_PARAM_LINEAR_DAMP:
+				space->default_linear_damp = MAX((real_t)0.0, (real_t)p_value);
+				break;
+			case PS3DE::AREA_PARAM_ANGULAR_DAMP:
+				space->default_angular_damp = MAX((real_t)0.0, (real_t)p_value);
+				break;
+			default:
+				space->params[(int)p_param] = (real_t)p_value;
+				break;
+		}
+		space->gravity = space->gravity_direction.is_zero_approx() ? Vector3() : space->gravity_direction.normalized() * space->gravity_magnitude;
+		if (space->scene) {
+			space->scene->setGravity(PhysXBackend::to_px(space->gravity));
+		}
+		if (p_param == PS3DE::AREA_PARAM_LINEAR_DAMP || p_param == PS3DE::AREA_PARAM_ANGULAR_DAMP) {
+			for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+				if (E.value->space == p_area) {
+					_apply_body_damping(E.value);
+				}
+			}
+		}
+		return;
+	}
+
 	PhysXArea *area = area_owner.get_or_null(p_area);
 	ERR_FAIL_NULL(area);
 	switch (p_param) {
+		case PS3DE::AREA_PARAM_GRAVITY_OVERRIDE_MODE: {
+			area->gravity_override_mode = (PS3DE::AreaSpaceOverrideMode)(int)p_value;
+		} break;
 		case PS3DE::AREA_PARAM_GRAVITY: {
 			area->gravity = p_value;
 		} break;
@@ -1251,8 +1464,14 @@ void PhysXPhysicsServer3D::area_set_param(RID p_area, PS3DE::AreaParameter p_par
 		case PS3DE::AREA_PARAM_GRAVITY_POINT_UNIT_DISTANCE: {
 			area->gravity_point_unit_distance = p_value;
 		} break;
+		case PS3DE::AREA_PARAM_LINEAR_DAMP_OVERRIDE_MODE: {
+			area->linear_damp_override_mode = (PS3DE::AreaSpaceOverrideMode)(int)p_value;
+		} break;
 		case PS3DE::AREA_PARAM_LINEAR_DAMP: {
 			area->linear_damp = p_value;
+		} break;
+		case PS3DE::AREA_PARAM_ANGULAR_DAMP_OVERRIDE_MODE: {
+			area->angular_damp_override_mode = (PS3DE::AreaSpaceOverrideMode)(int)p_value;
 		} break;
 		case PS3DE::AREA_PARAM_ANGULAR_DAMP: {
 			area->angular_damp = p_value;
@@ -1260,8 +1479,19 @@ void PhysXPhysicsServer3D::area_set_param(RID p_area, PS3DE::AreaParameter p_par
 		case PS3DE::AREA_PARAM_PRIORITY: {
 			area->priority = p_value;
 		} break;
+		case PS3DE::AREA_PARAM_WIND_FORCE_MAGNITUDE: {
+			area->wind_force_magnitude = MAX((real_t)0.0, (real_t)p_value);
+		} break;
+		case PS3DE::AREA_PARAM_WIND_SOURCE: {
+			area->wind_source = p_value;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_DIRECTION: {
+			area->wind_direction = p_value;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_ATTENUATION_FACTOR: {
+			area->wind_attenuation_factor = MAX((real_t)0.0, (real_t)p_value);
+		} break;
 		default: {
-			// Wind and override modes: cached only (documented limitation).
 		} break;
 	}
 }
@@ -1275,9 +1505,28 @@ void PhysXPhysicsServer3D::area_set_transform(RID p_area, const Transform3D &p_t
 }
 
 Variant PhysXPhysicsServer3D::area_get_param(RID p_parea, PS3DE::AreaParameter p_param) const {
+	if (const PhysXSpace *space = space_owner.get_or_null(p_parea)) {
+		switch (p_param) {
+			case PS3DE::AREA_PARAM_GRAVITY:
+				return space->gravity_magnitude;
+			case PS3DE::AREA_PARAM_GRAVITY_VECTOR:
+				return space->gravity_direction;
+			case PS3DE::AREA_PARAM_LINEAR_DAMP:
+				return space->default_linear_damp;
+			case PS3DE::AREA_PARAM_ANGULAR_DAMP:
+				return space->default_angular_damp;
+			default: {
+				const HashMap<int, real_t>::ConstIterator it = space->params.find((int)p_param);
+				return it ? Variant(it->value) : Variant();
+			}
+		}
+	}
 	const PhysXArea *area = area_owner.get_or_null(p_parea);
 	ERR_FAIL_NULL_V(area, Variant());
 	switch (p_param) {
+		case PS3DE::AREA_PARAM_GRAVITY_OVERRIDE_MODE: {
+			return (int)area->gravity_override_mode;
+		} break;
 		case PS3DE::AREA_PARAM_GRAVITY: {
 			return area->gravity;
 		} break;
@@ -1290,14 +1539,32 @@ Variant PhysXPhysicsServer3D::area_get_param(RID p_parea, PS3DE::AreaParameter p
 		case PS3DE::AREA_PARAM_GRAVITY_POINT_UNIT_DISTANCE: {
 			return area->gravity_point_unit_distance;
 		} break;
+		case PS3DE::AREA_PARAM_LINEAR_DAMP_OVERRIDE_MODE: {
+			return (int)area->linear_damp_override_mode;
+		} break;
 		case PS3DE::AREA_PARAM_LINEAR_DAMP: {
 			return area->linear_damp;
+		} break;
+		case PS3DE::AREA_PARAM_ANGULAR_DAMP_OVERRIDE_MODE: {
+			return (int)area->angular_damp_override_mode;
 		} break;
 		case PS3DE::AREA_PARAM_ANGULAR_DAMP: {
 			return area->angular_damp;
 		} break;
 		case PS3DE::AREA_PARAM_PRIORITY: {
 			return area->priority;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_FORCE_MAGNITUDE: {
+			return area->wind_force_magnitude;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_SOURCE: {
+			return area->wind_source;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_DIRECTION: {
+			return area->wind_direction;
+		} break;
+		case PS3DE::AREA_PARAM_WIND_ATTENUATION_FACTOR: {
+			return area->wind_attenuation_factor;
 		} break;
 		default: {
 			return Variant();
@@ -1390,6 +1657,7 @@ void PhysXPhysicsServer3D::body_set_space(RID p_body, RID p_space) {
 	if (sp && sp->scene && body->actor) {
 		sp->scene->addActor(*body->actor);
 	}
+	_apply_body_damping(body);
 }
 
 RID PhysXPhysicsServer3D::body_get_space(RID p_body) const {
@@ -1582,7 +1850,6 @@ void PhysXPhysicsServer3D::body_set_param(RID p_body, PS3DE::BodyParameter p_par
 	body->params[p_param] = p_value;
 	body->param_set[p_param] = true;
 
-	PxRigidDynamic *dyn = body->actor ? body->actor->is<PxRigidDynamic>() : nullptr;
 	switch (p_param) {
 		case PS3DE::BODY_PARAM_MASS:
 		case PS3DE::BODY_PARAM_INERTIA:
@@ -1606,15 +1873,9 @@ void PhysXPhysicsServer3D::body_set_param(RID p_body, PS3DE::BodyParameter p_par
 				}
 			}
 		} break;
-		case PS3DE::BODY_PARAM_LINEAR_DAMP: {
-			if (dyn) {
-				dyn->setLinearDamping((float)(real_t)p_value);
-			}
-		} break;
+		case PS3DE::BODY_PARAM_LINEAR_DAMP:
 		case PS3DE::BODY_PARAM_ANGULAR_DAMP: {
-			if (dyn) {
-				dyn->setAngularDamping((float)(real_t)p_value);
-			}
+			_apply_body_damping(body);
 		} break;
 		default: {
 			// Gravity scale/damp modes handled at step() level (documented).
@@ -1950,6 +2211,7 @@ PhysicsDirectBodyState3D *PhysXPhysicsServer3D::body_get_direct_state(RID p_body
 	if (!direct_body_states.has(p_body)) {
 		PhysXDirectBodyState *state = memnew(PhysXDirectBodyState);
 		state->body = body;
+		state->server = this;
 		direct_body_states[p_body] = state;
 	}
 	PhysXDirectBodyState *state = direct_body_states[p_body];
@@ -2531,6 +2793,22 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 	}
 	if (body_owner.owns(p_rid)) {
 		PhysXBody *body = body_owner.get_or_null(p_rid);
+		// Remove both directions before freeing the owner pointer. Filter data
+		// stores this address; leaving it in the global exception table could
+		// suppress collisions for a later object allocated at the same address.
+		for (const RID &exception_rid : body->exceptions) {
+			PhysXBody *other = body_owner.get_or_null(exception_rid);
+			if (other) {
+				PhysXBackend::remove_collision_exception(body, other);
+				other->exceptions.erase(p_rid);
+			}
+		}
+		for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+			if (E.key != p_rid && E.value->exceptions.has(p_rid)) {
+				E.value->exceptions.erase(p_rid);
+				PhysXBackend::remove_collision_exception(body, E.value);
+			}
+		}
 		for (int i = body->shapes.size() - 1; i >= 0; i--) {
 			_body_remove_px_shape(body, i);
 		}
@@ -2613,6 +2891,53 @@ void PhysXPhysicsServer3D::free_rid(RID p_rid) {
 	}
 }
 
+void PhysXPhysicsServer3D::_apply_simulation_step_forces() {
+	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+		PhysXBody *body = E.value;
+		PhysXSpace *body_space = space_owner.get_or_null(body->space);
+		if (!body_space || !body_space->active) {
+			continue;
+		}
+		PxRigidDynamic *dyn = body->actor ? body->actor->is<PxRigidDynamic>() : nullptr;
+		if (!dyn || body->mode == PS3DE::BODY_MODE_KINEMATIC) {
+			continue;
+		}
+		// Resolve gravity and damping from the current overlap set. These values
+		// are recalculated for every actual fixed substep.
+		const Vector3 body_position = PhysXBackend::from_px(dyn->getGlobalPose().p);
+		const Vector3 effective_gravity = _get_effective_gravity(body, body_position);
+		dyn->setLinearDamping((float)_get_effective_damping(body, false));
+		dyn->setAngularDamping((float)_get_effective_damping(body, true));
+
+		if (!effective_gravity.is_zero_approx()) {
+			dyn->addForce(PhysXBackend::to_px(effective_gravity), PxForceMode::eACCELERATION);
+		}
+		if (!body->constant_force.is_zero_approx()) {
+			dyn->addForce(PhysXBackend::to_px(body->constant_force), PxForceMode::eFORCE);
+		}
+		if (!body->constant_torque.is_zero_approx()) {
+			dyn->addTorque(PhysXBackend::to_px(body->constant_torque), PxForceMode::eFORCE);
+		}
+	}
+}
+
+void PhysXPhysicsServer3D::set_active(bool p_active) {
+	active = p_active;
+}
+
+int PhysXPhysicsServer3D::get_process_info(PS3DE::ProcessInfo p_info) {
+	switch (p_info) {
+		case PS3DE::INFO_ACTIVE_OBJECTS:
+			return active_objects;
+		case PS3DE::INFO_COLLISION_PAIRS:
+			return collision_pairs;
+		case PS3DE::INFO_ISLAND_COUNT:
+			// PhysX does not expose a stable cross-version island counter here.
+			return 0;
+	}
+	return 0;
+}
+
 void PhysXPhysicsServer3D::init() {
 	// Apply the physics/physx_physics_3d/* project settings before startup.
 	PhysXBackend::Config &cfg = backend->get_config();
@@ -2624,7 +2949,6 @@ void PhysXPhysicsServer3D::init() {
 		cfg.gpu_acceleration = get_bool("physics/physx_physics_3d/gpu_acceleration", cfg.gpu_acceleration);
 		cfg.cooking = get_bool("physics/physx_physics_3d/cooking", cfg.cooking);
 		cfg.character_controller = get_bool("physics/physx_physics_3d/character_controller", cfg.character_controller);
-		cfg.vehicle = get_bool("physics/physx_physics_3d/vehicle", cfg.vehicle);
 		cfg.broadphase_mbp = get_bool("physics/physx_physics_3d/broadphase_mbp", cfg.broadphase_mbp);
 		if (ps->has_setting("physics/physx_physics_3d/simulation_step")) {
 			cfg.simulation_step = (real_t)ps->get_setting("physics/physx_physics_3d/simulation_step");
@@ -2633,29 +2957,19 @@ void PhysXPhysicsServer3D::init() {
 			cfg.max_sub_steps = (int)ps->get_setting("physics/physx_physics_3d/max_sub_steps");
 		}
 	}
+	backend->set_before_simulation_step([this]() { _apply_simulation_step_forces(); });
 	backend->init();
 }
 
 void PhysXPhysicsServer3D::step(real_t p_step) {
-	if (!backend->get_physics()) {
+	if (!active || !backend->get_physics()) {
 		return;
 	}
+	active_objects = 0;
+	collision_pairs = 0;
 
-	// Apply constant forces and force-integration callbacks before simulating.
-	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
-		PhysXBody *body = E.value;
-		PxRigidDynamic *dyn = body->actor ? body->actor->is<PxRigidDynamic>() : nullptr;
-		if (!dyn || body->mode == PS3DE::BODY_MODE_KINEMATIC) {
-			continue;
-		}
-		if (!body->constant_force.is_zero_approx()) {
-			dyn->addForce(PhysXBackend::to_px(body->constant_force), PxForceMode::eFORCE);
-		}
-		if (!body->constant_torque.is_zero_approx()) {
-			dyn->addTorque(PhysXBackend::to_px(body->constant_torque), PxForceMode::eFORCE);
-		}
-	}
-
+	// Gravity and persistent forces are applied inside PhysXBackend once per
+	// actual fixed substep, not once per rendered frame.
 	backend->simulate((float)p_step);
 	backend->fetch_results(true);
 
@@ -2666,7 +2980,8 @@ void PhysXPhysicsServer3D::step(real_t p_step) {
 	in_step = true;
 	Vector<RID> callback_bodies;
 	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
-		if (E.value->state_sync_callback.is_valid() || (E.value->force_integration_callback.is_valid() && !E.value->omit_force_integration)) {
+		PhysXSpace *body_space = space_owner.get_or_null(E.value->space);
+		if (body_space && body_space->active && (E.value->state_sync_callback.is_valid() || (E.value->force_integration_callback.is_valid() && !E.value->omit_force_integration))) {
 			callback_bodies.push_back(E.key);
 		}
 	}
@@ -2676,14 +2991,24 @@ void PhysXPhysicsServer3D::step(real_t p_step) {
 			continue;
 		}
 		if (body->state_sync_callback.is_valid()) {
-			body->state_sync_callback.call(body->rid, body->object_id);
+			body->state_sync_callback.call(body_get_direct_state(body->rid));
 		}
 		if (body->force_integration_callback.is_valid() && !body->omit_force_integration) {
 			body->force_integration_callback.call(body_get_direct_state(body->rid), body->force_integration_udata);
 		}
 	}
 
+	flushing_queries = true;
 	_check_area_overlaps();
+	flushing_queries = false;
+
+	for (const KeyValue<RID, PhysXBody *> &E : body_map) {
+		PhysXSpace *body_space = space_owner.get_or_null(E.value->space);
+		PxRigidDynamic *dyn = E.value->actor ? E.value->actor->is<PxRigidDynamic>() : nullptr;
+		if (body_space && body_space->active && dyn && !dyn->isSleeping()) {
+			active_objects++;
+		}
+	}
 
 	// Releases requested by callbacks during this step, now that iteration is
 	// done.

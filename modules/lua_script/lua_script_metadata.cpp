@@ -55,6 +55,102 @@ void skip_spaces(const std::string &p_text, size_t &p_pos) {
 	}
 }
 
+// Lua long comments and long strings can span physical lines. Metadata scanning must not
+// mistake their contents for annotations or top-level functions. `r_equals == -1` means
+// normal Lua code; otherwise it is the number of '=' characters in the active delimiter.
+int long_bracket_open(const std::string &p_text, size_t p_pos, size_t &r_after_open) {
+	if (p_pos >= p_text.size() || p_text[p_pos] != '[') {
+		return -1;
+	}
+	size_t cursor = p_pos + 1;
+	while (cursor < p_text.size() && p_text[cursor] == '=') {
+		cursor++;
+	}
+	if (cursor >= p_text.size() || p_text[cursor] != '[') {
+		return -1;
+	}
+	r_after_open = cursor + 1;
+	return int(cursor - p_pos - 1);
+}
+
+bool long_bracket_close(const std::string &p_text, size_t p_pos, int p_equals, size_t &r_after_close) {
+	if (p_pos >= p_text.size() || p_text[p_pos] != ']') {
+		return false;
+	}
+	size_t cursor = p_pos + 1;
+	for (int i = 0; i < p_equals; i++) {
+		if (cursor >= p_text.size() || p_text[cursor] != '=') {
+			return false;
+		}
+		cursor++;
+	}
+	if (cursor >= p_text.size() || p_text[cursor] != ']') {
+		return false;
+	}
+	r_after_close = cursor + 1;
+	return true;
+}
+
+// Advance the lexical state after a line. Quoted strings and short comments are skipped so
+// bracket-like text within them cannot accidentally open a long token.
+void scan_long_bracket_state(const std::string &p_line, int &r_equals, char &r_quote) {
+	size_t pos = 0;
+	while (pos < p_line.size()) {
+		if (r_quote != 0) {
+			if (p_line[pos] == '\\') {
+				if (pos + 1 < p_line.size()) {
+					pos += 2;
+				} else {
+					// Lua permits a quoted string to continue across lines when the
+					// final character is an escape.
+					pos++;
+				}
+			} else if (p_line[pos++] == r_quote) {
+				r_quote = 0;
+			}
+			continue;
+		}
+		if (r_equals >= 0) {
+			size_t after_close = 0;
+			if (long_bracket_close(p_line, pos, r_equals, after_close)) {
+				r_equals = -1;
+				pos = after_close;
+			} else {
+				pos++;
+			}
+			continue;
+		}
+
+		const char c = p_line[pos];
+		if (c == '\'' || c == '"') {
+			r_quote = c;
+			pos++;
+			continue;
+		}
+
+		if (c == '-' && pos + 1 < p_line.size() && p_line[pos + 1] == '-') {
+			pos += 2;
+			size_t after_open = 0;
+			const int equals = long_bracket_open(p_line, pos, after_open);
+			if (equals < 0) {
+				return; // A short comment consumes the rest of the line.
+			}
+			r_equals = equals;
+			pos = after_open;
+			continue;
+		}
+
+		size_t after_open = 0;
+		const int equals = long_bracket_open(p_line, pos, after_open);
+		if (equals >= 0) {
+			r_equals = equals;
+			pos = after_open;
+		} else {
+			pos++;
+		}
+	}
+}
+
 // Splits "a, b, ..." between the parentheses that start at `p_pos`.
 std::vector<std::string> read_parameters(const std::string &p_text, size_t p_pos) {
 	std::vector<std::string> params;
@@ -175,6 +271,8 @@ void parse_annotation(const std::string &p_body, int p_line, Metadata &r_metadat
 Metadata parse(const std::string &p_source) {
 	Metadata metadata;
 	int line_number = 0;
+	int long_bracket_equals = -1;
+	char string_quote = 0;
 	size_t start = 0;
 	while (start <= p_source.size()) {
 		size_t end = p_source.find('\n', start);
@@ -184,9 +282,9 @@ Metadata parse(const std::string &p_source) {
 		const std::string line = p_source.substr(start, end - start);
 		line_number++;
 
-		if (line.compare(0, 3, "--@") == 0) {
+		if (long_bracket_equals < 0 && string_quote == 0 && line.compare(0, 3, "--@") == 0) {
 			parse_annotation(line.substr(3), line_number, metadata);
-		} else {
+		} else if (long_bracket_equals < 0 && string_quote == 0) {
 			std::string name;
 			std::vector<std::string> params;
 			if (match_top_level_function(line, name, params)) {
@@ -197,6 +295,7 @@ Metadata parse(const std::string &p_source) {
 				metadata.functions.push_back(function);
 			}
 		}
+		scan_long_bracket_state(line, long_bracket_equals, string_quote);
 
 		if (end == p_source.size()) {
 			break;

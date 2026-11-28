@@ -1,5 +1,6 @@
 --@extends SceneTree
 --@export speed: float = 2.5
+--@signal probe_event(value)
 
 -- Engine-level regression check for the Lua 5.5 script language.
 --
@@ -21,6 +22,16 @@ local function check_export_default()
 	check(speed == 2.5, "@export default applied to the main script (speed=" .. tostring(speed) .. ")")
 end
 
+local function check_lua_55_runtime()
+	check(_VERSION == "Lua 5.5", "engine embeds the full Lua 5.5 runtime (" .. tostring(_VERSION) .. ")")
+	check(type(io) == "table" and type(io.open) == "function", "standard io library is available")
+	check(type(os) == "table" and type(os.clock) == "function", "standard os library is available")
+	check(type(debug) == "table" and type(debug.traceback) == "function", "standard debug library is available")
+	check(type(package) == "table" and type(package.searchpath) == "function", "standard package library is available")
+	check(type(utf8) == "table" and utf8.len("Kaizen") == 6, "Lua UTF-8 library is available")
+	check(string.unpack("<I2", string.pack("<I2", 1337)) == 1337, "Lua binary pack/unpack is available")
+end
+
 local function check_variant_arithmetic()
 	local sum = Vector2(1, 2) + Vector2(3, 4)
 	check(sum.x == 4 and sum.y == 6, "Vector2 operator + (got " .. tostring(sum) .. ")")
@@ -36,6 +47,19 @@ local function check_table_round_trip()
 	check(#arr == 3 and arr[2] == 20, "Lua sequence -> Array, # and 1-based index")
 	arr[#arr + 1] = 40
 	check(#arr == 4 and arr[4] == 40, "t[#t + 1] = v appends to an Array")
+
+	-- Conversion used to reject any table deeper than 32 levels. Exercise a
+	-- chain well past that threshold through the actual Variant bridge.
+	local nested = { value = "bottom" }
+	for _ = 1, 96 do
+		nested = { child = nested }
+	end
+	root:set_meta("lua_deep_table", nested)
+	local converted = root:get_meta("lua_deep_table")
+	for _ = 1, 96 do
+		converted = converted.child
+	end
+	check(converted.value == "bottom", "nested Lua tables convert beyond the former 32-level cap")
 end
 
 local function check_callable_round_trip()
@@ -43,6 +67,13 @@ local function check_callable_round_trip()
 	root:set_meta("lua_fn", function(x) return x * 2 end)
 	local fn = root:get_meta("lua_fn")
 	check(fn(21) == 42, "Lua function -> Callable -> call from Lua")
+end
+
+local function check_script_signal()
+	local received = nil
+	local ok = self:connect("probe_event", function(value) received = value end)
+	self:emit_signal("probe_event", 42)
+	check(ok == 0 and received == 42, "--@signal is listed by the script and can be connected/emitted")
 end
 
 local function check_errors_are_lua_errors()
@@ -159,6 +190,7 @@ end
 -- Runs once the main loop is set up, the same way a GDScript SceneTree does.
 function _initialize()
 	run_check("export", check_export_default)
+	run_check("Lua 5.5 runtime", check_lua_55_runtime)
 	run_check("arithmetic", check_variant_arithmetic)
 	run_check("table round trip", check_table_round_trip)
 	run_check("callable round trip", check_callable_round_trip)
@@ -174,5 +206,5 @@ function _initialize()
 	run_check("preload and constructors", check_preload_and_variant_constructors)
 
 	print(string.format("LUA_ENGINE_PROBE: %s (%d failure(s))", failures == 0 and "PASS" or "FAIL", failures))
-	self:quit(failures == 0 and 0 or 1)
+	self:call_deferred("quit", failures == 0 and 0 or 1)
 end

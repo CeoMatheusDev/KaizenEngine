@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 Import("env_modules")
 
@@ -12,7 +14,7 @@ env_csg.Append(CPPDEFINES=[("MANIFOLD_PAR", -1)])
 
 thirdparty_obj = []
 
-thirdparty_dir = "#thirdparty/manifold/"
+thirdparty_dir = methods.get_thirdparty_dir("manifold")
 thirdparty_sources = [
     "src/boolean_result.cpp",
     "src/boolean3.cpp",

@@ -7,6 +7,7 @@ import core_builders
 
 import methods
 
+
 Import("env")
 
 env.core_sources = []
@@ -36,7 +37,7 @@ env_thirdparty.add_source_files(thirdparty_obj, thirdparty_misc_sources)
 
 # Brotli
 if env["brotli"] and env["builtin_brotli"]:
-    thirdparty_brotli_dir = "#thirdparty/brotli/"
+    thirdparty_brotli_dir = methods.get_thirdparty_dir("brotli")
     thirdparty_brotli_sources = [
         "common/constants.c",
         "common/context.c",
@@ -63,7 +64,7 @@ if env["brotli"] and env["builtin_brotli"]:
 
 # PCRE2
 if env["builtin_pcre2"]:
-    thirdparty_pcre2_dir = "#thirdparty/pcre2/src/"
+    thirdparty_pcre2_dir = methods.get_thirdparty_dir("pcre2") + "src/"
     thirdparty_pcre2_sources = [
         "pcre2_auto_possess.c",
         "pcre2_chartables.c",
@@ -110,7 +111,7 @@ if env["builtin_pcre2"]:
 
 # Clipper2 Thirdparty source files used for polygon and polyline boolean operations.
 if env["builtin_clipper2"]:
-    thirdparty_clipper_dir = "#thirdparty/clipper2/"
+    thirdparty_clipper_dir = methods.get_thirdparty_dir("clipper2")
     thirdparty_clipper_sources = [
         "src/clipper.engine.cpp",
         "src/clipper.offset.cpp",
@@ -128,7 +129,7 @@ if env["builtin_clipper2"]:
 
 # Zlib library, can be unbundled
 if env["builtin_zlib"]:
-    thirdparty_zlib_dir = "#thirdparty/zlib/"
+    thirdparty_zlib_dir = methods.get_thirdparty_dir("zlib")
     thirdparty_zlib_sources = [
         "adler32.c",
         "compress.c",
@@ -155,14 +156,14 @@ if env["builtin_zlib"]:
 
 # Minizip library, could be unbundled in theory
 # However, our version has some custom modifications, so it won't compile with the system one
-thirdparty_minizip_dir = "#thirdparty/minizip/"
+thirdparty_minizip_dir = methods.get_thirdparty_dir("minizip")
 thirdparty_minizip_sources = ["ioapi.c", "unzip.c", "zip.c"]
 thirdparty_minizip_sources = [thirdparty_minizip_dir + file for file in thirdparty_minizip_sources]
 env_thirdparty.add_source_files(thirdparty_obj, thirdparty_minizip_sources)
 
 # Zstd library, can be unbundled
 if env["builtin_zstd"]:
-    thirdparty_zstd_dir = "#thirdparty/zstd/"
+    thirdparty_zstd_dir = methods.get_thirdparty_dir("zstd")
     thirdparty_zstd_sources = [
         "common/debug.c",
         "common/entropy_common.c",

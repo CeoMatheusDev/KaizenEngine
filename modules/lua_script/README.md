@@ -2,25 +2,27 @@
 
 Lua 5.5 scripting for KaizenEngine. Lua is the engine's primary script language.
 
-## Status
+## Runtime and module support
 
-- **Phase 0, dependency:** the Lua 5.5.1 sources are downloaded, validated and
-  compiled into the engine.
-- **Phase 1, script classes:** `LuaScript` (a `Script`) and `LuaScriptInstance`
-  (a `ScriptInstance`). Each object gets its own Lua environment.
-- **Phase 2, language:** `LuaLanguage` is registered with `ScriptServer`, and
-  `.lua` files load and save as `LuaScript` resources.
-- **Phase 3, Variant binding:** `lua_bridge.cpp` maps Godot values to Lua.
-  `nil`, booleans, integers, floats and strings are native; everything else
-  travels in a userdata with the `kaizen.Variant` metatable. Properties,
-  methods, operators, `pairs` and `#` work on those values. Lua tables convert
-  to `Array` (when they are a sequence) or `Dictionary`, and Lua functions
-  convert to `Callable`.
-- **Phase 4, editor:** syntax validation and function lookup
-  (`LuaEditorLanguage`). No highlighter, completion or debugger yet.
-- **Phase 5, parity:** `class_name` registers a global class, `--@tool`,
-  `--@export` and `--@signal` are read from the script header, and engine
-  classes are reachable from Lua (see *Engine access*).
+- The module builds the complete Lua 5.5.1 runtime library from the pinned
+  upstream source files. It uses `luaL_openlibs`, so the normal Lua standard
+  libraries are available; Kaizen does not replace them with a reduced Lua
+  dialect. Scripts run as text chunks in per-instance environments.
+- `LuaScript`/`LuaScriptInstance` are registered with `ScriptServer`; `.lua`
+  resources load and save through the engine resource APIs.
+- `lua_bridge.cpp` maps engine Variants and objects to Lua userdata and maps
+  Lua tables/functions back to Godot `Array`/`Dictionary`/`Callable` values.
+  Nested tables are no longer rejected at a fixed depth; active-path detection
+  prevents infinite traversal of cyclic tables, which Godot Variants cannot
+  represent. Object and Variant property access, methods, operators, `pairs`
+  and `#` are bridged. Unknown members produce Lua errors rather than silently
+  returning nil (except missing Dictionary keys).
+- Editor language integration performs syntax validation and function lookup.
+  It does not currently provide the full debugger/IDE feature set of the
+  upstream GDScript editor integration.
+- Kaizen-specific declarations use `--@extends`, `--@class_name`, `--@tool`,
+  `--@export` and `--@signal`; these are resource/editor metadata conventions,
+  not changes to Lua syntax. See *Script conventions*.
 
 Runtime-verified (engine binary, headless): script load, `class_name` and
 `extends`, method calls, `@export` defaults, Variant arithmetic and
@@ -115,8 +117,16 @@ The churn projects (`tests/kaizen/churn_project`, `p251_dedup_project`,
 `pipeline_churn_project`) are Lua ports of the former GDScript scenes. Run them
 with the command in `tests/kaizen/README.md`; the GPU diagnostics need a GPU.
 
-## Roadmap (future rounds)
+## Known engine-integration gaps
 
-1. Editor: syntax highlighting and completion, debugger hooks.
-2. Argument-count checks when a Lua function is called through a Callable.
-3. Runtime tests for the script instance on more node types.
+The embedded Lua VM and its standard language libraries are upstream Lua 5.5.1;
+limitations listed here concern Kaizen's editor/engine adapter, not Lua language
+features. Cyclic Lua table references have no direct Godot Variant equivalent;
+the bridge reports them and substitutes nil at the recursive edge. Deep acyclic
+tables are supported beyond the previous 32-level cutoff (subject to normal
+process memory and call-stack limits). The module does not yet implement IDE syntax highlighting/completion,
+a Lua debugger, script-to-script inheritance, or full argument-count diagnostics
+for a Lua function called through a Godot `Callable`. Lua `--@signal` declarations
+are exposed through the engine's Script signal interface and can be connected
+and emitted by the owning object. These adapter gaps do not restrict standalone
+Lua syntax, coroutines, metatables, modules, or the standard libraries.

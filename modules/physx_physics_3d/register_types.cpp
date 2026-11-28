@@ -24,10 +24,9 @@ void initialize_physx_physics_3d_module(ModuleInitializationLevel p_level) {
 	}
 
 	// PhysX backend configuration (used by PhysXPhysicsServer3D::init()).
-	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/gpu_acceleration"), true);
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/gpu_acceleration"), false);
 	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/cooking"), true);
-	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/character_controller"), true);
-	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/vehicle"), true);
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/character_controller"), false);
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/physx_physics_3d/simulation_step", PROPERTY_HINT_RANGE, "0.001,0.1,0.0001"), 1.0 / 60.0);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "physics/physx_physics_3d/max_sub_steps", PROPERTY_HINT_RANGE, "1,16,1"), 4);
 	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "physics/physx_physics_3d/broadphase_mbp"), true);

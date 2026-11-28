@@ -1,47 +1,34 @@
-# Lua SDK (Scripting)
+# Lua 5.5 SDK and script language
 
-KaizenEngine bundles the Lua 5.5 interpreter as the foundation for a future
-first-class Lua script language (alongside GDScript and C#).
-
-## Status
-
-Phase 0: the dependency is downloaded, validated and compiled into the
-engine. The script language implementation (ScriptLanguage/Script/
-ScriptInstance + editor integration) is a later phase — see
-`modules/lua_script/README.md` for the roadmap.
+Lua 5.5.1 is the script language provided by Kaizen's `modules/lua_script` module. The module implements `ScriptLanguage`, `Script`, and per-object `ScriptInstance` resources, registers `.lua` loading/saving, and exposes engine Variants and objects through the Lua bridge. Deep acyclic table conversion no longer has the adapter's former fixed 32-level cutoff; cycles are detected because Godot Variant containers cannot represent cyclic graphs. See `modules/lua_script/README.md` for syntax, bindings, supported annotations, and current limitations.
 
 ## Dependency
 
 | | |
 |---|---|
-| Component | Lua 5.5.1 (reference sources, flat layout) |
-| Source | https://github.com/lua/lua tag `v5.5.1` |
-| License | MIT — redistribution permitted |
-| Location | `thirdparty/lua/lua/` (gitignored, fetched on demand) |
+| Component | Lua 5.5.1 reference sources (flat layout) |
+| Source | `https://github.com/lua/lua`, tag `v5.5.1` |
+| License | MIT |
+| Location | `thirdparty/lua/lua/` (fetched locally; not committed) |
+
+Fetch and validate the pinned checkout:
 
 ```bash
 python3 tools/sdk/sdk_manager.py --download lua/lua
 python3 tools/sdk/sdk_manager.py --validate lua/lua
 ```
 
-The sdk_manager pins the tag through `acquisition_ref` in
-`tools/sdk/manifest/lua_sdks.json`, so the fetched version always matches
-the manifest instead of the repository's default branch.
-
-## Build
-
-The `modules/lua_script` module compiles the embeddable library (33 sources:
-everything except the standalone `lua.c`/`luac.c` mains and the `onelua.c`
-amalgamation):
+## Build and test
 
 ```bash
-./build.sh lua      # just this group
-./build.sh smoke    # runtime smoke test (PhysX + Lua)
+./build.sh lua
+bash tests/kaizen/run_lua_smoke.sh
 ```
 
-## Runtime smoke
+The standalone smoke test executes real Lua through its C API. The engine integration probe additionally exercises `.lua` loading, script instances, callbacks, exported values, Variants, engine object access, and error handling; it requires an editor binary built with `lua_script`:
 
-`tests/kaizen/lua_smoke.c` creates a `lua_State`, opens the standard
-libraries and executes real Lua (arithmetic through the C API, tables,
-strings, error statuses, coroutine yield/resume). It runs in CI on every
-push/PR.
+```bash
+bash tests/kaizen/run_lua_engine_test.sh
+```
+
+The metadata parser has a separate no-SDK unit test and is included in `bash tests/kaizen/run_tests.sh`.

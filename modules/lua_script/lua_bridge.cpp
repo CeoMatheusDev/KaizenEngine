@@ -16,6 +16,7 @@
 #include "core/variant/dictionary.h"
 
 #include <new>
+#include <unordered_set>
 
 // Error discipline: Lua raises errors with longjmp, which would skip C++ destructors. Every
 // metamethod below therefore does its C++ work in an `*_impl` helper whose locals are gone
@@ -25,7 +26,6 @@
 namespace LuaBridge {
 namespace {
 
-constexpr int MAX_CONVERSION_DEPTH = 32;
 constexpr const char *NEXT_REGISTRY_KEY = "kaizen.next";
 
 LuaVariantBox *check_box(lua_State *L, int p_index) {
@@ -498,13 +498,37 @@ public:
 	}
 };
 
-Variant to_variant_depth(lua_State *L, int p_index, int p_depth);
+struct ConversionContext {
+	// Variant containers cannot represent self-referential graphs. Track only the
+	// current recursion path, so repeated non-cyclic references are still copied.
+	std::unordered_set<const void *> active_tables;
+};
 
-Variant table_to_variant(lua_State *L, int p_index, int p_depth) {
-	if (p_depth > MAX_CONVERSION_DEPTH) {
-		LuaLanguage::get_singleton()->report_error("Table nesting is too deep to convert to a Variant (cyclic table?).");
+Variant to_variant_internal(lua_State *L, int p_index, ConversionContext &p_context);
+
+Variant table_to_variant(lua_State *L, int p_index, ConversionContext &p_context) {
+	const void *identity = lua_topointer(L, p_index);
+	if (p_context.active_tables.find(identity) != p_context.active_tables.end()) {
+		if (LuaLanguage::get_singleton()) {
+			LuaLanguage::get_singleton()->report_error("Cannot convert a cyclic Lua table to a Variant.");
+		}
 		return Variant();
 	}
+	// Lua's value stack grows independently from the C++ call stack. Ensure room
+	// for table iteration and child conversion before descending into a nested table.
+	if (!lua_checkstack(L, 4)) {
+		if (LuaLanguage::get_singleton()) {
+			LuaLanguage::get_singleton()->report_error("Lua stack exhausted while converting a table to a Variant.");
+		}
+		return Variant();
+	}
+	p_context.active_tables.insert(identity);
+	struct ActiveTableGuard {
+		ConversionContext &context;
+		const void *identity;
+		~ActiveTableGuard() { context.active_tables.erase(identity); }
+	} active_guard{ p_context, identity };
+
 	const lua_Unsigned length = lua_rawlen(L, p_index);
 	lua_Unsigned count = 0;
 	bool sequence = true;
@@ -527,7 +551,7 @@ Variant table_to_variant(lua_State *L, int p_index, int p_depth) {
 		Array array;
 		for (lua_Unsigned i = 1; i <= length; i++) {
 			lua_rawgeti(L, p_index, lua_Integer(i));
-			array.push_back(to_variant_depth(L, -1, p_depth + 1));
+			array.push_back(to_variant_internal(L, -1, p_context));
 			lua_pop(L, 1);
 		}
 		return array;
@@ -536,14 +560,14 @@ Variant table_to_variant(lua_State *L, int p_index, int p_depth) {
 	Dictionary dictionary;
 	lua_pushnil(L);
 	while (lua_next(L, p_index) != 0) {
-		const Variant key = to_variant_depth(L, -2, p_depth + 1);
-		dictionary[key] = to_variant_depth(L, -1, p_depth + 1);
+		const Variant key = to_variant_internal(L, -2, p_context);
+		dictionary[key] = to_variant_internal(L, -1, p_context);
 		lua_pop(L, 1);
 	}
 	return dictionary;
 }
 
-Variant to_variant_depth(lua_State *L, int p_index, int p_depth) {
+Variant to_variant_internal(lua_State *L, int p_index, ConversionContext &p_context) {
 	p_index = lua_absindex(L, p_index);
 	switch (lua_type(L, p_index)) {
 		case LUA_TBOOLEAN:
@@ -568,7 +592,7 @@ Variant to_variant_depth(lua_State *L, int p_index, int p_depth) {
 			return Callable(memnew(LuaCallable(ref)));
 		}
 		case LUA_TTABLE:
-			return table_to_variant(L, p_index, p_depth);
+			return table_to_variant(L, p_index, p_context);
 		default:
 			return Variant();
 	}
@@ -647,7 +671,8 @@ void push_variant(lua_State *L, const Variant &p_value, bool p_keep_alive) {
 }
 
 Variant to_variant(lua_State *L, int p_index) {
-	return to_variant_depth(L, p_index, 0);
+	ConversionContext context;
+	return to_variant_internal(L, p_index, context);
 }
 
 bool is_variant_box(lua_State *L, int p_index) {

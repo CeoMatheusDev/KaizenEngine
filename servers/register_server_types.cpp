@@ -409,6 +409,11 @@ void register_server_types() {
 void unregister_server_types() {
 	OS::get_singleton()->benchmark_begin_measure("Servers", "Unregister Extensions");
 
+	// The scripting singleton is held by a static Ref; release it before
+	// ObjectDB and memory teardown, and remove the borrowed Engine singleton
+	// pointer before the object is destroyed.
+	RTXBackend::cleanup_singleton();
+
 	ServersDebugger::deinitialize();
 	memdelete(shader_types);
 	if constexpr (GD_IS_CLASS_ENABLED(MovieWriterPNGWAV)) {

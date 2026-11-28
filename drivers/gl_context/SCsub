@@ -5,7 +5,7 @@ Import("env")
 
 if env["platform"] in ["macos", "windows", "linuxbsd"]:
     # Thirdparty source files
-    thirdparty_dir = "#thirdparty/glad/"
+    thirdparty_dir = "#thirdparty/glad-2.0.8/"
     thirdparty_sources = ["gl.c"]
 
     env.Prepend(CPPPATH=[thirdparty_dir])

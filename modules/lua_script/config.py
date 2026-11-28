@@ -1,5 +1,5 @@
 name = "lua_script"
-description = "Lua 5.5 scripting language for KaizenEngine (bundled interpreter; language implementation in progress)"
+description = "Lua 5.5 script language for KaizenEngine (Script resources, instances, editor validation, and engine bindings)"
 author = "Hardion Labs"
 version = "0.1.0"
 url = "https://github.com/CeoMatheusDev/KaizenEngine"
@@ -9,8 +9,15 @@ dependencies = []
 
 def can_build(env, platform):
     import os
-    if not os.path.exists("thirdparty/lua/lua/lua.h"):
-        print("Lua 5.5 sources not found - run: python3 tools/sdk/sdk_manager.py --download lua/lua")
+
+    lua_root = "thirdparty/lua/lua"
+    required_files = ("lua.h", "lauxlib.h", "lualib.h", "lapi.c", "lstate.c", "lvm.c")
+    missing = [name for name in required_files if not os.path.isfile(os.path.join(lua_root, name))]
+    if missing:
+        print(
+            "Lua 5.5 sources are missing or incomplete ({}). Run: "
+            "python3 tools/sdk/sdk_manager.py --download lua/lua".format(", ".join(missing))
+        )
         return False
     return True
 

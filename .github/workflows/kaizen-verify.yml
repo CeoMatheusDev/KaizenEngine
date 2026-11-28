@@ -20,7 +20,12 @@ jobs:
       - name: Regenerate build-time headers
         run: bash tools/regen_gen_headers.sh
 
-      - name: Test suite (license banners + engine checks)
+      - name: Fetch pinned open-source SDK sources
+        run: |
+          python3 tools/sdk/sdk_manager.py --download lua/lua
+          python3 tools/sdk/sdk_manager.py --download physx/physx
+
+      - name: Test suite (standalone subsystem and metadata checks)
         run: bash tests/kaizen/run_tests.sh
 
       - name: Build PhysX SDK group

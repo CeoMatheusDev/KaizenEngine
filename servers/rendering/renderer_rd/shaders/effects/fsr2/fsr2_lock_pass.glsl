@@ -4,4 +4,4 @@
 
 #VERSION_DEFINES
 
-#include "thirdparty/amd-fsr2/shaders/ffx_fsr2_lock_pass.glsl"
+#include "thirdparty/amd-fsr2-2.2.1/shaders/ffx_fsr2_lock_pass.glsl"

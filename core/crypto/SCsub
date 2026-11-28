@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 
 
@@ -15,6 +17,7 @@ is_builtin = env["builtin_mbedtls"]
 has_module = env["module_mbedtls_enabled"]
 thirdparty_obj = []
 configs = []
+thirdparty_mbedtls_dir = methods.get_thirdparty_dir("mbedtls")
 
 if is_builtin or not has_module:
     # Use our headers for builtin or if the module is not going to be compiled.
@@ -22,10 +25,10 @@ if is_builtin or not has_module:
     # when building without the module.
     env_crypto.Prepend(
         CPPPATH=[
-            "#thirdparty/mbedtls/kaizen/",
-            "#thirdparty/mbedtls/include/",
-            "#thirdparty/mbedtls/tf-psa-crypto/include/",
-            "#thirdparty/mbedtls/tf-psa-crypto/drivers/builtin/include/",
+            thirdparty_mbedtls_dir + "kaizen/",
+            thirdparty_mbedtls_dir + "include/",
+            thirdparty_mbedtls_dir + "tf-psa-crypto/include/",
+            thirdparty_mbedtls_dir + "tf-psa-crypto/drivers/builtin/include/",
         ]
     )
     env_crypto.Append(
@@ -34,12 +37,12 @@ if is_builtin or not has_module:
             ("MBEDTLS_CONFIG_FILE", env_crypto.EscapeDefine("kaizen_mbedtls_config.h")),
         ]
     )
-    configs = ["#thirdparty/mbedtls/kaizen/kaizen_psa_config.h", "#thirdparty/mbedtls/kaizen/kaizen_mbedtls_config.h"]
+    configs = [thirdparty_mbedtls_dir + "kaizen/kaizen_psa_config.h", thirdparty_mbedtls_dir + "kaizen/kaizen_mbedtls_config.h"]
     if not has_module:
         env_crypto.Append(CPPDEFINES=["KAIZEN_MBEDTLS_LIGHT"])
     # Our custom mbedTLS platform functions
     platform_obj = []
-    env_crypto.add_source_files(platform_obj, ["#thirdparty/mbedtls/kaizen/kaizen_mbedtls_platform.cpp"])
+    env_crypto.add_source_files(platform_obj, [thirdparty_mbedtls_dir + "kaizen/kaizen_mbedtls_platform.cpp"])
     env.core_sources += platform_obj
     env.Depends(platform_obj, configs)
 
@@ -52,16 +55,15 @@ if not has_module:
     # Build minimal mbedTLS library (MD5/SHA/Base64/AES).
     env_thirdparty = env_crypto.Clone()
     env_thirdparty.disable_warnings()
-    psa_dir = "#thirdparty/mbedtls/tf-psa-crypto/"
+    psa_dir = thirdparty_mbedtls_dir + "tf-psa-crypto/"
     env_thirdparty.Prepend(
         CPPPATH=[
             psa_dir + d
             for d in ["include/", "core/", "dispatch/", "extras", "platform/", "utilities/", "drivers/builtin/src/"]
         ]
     )
-    env_thirdparty.Prepend(CPPPATH=["#thirdparty/mbedtls/tf-psa-crypto/drivers/builtin/include/"])
+    env_thirdparty.Prepend(CPPPATH=[thirdparty_mbedtls_dir + "tf-psa-crypto/drivers/builtin/include/"])
 
-    thirdparty_mbedtls_dir = "#thirdparty/mbedtls/"
     thirdparty_mbedtls_sources = [
         "tf-psa-crypto/core/psa_crypto.c",
         "tf-psa-crypto/core/psa_crypto_client.c",

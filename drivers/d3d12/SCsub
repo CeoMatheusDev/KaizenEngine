@@ -171,7 +171,7 @@ env_thirdparty.Prepend(
     CPPPATH=[
         "#thirdparty/directx_headers/include/directx",
         "#thirdparty/directx_headers/include/dxguids",
-        "#thirdparty/d3d12ma",
+        methods.get_thirdparty_dir("d3d12ma"),
     ]
 )
 

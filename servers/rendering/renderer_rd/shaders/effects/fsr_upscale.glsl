@@ -43,7 +43,7 @@
 
 #endif
 
-#include "thirdparty/amd-fsr/ffx_a.h"
+#include "thirdparty/amd-fsr-1.0.2/ffx_a.h"
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -113,7 +113,7 @@ void FsrRcasInputH(inout AH1 r, inout AH1 g, inout AH1 b) {}
 
 #endif
 
-#include "thirdparty/amd-fsr/ffx_fsr1.h"
+#include "thirdparty/amd-fsr-1.0.2/ffx_fsr1.h"
 
 void fsr_easu_pass(AU2 pos) {
 #ifdef MODE_FSR_UPSCALE_NORMAL

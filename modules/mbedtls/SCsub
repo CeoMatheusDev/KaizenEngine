@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
 
+
+import methods
 Import("env")
 Import("env_modules")
 
@@ -16,6 +18,7 @@ env_mbed_tls.AddMethod(_escape_define, "EscapeDefine")
 
 thirdparty_obj = []
 configs = []
+thirdparty_mbedtls_dir = methods.get_thirdparty_dir("mbedtls")
 
 if env["builtin_mbedtls"]:
     env_mbed_tls.Append(
@@ -24,13 +27,13 @@ if env["builtin_mbedtls"]:
             ("MBEDTLS_CONFIG_FILE", env_mbed_tls.EscapeDefine("kaizen_mbedtls_config.h")),
         ]
     )
-    configs = ["#thirdparty/mbedtls/kaizen/kaizen_psa_config.h", "#thirdparty/mbedtls/kaizen/kaizen_mbedtls_config.h"]
+    configs = [thirdparty_mbedtls_dir + "kaizen/kaizen_psa_config.h", thirdparty_mbedtls_dir + "kaizen/kaizen_mbedtls_config.h"]
     env_mbed_tls.Prepend(
         CPPPATH=[
-            "#thirdparty/mbedtls/kaizen/",
-            "#thirdparty/mbedtls/include/",
-            "#thirdparty/mbedtls/tf-psa-crypto/include/",
-            "#thirdparty/mbedtls/tf-psa-crypto/drivers/builtin/include/",
+            thirdparty_mbedtls_dir + "kaizen/",
+            thirdparty_mbedtls_dir + "include/",
+            thirdparty_mbedtls_dir + "tf-psa-crypto/include/",
+            thirdparty_mbedtls_dir + "tf-psa-crypto/drivers/builtin/include/",
         ]
     )
 
@@ -122,7 +125,7 @@ if env["builtin_mbedtls"]:
         "core/psa_crypto_driver_wrappers_no_static.c",
     ]
 
-    psa_dir = "#thirdparty/mbedtls/tf-psa-crypto/"
+    psa_dir = thirdparty_mbedtls_dir + "tf-psa-crypto/"
     psa_sources = [psa_dir + file for file in psa_sources]
     env_psa.Prepend(CPPPATH=[psa_dir + "drivers/builtin/src/"])
     env_psa.Prepend(CPPPATH=[psa_dir + "platform/"])
@@ -174,11 +177,11 @@ if env["builtin_mbedtls"]:
         "library/version_features.c",
     ]
 
-    mbedtls_dir = "#thirdparty/mbedtls/"
+    mbedtls_dir = methods.get_thirdparty_dir("mbedtls")
     mbedtls_sources = [mbedtls_dir + file for file in mbedtls_sources]
 
     env_library = env_psa.Clone()
-    env_library.Prepend(CPPPATH=["#thirdparty/mbedtls/library/"])
+    env_library.Prepend(CPPPATH=[thirdparty_mbedtls_dir + "library/"])
     env_library.disable_warnings()
     env_library.add_source_files(thirdparty_obj, mbedtls_sources)
     env_library.Depends(thirdparty_obj, psa_obj + configs)
